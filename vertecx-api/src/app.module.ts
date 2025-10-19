@@ -15,6 +15,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { ServicesModule } from './services/services.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { RequestsModule } from './requests/requests.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 
 @Module({
   imports: [
@@ -22,7 +23,6 @@ import { RequestsModule } from './requests/requests.module';
     PurchasesModule,
     UsersModule,
     TechniciansModule,
-    ProvidersModule,
     CustomersModule,
     AppoimentsModule,
     RolesModule,
@@ -32,6 +32,7 @@ import { RequestsModule } from './requests/requests.module';
     ServicesModule,
     QuotesModule,
     RequestsModule,
+    SuppliersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

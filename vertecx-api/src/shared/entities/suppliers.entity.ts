@@ -1,4 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('suppliers')
 export class Suppliers {
@@ -31,5 +37,4 @@ export class Suppliers {
 
   @Column({ nullable: true })
   phone: string;
-
 }
