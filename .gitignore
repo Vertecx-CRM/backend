@@ -136,6 +136,7 @@ dist
 .pnp.*
 
 certs/
+<<<<<<< HEAD
 src/certs
 src/.env
 .env
@@ -143,3 +144,5 @@ node_modules/
 scripts/
 scripts/generate-entities.ts
 dist/
+=======
+>>>>>>> 709dfc2 (Db conecction and script to the entities)
