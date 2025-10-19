@@ -1,4 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { Certifications } from 'src/shared/entities/certifications.entity';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('technicians')
 export class Technicians {
@@ -33,5 +35,4 @@ export class Technicians {
   @ManyToOne(() => Certifications)
   @JoinColumn({ name: 'certificationid' })
   certifications: Certifications;
-
 }

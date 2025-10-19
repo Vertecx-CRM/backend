@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { DatabaseModule } from './database/database.module';
 import { SalesModule } from './sales/sales.module';
-import { PurchasesModule } from './purchases/purchases.module';
 import { UsersModule } from './users/users.module';
 import { TechniciansModule } from './technicians/technicians.module';
-import { ProvidersModule } from './providers/providers.module';
 import { CustomersModule } from './customers/customers.module';
 import { AppoimentsModule } from './appoiments/appoiments.module';
 import { RolesModule } from './roles/roles.module';
@@ -16,12 +15,14 @@ import { ServicesModule } from './services/services.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { RequestsModule } from './requests/requests.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { PurchasesmanagementModule } from './purchases/purchasesmanagement.module';
 
 @Module({
   imports: [
+    DatabaseModule,
     SalesModule,
-    PurchasesModule,
     UsersModule,
+    PurchasesmanagementModule,
     TechniciansModule,
     CustomersModule,
     AppoimentsModule,

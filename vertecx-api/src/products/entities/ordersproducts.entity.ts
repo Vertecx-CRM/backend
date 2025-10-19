@@ -1,4 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Products } from './products.entity';
+import { Ordersservices } from 'src/services/entities/ordersservices.entity';
 
 @Entity('ordersproducts')
 export class Ordersproducts {
@@ -18,5 +20,4 @@ export class Ordersproducts {
   @ManyToOne(() => Ordersservices)
   @JoinColumn({ name: 'ordersid' })
   ordersservices: Ordersservices;
-
 }

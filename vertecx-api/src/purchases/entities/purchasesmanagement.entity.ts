@@ -1,8 +1,16 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { States } from 'src/shared/entities/states.entity';
+import { Suppliers } from 'src/shared/entities/suppliers.entity';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('purchasesmanagement')
 export class Purchasesmanagement {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   purchaseorderid: number;
 
   @Column({ nullable: true })
@@ -30,5 +38,4 @@ export class Purchasesmanagement {
   @ManyToOne(() => Suppliers)
   @JoinColumn({ name: 'supplierid' })
   suppliers: Suppliers;
-
 }

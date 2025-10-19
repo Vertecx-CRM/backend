@@ -1,14 +1,8 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('suppliers')
 export class Suppliers {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   supplierid: number;
 
   @Column({ nullable: true })

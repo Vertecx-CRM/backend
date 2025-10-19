@@ -19,7 +19,7 @@ import * as fs from 'fs';
         synchronize: config.get<boolean>('DB_SYNC'),
         ssl: {
           rejectUnauthorized: true,
-          ca: fs.readFileSync('certs/ca.pem').toString(),
+          ca: fs.readFileSync('src/certs/ca.pem').toString(),
         },
       }),
       inject: [ConfigService],

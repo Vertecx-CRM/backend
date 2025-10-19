@@ -1,3 +1,6 @@
+import { Customers } from 'src/customers/entities/customers.entity';
+import { States } from 'src/shared/entities/states.entity';
+import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('ordersservices')
