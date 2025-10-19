@@ -136,3 +136,9 @@ dist
 .pnp.*
 
 certs/
+src/certs
+src/.env
+.env
+node_modules/
+scripts/
+dist/
