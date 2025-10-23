@@ -2,7 +2,7 @@ import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 't
 
 @Entity('privileges')
 export class Privileges {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   privilegeid: number;
 
   @Column({ nullable: false })

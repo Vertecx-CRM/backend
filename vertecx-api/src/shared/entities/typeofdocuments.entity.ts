@@ -1,14 +1,17 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity('states')
-export class States {
+@Entity('typeofdocuments')
+export class Typeofdocuments {
   @PrimaryGeneratedColumn()
-  stateid: number;
+  typeofdocumentid: number;
 
   @Column({ nullable: true })
+  createat: Date;
+
+  @Column({ nullable: true })
+  updateat: Date;
+
+  @Column({ nullable: false })
   name: string;
-
-  @Column({ nullable: true })
-  description: string;
 
 }

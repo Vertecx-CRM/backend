@@ -1,10 +1,8 @@
-import { Ordersservices } from 'src/services/entities/ordersservices.entity';
-import { States } from 'src/shared/entities/states.entity';
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('quotes')
 export class Quotes {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   quotesid: number;
 
   @Column({ nullable: false })
@@ -26,4 +24,5 @@ export class Quotes {
   @ManyToOne(() => States)
   @JoinColumn({ name: 'quotesid' })
   states: States;
+
 }

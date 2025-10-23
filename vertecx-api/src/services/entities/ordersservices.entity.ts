@@ -1,11 +1,8 @@
-import { Customers } from 'src/customers/entities/customers.entity';
-import { States } from 'src/shared/entities/states.entity';
-import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('ordersservices')
 export class Ordersservices {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   ordersservicesid: number;
 
   @Column({ nullable: true })
@@ -32,16 +29,8 @@ export class Ordersservices {
   @Column({ nullable: true })
   files: string;
 
-  @ManyToOne(() => Customers)
-  @JoinColumn({ name: 'clientid' })
-  customers: Customers;
-
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
   states: States;
-
-  @ManyToOne(() => Technicians)
-  @JoinColumn({ name: 'technicalid' })
-  technicians: Technicians;
 
 }

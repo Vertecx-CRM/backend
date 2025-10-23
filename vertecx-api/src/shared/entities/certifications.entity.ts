@@ -2,7 +2,7 @@ import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 't
 
 @Entity('certifications')
 export class Certifications {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   certificationid: number;
 
   @Column({ nullable: true })

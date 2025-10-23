@@ -1,9 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity('customers')
-export class Customers {
+@Entity('suppliers')
+export class Suppliers {
   @PrimaryGeneratedColumn()
-  customerid: number;
+  supplierid: number;
 
   @Column({ nullable: false })
   userid: number;
@@ -11,14 +11,20 @@ export class Customers {
   @Column({ nullable: false })
   stateid: number;
 
-  @Column({ nullable: true })
-  customeraddress: string;
+  @Column({ nullable: false })
+  nit: string;
 
   @Column({ nullable: true })
-  customercity: string;
+  address: string;
 
   @Column({ nullable: true })
-  customerzipcode: string;
+  city: string;
+
+  @Column({ nullable: true })
+  zipcode: string;
+
+  @Column({ nullable: false })
+  companyname: string;
 
   @ManyToOne(() => Users)
   @JoinColumn({ name: 'userid' })

@@ -1,34 +1,37 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('suppliers')
 export class Suppliers {
-  @PrimaryGeneratedColumn()
+  @Column({ nullable: false })
   supplierid: number;
 
-  @Column({ nullable: true })
-  rating: number;
+  @Column({ nullable: false })
+  userid: number;
+
+  @Column({ nullable: false })
+  stateid: number;
+
+  @Column({ nullable: false })
+  nit: string;
 
   @Column({ nullable: true })
-  status: string;
+  address: string;
 
   @Column({ nullable: true })
-  documenttypeid: number;
+  city: string;
 
   @Column({ nullable: true })
-  contactname: string;
+  zipcode: string;
 
-  @Column({ nullable: true })
-  mobile: string;
+  @Column({ nullable: false })
+  companyname: string;
 
-  @Column({ nullable: true })
-  email: string;
+  @ManyToOne(() => Users)
+  @JoinColumn({ name: 'userid' })
+  users: Users;
 
-  @Column({ nullable: true })
-  name: string;
+  @ManyToOne(() => States)
+  @JoinColumn({ name: 'stateid' })
+  states: States;
 
-  @Column({ nullable: true })
-  documentnumber: string;
-
-  @Column({ nullable: true })
-  phone: string;
 }

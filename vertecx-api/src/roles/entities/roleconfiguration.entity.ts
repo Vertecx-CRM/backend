@@ -1,10 +1,8 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { Roles } from './roles.entity';
-import { Privileges } from 'src/shared/entities/privileges.entity';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('roleconfiguration')
 export class Roleconfiguration {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   roleconfigurationid: number;
 
   @Column({ nullable: false })
@@ -27,4 +25,5 @@ export class Roleconfiguration {
   @ManyToOne(() => Privileges)
   @JoinColumn({ name: 'privilegeid' })
   privileges: Privileges;
+
 }

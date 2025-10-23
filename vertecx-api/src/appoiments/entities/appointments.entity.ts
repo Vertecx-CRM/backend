@@ -1,6 +1,4 @@
-import { Quotes } from 'src/quotes/entities/quotes.entity';
-import { Technicians } from 'src/technicians/entities/technicians.entity';
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('appointments')
 export class Appointments {
@@ -13,7 +11,7 @@ export class Appointments {
   @Column({ nullable: false })
   technicalid: number;
 
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   appointmentid: number;
 
   @Column({ nullable: true })
@@ -29,7 +27,4 @@ export class Appointments {
   @JoinColumn({ name: 'quotesid' })
   quotes: Quotes;
 
-  @ManyToOne(() => Technicians)
-  @JoinColumn({ name: 'technicalid' })
-  technicians: Technicians;
 }

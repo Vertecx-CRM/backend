@@ -2,7 +2,7 @@ import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 't
 
 @Entity('roles')
 export class Roles {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   roleid: number;
 
   @Column({ nullable: true })

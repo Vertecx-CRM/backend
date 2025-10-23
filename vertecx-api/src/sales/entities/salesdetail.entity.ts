@@ -1,16 +1,8 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
-import { Sales } from './sales.entity';
-import { Products } from 'src/products/entities/products.entity';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('salesdetail')
 export class Salesdetail {
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn()
   saledetailid: number;
 
   @Column({ nullable: false })
@@ -44,4 +36,5 @@ export class Salesdetail {
   @ManyToOne(() => Products)
   @JoinColumn({ name: 'productid' })
   products: Products;
+
 }
