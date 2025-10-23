@@ -1,4 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { Technicians } from './technicians.entity';
+import { Certifications } from 'src/shared/entities/certifications.entity';
+import { States } from 'src/shared/entities/states.entity';
 
 @Entity('technician_certifications')
 export class TechnicianCertifications {
@@ -31,5 +40,4 @@ export class TechnicianCertifications {
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
   states: States;
-
 }

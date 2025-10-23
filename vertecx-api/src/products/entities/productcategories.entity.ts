@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('productcategories')
 export class Productcategories {
@@ -13,5 +13,4 @@ export class Productcategories {
 
   @Column({ nullable: true })
   categorydescription: string;
-
 }

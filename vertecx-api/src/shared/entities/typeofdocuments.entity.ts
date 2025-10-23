@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('typeofdocuments')
 export class Typeofdocuments {
@@ -13,5 +13,4 @@ export class Typeofdocuments {
 
   @Column({ nullable: false })
   name: string;
-
 }
