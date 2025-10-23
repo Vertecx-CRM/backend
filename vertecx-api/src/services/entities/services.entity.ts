@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('services')
 export class Services {
@@ -19,5 +19,4 @@ export class Services {
 
   @Column({ nullable: true })
   image: string;
-
 }

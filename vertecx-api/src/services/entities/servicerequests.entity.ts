@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { States } from 'src/shared/entities/states.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { Services } from './services.entity';
 
 @Entity('servicerequests')
 export class Servicerequests {
@@ -33,5 +41,4 @@ export class Servicerequests {
   @ManyToOne(() => Services)
   @JoinColumn({ name: 'serviceid' })
   services: Services;
-
 }

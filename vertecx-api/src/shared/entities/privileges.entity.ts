@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('privileges')
 export class Privileges {
@@ -7,5 +7,4 @@ export class Privileges {
 
   @Column({ nullable: false })
   name: string;
-
 }

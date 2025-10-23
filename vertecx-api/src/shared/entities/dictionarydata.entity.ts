@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('dictionarydata')
 export class Dictionarydata {
@@ -37,5 +37,4 @@ export class Dictionarydata {
 
   @Column({ nullable: false })
   tabla: string;
-
 }

@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { States } from 'src/shared/entities/states.entity';
+import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('users')
 export class Users {
@@ -45,5 +53,4 @@ export class Users {
   @ManyToOne(() => Typeofdocuments)
   @JoinColumn({ name: 'typeid' })
   typeofdocuments: Typeofdocuments;
-
 }

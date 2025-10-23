@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('states')
 export class States {
@@ -10,5 +10,4 @@ export class States {
 
   @Column({ nullable: true })
   description: string;
-
 }
