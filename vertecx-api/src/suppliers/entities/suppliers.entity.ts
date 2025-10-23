@@ -1,3 +1,5 @@
+import { States } from 'src/shared/entities/states.entity';
+import { Users } from 'src/users/entities/users.entity';
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('suppliers')

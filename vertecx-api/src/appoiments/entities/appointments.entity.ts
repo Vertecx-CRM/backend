@@ -1,4 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Quotes } from 'src/quotes/entities/quotes.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('appointments')
 export class Appointments {
@@ -26,5 +33,4 @@ export class Appointments {
   @ManyToOne(() => Quotes)
   @JoinColumn({ name: 'quotesid' })
   quotes: Quotes;
-
 }

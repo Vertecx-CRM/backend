@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('sales')
 export class Sales {
@@ -40,5 +40,4 @@ export class Sales {
 
   @Column({ nullable: true })
   salestatus: string;
-
 }
