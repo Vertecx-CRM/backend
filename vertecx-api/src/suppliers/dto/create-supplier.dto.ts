@@ -35,5 +35,10 @@ export class CreateSupplierDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(5)
-  Rating: string;
+  rating: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(5)
+  image: string;
 }
