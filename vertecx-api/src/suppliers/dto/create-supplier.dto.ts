@@ -39,6 +39,6 @@ export class CreateSupplierDto {
 
   @IsString()
   @IsNotEmpty()
-  @MaxLength(5)
+  @MaxLength(255)
   image: string;
 }
