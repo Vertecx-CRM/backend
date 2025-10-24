@@ -34,6 +34,9 @@ export class Suppliers {
   @Column({ nullable: false })
   companyname: string;
 
+  @Column({ nullable: false })
+  Rating: string;
+
   @ManyToOne(() => Users)
   @JoinColumn({ name: 'userid' })
   users: Users;
