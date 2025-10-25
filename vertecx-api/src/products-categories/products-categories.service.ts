@@ -1,119 +1,81 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateProductsCategoryDto } from './dto/create-products-category.dto';
 import { UpdateProductsCategoryDto } from './dto/update-products-category.dto';
+import { ProductCategory } from './entities/product-category.entity';
 
 @Injectable()
 export class ProductsCategoriesService {
-  private categories = [];
+  constructor(
+    @InjectRepository(ProductCategory)
+    private readonly categoryRepo: Repository<ProductCategory>,
+  ) {}
 
-  create(createProductsCategoryDto: CreateProductsCategoryDto) {
-    const categoryDto = new CreateProductsCategoryDto(createProductsCategoryDto);
+  async create(dto: CreateProductsCategoryDto) {
+    const categoryDto = new CreateProductsCategoryDto(dto);
 
     const errors = categoryDto.validate();
-
     if (errors.length > 0) {
-      return {
-        success: false,
-        message: 'Validation errors',
-        errors,
-      };
+      throw new BadRequestException({ success: false, message: 'Validation errors', errors });
     }
 
-    const existingUser = this.categories.find(
-      (u) => u.name === categoryDto.name
-    );
-
-    if (existingUser) {
-      return {
+    const existing = await this.categoryRepo.findOne({ where: { name: categoryDto.name } });
+    if (existing) {
+      throw new BadRequestException({
         success: false,
         message: 'The category name already exists.',
-        errors: ['The name is already registered for another product category.'],
-      };
+        errors: ['There is already a category with the same name.'],
+      });
     }
 
-    const newCategory = {
-      id: this.categories.length + 1,
-      icon: categoryDto.icon,
+    const newCategory = this.categoryRepo.create({
       name: categoryDto.name,
       description: categoryDto.description,
       status: categoryDto.status,
-      createdAt: new Date(),
-    };
+      icon: categoryDto.icon,
+    });
 
-    this.categories.push(newCategory);
-
-    return {
-      success: true,
-      message: 'Category created successfully',
-      data: newCategory,
-    };
+    const saved = await this.categoryRepo.save(newCategory);
+    return { success: true, message: 'Category created successfully', data: saved };
   }
 
   findAll() {
-    return this.categories;
+    return this.categoryRepo.find();
   }
 
-  findOne(id: number) {
-    const category = this.categories.find((cat) => cat.id === id);
-    return category || { success: false, message: `Category with id not found ${id}` };
+  async findOne(id: number) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new BadRequestException({ success: false, message: `Category with id not found ${id}` });
+    }
+    return category;
   }
 
-  update(id: number, updateProductsCategoryDto: UpdateProductsCategoryDto) {
- 
-    const categoryDto = new UpdateProductsCategoryDto(updateProductsCategoryDto);
+  async update(id: number, dto: UpdateProductsCategoryDto) {
+    const categoryDto = new UpdateProductsCategoryDto(dto);
     const errors = categoryDto.validate();
-
     if (errors.length > 0) {
-      return { success: false, message: 'Validation errors', errors };
+      throw new BadRequestException({ success: false, message: 'Validation errors', errors });
     }
 
-    const index = this.categories.findIndex((cat) => cat.id === id);
-    if (index === -1) {
-      return { success: false, message: `Category with id not found ${id}` };
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new BadRequestException({ success: false, message: `Category with id not found ${id}` });
     }
 
-    if (categoryDto.name) {
-      const duplicateName = this.categories.find(
-        (cat) => cat.name.toLowerCase() === categoryDto.name.toLowerCase() && cat.id !== id
-      );
+    Object.assign(category, dto, { updatedAt: new Date() });
+    const updated = await this.categoryRepo.save(category);
 
-      if (duplicateName) {
-        return {
-          success: false,
-          message: 'The category name already exists.',
-          errors: ['There is already a category with the same name.'],
-        };
-      }
-    }
-
-    const filteredDto = Object.fromEntries(
-      Object.entries(categoryDto).filter(([_, value]) => value !== undefined)
-    );
-
-    const updatedCategory = {
-      ...this.categories[index],
-      ...filteredDto,
-      updatedAt: new Date(),
-    };
-
-    this.categories[index] = updatedCategory;
-
-    return {
-      success: true,
-      message: 'Category updated successfully',
-      data: updatedCategory,
-    };
+    return { success: true, message: 'Category updated successfully', data: updated };
   }
 
-
-
-  remove(id: number) {
-    const index = this.categories.findIndex((cat) => cat.id === id);
-    if (index === -1) {
-      return { message: `Category with id not found ${id}` };
+  async remove(id: number) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new BadRequestException({ success: false, message: `Category with id not found ${id}` });
     }
-
-    const deleted = this.categories.splice(index, 1);
-    return { message: 'Category successfully deleted', data: deleted[0] };
+    await this.categoryRepo.remove(category);
+    return { success: true, message: 'Category successfully deleted' };
   }
 }

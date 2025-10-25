@@ -6,13 +6,17 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  // ✅ Habilitar CORS
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
+  // ✅ Swagger
   const config = new DocumentBuilder()
     .setTitle('Vertecx API')
     .setDescription('Documentación de la API de Vertecx')
@@ -22,6 +26,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  // ✅ Arranque del servidor
   await app.listen(3000);
   console.log('🚀 API corriendo en http://localhost:3000/api/docs');
 }

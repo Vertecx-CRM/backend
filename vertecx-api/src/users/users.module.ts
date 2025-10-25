@@ -9,5 +9,6 @@ import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
   imports: [TypeOrmModule.forFeature([Users, Typeofdocuments])],
   controllers: [UsersController],
   providers: [UsersService],
+  exports: [TypeOrmModule],
 })
 export class UsersModule {}

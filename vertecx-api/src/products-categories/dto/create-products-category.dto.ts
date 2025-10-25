@@ -4,24 +4,23 @@ export class CreateProductsCategoryDto {
   description?: string;
   status: boolean;
 
-  constructor(data: any) {
-    this.icon = data.icon;
-    this.name = (data.name).trim();
-    this.description = (data.description).trim();
-    this.status = data.status ?? true;
+  constructor(data: any = {}) {
+    // 👇 Asignaciones seguras (sin .trim() sobre undefined)
+    this.icon = data.icon ?? null;
+    this.name = typeof data.name === 'string' ? data.name.trim() : data.name ?? '';
+    this.description = typeof data.description === 'string' ? data.description.trim() : null;
+    this.status = typeof data.status === 'boolean' ? data.status : true;
   }
 
   validate(): string[] {
     const errors: string[] = [];
-
-    // Expresión regular para detectar números
     const hasNumbers = /\d/;
 
     // Validar nombre
     if (!this.name) {
-      errors.push('Name is required.');
+      errors.push('The field "name" is required and must be a non-empty string.');
     } else if (typeof this.name !== 'string') {
-      errors.push('The name must be a text.');
+      errors.push('The field "name" must be text.');
     } else if (this.name.length < 3) {
       errors.push('The name must have at least 3 characters.');
     } else if (this.name.length > 50) {
@@ -33,7 +32,7 @@ export class CreateProductsCategoryDto {
     // Validar descripción
     if (this.description) {
       if (typeof this.description !== 'string') {
-        errors.push('The description must be a text.');
+        errors.push('The description must be text.');
       } else if (this.description.length > 255) {
         errors.push('The description must not exceed 255 characters.');
       } else if (hasNumbers.test(this.description)) {
@@ -41,14 +40,14 @@ export class CreateProductsCategoryDto {
       }
     }
 
-    // Validar icono
+    // Validar icon
     if (this.icon && typeof this.icon !== 'string') {
       errors.push('The icon must be a text string (URL or base64).');
     }
 
     // Validar estado
     if (typeof this.status !== 'boolean') {
-      errors.push('The state must be a boolean value (true or false).');
+      errors.push('The status must be a boolean value (true or false).');
     }
 
     return errors;
