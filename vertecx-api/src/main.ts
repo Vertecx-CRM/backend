@@ -22,7 +22,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(3000);
-  console.log('🚀 API corriendo en http://localhost:3000/api/docs');
+  await app.listen(3001);
+  console.log('🚀 API corriendo en http://localhost:3001/api/docs');
 }
 bootstrap();

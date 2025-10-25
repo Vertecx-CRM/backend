@@ -4,70 +4,76 @@ import { Repository } from 'typeorm';
 import { Suppliers } from './entities/suppliers.entity';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
-import { Users } from 'src/users/entities/users.entity';
 import { States } from 'src/shared/entities/states.entity';
 
 @Injectable()
 export class SuppliersService {
   constructor(
     @InjectRepository(Suppliers) private readonly repo: Repository<Suppliers>,
-    @InjectRepository(Users) private readonly usersRepo: Repository<Users>,
     @InjectRepository(States) private readonly statesRepo: Repository<States>,
   ) {}
 
-  private async ensureUserAndState(userid: number, stateid: number) {
-    const user = await this.usersRepo.findOne({ where: { userid } });
-    if (!user) throw new BadRequestException('El usuario no existe');
-    const state = await this.statesRepo.findOne({ where: { stateid } });
-    if (!state) throw new BadRequestException('El estado no existe');
+  private async ensureState(stateid: number) {
+    const state = await this.statesRepo.findOne({ where: { stateid } as any });
+    if (!state) throw new BadRequestException('stateid no existe');
   }
 
-  private async ensureNitUnique(nit: string, excludeId?: number) {
-    const qb = this.repo.createQueryBuilder('s').where('s.nit = :nit', { nit });
-    if (excludeId) qb.andWhere('s.supplierid <> :id', { id: excludeId });
-    const exists = await qb.getExists();
-    if (exists) throw new BadRequestException('El NIT ya está registrado');
-  }
-
-  async create(dto: CreateSupplierDto): Promise<Suppliers> {
-    await this.ensureUserAndState(dto.userid, dto.stateid);
-    await this.ensureNitUnique(dto.nit);
-    const entity = this.repo.create(dto);
-    return this.repo.save(entity);
-  }
-
-  async createMany(dtos: CreateSupplierDto[]): Promise<Suppliers[]> {
-    for (const d of dtos) {
-      await this.ensureUserAndState(d.userid, d.stateid);
-      await this.ensureNitUnique(d.nit);
+  private async ensureUnique(dto: { nit?: string; phone?: string; email?: string }, excludeId?: number) {
+    if (dto.nit) {
+      const q = this.repo.createQueryBuilder('s').where('s.nit = :nit', { nit: dto.nit });
+      if (excludeId) q.andWhere('s.supplierid <> :id', { id: excludeId });
+      if (await q.getExists()) throw new BadRequestException('NIT ya registrado');
     }
-    const entities = this.repo.create(dtos);
-    return this.repo.save(entities);
+    if (dto.phone) {
+      const q = this.repo.createQueryBuilder('s').where('s.phone = :phone', { phone: dto.phone });
+      if (excludeId) q.andWhere('s.supplierid <> :id', { id: excludeId });
+      if (await q.getExists()) throw new BadRequestException('Teléfono ya registrado');
+    }
+    if (dto.email) {
+      const q = this.repo.createQueryBuilder('s').where('s.email = :email', { email: dto.email });
+      if (excludeId) q.andWhere('s.supplierid <> :id', { id: excludeId });
+      if (await q.getExists()) throw new BadRequestException('Correo ya registrado');
+    }
   }
 
-  async findAll(): Promise<Suppliers[]> {
-    return this.repo.find();
+  async create(dto: CreateSupplierDto) {
+    await this.ensureState(dto.stateid);
+    await this.ensureUnique({ nit: dto.nit, phone: dto.phone, email: dto.email });
+    const entity = this.repo.create(dto);
+    const saved = await this.repo.save(entity);
+    return { message: 'Proveedor registrado correctamente', data: saved };
   }
 
-  async findOne(id: number): Promise<Suppliers> {
+  async findAll() {
+    const data = await this.repo.find();
+    return { message: 'OK', data };
+  }
+
+  async findOne(id: number) {
     const entity = await this.repo.findOne({ where: { supplierid: id } });
     if (!entity) throw new NotFoundException('Proveedor no encontrado');
-    return entity;
+    return { message: 'OK', data: entity };
   }
 
-  async update(id: number, dto: UpdateSupplierDto): Promise<Suppliers> {
-    const current = await this.findOne(id);
-    const userid = dto.userid ?? current.userid;
+  async update(id: number, dto: UpdateSupplierDto) {
+    const current = await this.repo.findOne({ where: { supplierid: id } });
+    if (!current) throw new NotFoundException('Proveedor no encontrado');
     const stateid = dto.stateid ?? current.stateid;
-    await this.ensureUserAndState(userid, stateid);
-    if (dto.nit) await this.ensureNitUnique(dto.nit, id);
+    await this.ensureState(stateid);
+    await this.ensureUnique(
+      { nit: dto.nit, phone: dto.phone, email: dto.email },
+      id,
+    );
     const entity = await this.repo.preload({ supplierid: id, ...dto });
     if (!entity) throw new NotFoundException('Proveedor no encontrado');
-    return this.repo.save(entity);
+    const saved = await this.repo.save(entity);
+    return { message: 'Proveedor actualizado correctamente', data: saved };
   }
 
-  async remove(id: number): Promise<void> {
-    const entity = await this.findOne(id);
+  async remove(id: number) {
+    const entity = await this.repo.findOne({ where: { supplierid: id } });
+    if (!entity) throw new NotFoundException('Proveedor no encontrado');
     await this.repo.remove(entity);
+    return { message: 'Proveedor eliminado correctamente' };
   }
 }

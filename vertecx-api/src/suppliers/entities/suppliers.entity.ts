@@ -1,50 +1,49 @@
+import { Entity, PrimaryGeneratedColumn, Column, Index, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { States } from 'src/shared/entities/states.entity';
-import { Users } from 'src/users/entities/users.entity';
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
 
 @Entity('suppliers')
 export class Suppliers {
   @PrimaryGeneratedColumn()
   supplierid: number;
 
-  @Column({ nullable: false })
-  userid: number;
+  @Index()
+  @Column({ type: 'varchar', length: 150 })
+  name: string;
 
-  @Column({ nullable: false })
-  stateid: number;
-
-  @Column({ nullable: false })
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 50 })
   nit: string;
 
-  @Column({ nullable: true })
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 20 })
+  phone: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 160 })
+  email: string;
+
+  @Column({ type: 'varchar', length: 200 })
   address: string;
 
-  @Column({ nullable: true })
-  city: string;
+  @Column({ type: 'varchar', length: 120 })
+  servicetype: string;
 
-  @Column({ nullable: true })
-  zipcode: string;
+  @Column({ type: 'int' })
+  stateid: number;
 
-  @Column({ nullable: false })
-  companyname: string;
+  @Column({ type: 'varchar', length: 120 })
+  contactname: string;
 
-  @Column({ nullable: false })
-  rating: string;
-
-  @Column({ nullable: false })
+  @Column({ type: 'varchar', length: 255 })
   image: string;
-
-  @ManyToOne(() => Users)
-  @JoinColumn({ name: 'userid' })
-  users: Users;
 
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
-  states: States;
+  state: States;
+
+  @CreateDateColumn()
+  createat: Date;
+
+  @UpdateDateColumn()
+  updateat: Date;
 }
