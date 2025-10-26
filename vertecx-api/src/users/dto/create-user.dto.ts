@@ -1,14 +1,14 @@
 export class CreateUserDto {
-  name: string;                 // Obligatorio
-  lastname: string;             // Obligatorio
-  email: string;                // Obligatorio
-  password: string;             // Obligatorio
-  confirmPassword: string;      // Obligatorio
-  phone: string;                // Obligatorio (string, 7–15 dígitos)
-  typeid: number;               // Obligatorio (FK tipo documento)
-  documentnumber: string;       // Obligatorio (string, 5–20 dígitos)
-  image?: string;               // Opcional
-  stateid: number;              // Obligatorio (FK estado)
+  name: string;
+  lastname: string;
+  email: string;
+  password: string;
+  confirmPassword: string;     
+  phone: string;
+  typeid: number;
+  documentnumber: string;
+  image?: string;
+  stateid: number;
 
   constructor(data: any) {
     this.name = String(data.name || '').trim();

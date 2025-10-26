@@ -1,14 +1,14 @@
 export class UpdateUserDto {
-  name?: string;               // Opcional
-  lastname?: string;           // Opcional
-  email?: string;              // Opcional
-  password?: string;           // Opcional
-  confirmPassword?: string;    // Opcional
-  phone?: string;              // Opcional (string, 7–15 dígitos)
-  typeid?: number;             // Opcional (FK tipo documento)
-  documentnumber?: string;     // Opcional (string, 5–20 dígitos)
-  image?: string;              // Opcional
-  stateid?: number;            // Opcional (FK estado)
+  name?: string;           
+  lastname?: string;       
+  email?: string;          
+  password?: string;       
+  confirmPassword?: string;
+  phone?: string;
+  typeid?: number;
+  documentnumber?: string;
+  image?: string;
+  stateid?: number;
 
   constructor(data: any) {
     this.name = data.name ? String(data.name).trim() : undefined;
