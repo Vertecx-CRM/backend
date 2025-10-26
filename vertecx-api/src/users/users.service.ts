@@ -1,133 +1,163 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Not, Repository } from 'typeorm';
+import { Users } from './entities/users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+import { States } from 'src/shared/entities/states.entity';
 
 @Injectable()
 export class UsersService {
-  private users = [];
+  constructor(
+    @InjectRepository(Users)
+    private readonly usersRepository: Repository<Users>,
 
-  create(createUserDto: CreateUserDto) {
-    const dto = new CreateUserDto(createUserDto);
-    const errors = dto.validate();
+    @InjectRepository(Typeofdocuments)
+    private readonly docTypeRepository: Repository<Typeofdocuments>,
 
-    if (errors.length > 0) {
-      return { success: false, message: 'Validation errors', errors };
+    @InjectRepository(States)
+    private readonly statesRepository: Repository<States>,
+  ) {}
+
+  // 🟢 Crear usuario
+  async create(createUserDto: CreateUserDto) {
+    // 1️⃣ Validación DTO
+    const errors = new CreateUserDto(createUserDto).validate();
+    if (errors.length > 0) throw new BadRequestException(errors);
+
+    // 2️⃣ Verificar duplicados
+    const exists = await this.usersRepository.findOne({
+      where: [
+        { documentnumber: createUserDto.documentnumber },
+        { email: createUserDto.email },
+      ],
+    });
+    if (exists) {
+      throw new BadRequestException('A user with the same email or document number already exists.');
     }
 
-    const existingUser = this.users.find(
-      (u) => u.documentNumber === dto.documentNumber
-    );
-
-    if (existingUser) {
-      return {
-        success: false,
-        message: 'Document number already exists.',
-        errors: ['The document number is already registered by another user.'],
-      };
+    // 3️⃣ Verificar tipo de documento
+    const documentType = await this.docTypeRepository.findOne({
+      where: { typeofdocumentid: createUserDto.typeid },
+    });
+    if (!documentType) {
+      throw new BadRequestException(`Invalid document type (typeid: ${createUserDto.typeid}).`);
     }
 
-    const newUser = {
-      id: this.users.length + 1,
-      ...dto,
-      createdAt: new Date(),
-    };
+    // 4️⃣ Verificar estado
+    const state = await this.statesRepository.findOne({
+      where: { stateid: createUserDto.stateid },
+    });
+    if (!state) {
+      throw new BadRequestException(`Invalid state (stateid: ${createUserDto.stateid}).`);
+    }
 
-    this.users.push(newUser);
+    // 5️⃣ Crear el nuevo usuario
+    const newUser = this.usersRepository.create({
+      name: createUserDto.name,
+      lastname: createUserDto.lastname,
+      email: createUserDto.email,
+      password: createUserDto.password,
+      phone: createUserDto.phone,
+      documentnumber: createUserDto.documentnumber,
+      image: createUserDto.image ?? null,
+      createat: new Date(),
+      updateat: null,
+      typeid: documentType.typeofdocumentid,
+      stateid: state.stateid,
+    });
 
+    // 6️⃣ Guardar usuario
+    const saved = await this.usersRepository.save(newUser);
     return {
       success: true,
-      message: 'User created successfully',
-      data: newUser,
+      message: 'User created successfully.',
+      data: saved,
     };
   }
 
-  findAll() {
-    return this.users;
+  // 🟡 Listar todos
+  async findAll() {
+    const users = await this.usersRepository.find({
+      relations: ['states', 'typeofdocuments'],
+      order: { userid: 'ASC' },
+    });
+    return { success: true, data: users };
   }
 
-  findOne(id: number) {
-    const user = this.users.find((user) => user.id === id);
-    return user || { success: false, message: `User with id not found ${id}` };
+  // 🔵 Buscar por ID
+  async findOne(id: number) {
+    const user = await this.usersRepository.findOne({
+      where: { userid: id },
+      relations: ['states', 'typeofdocuments'],
+    });
+
+    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
+    return { success: true, data: user };
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    const userIndex = this.users.findIndex((u) => u.id === id);
-    if (userIndex === -1) {
-      return { success: false, message: `User with ID ${id} was not found.` };
-    }
+  // 🟠 Actualizar usuario
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.usersRepository.findOne({ where: { userid: id } });
+    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
 
-    const dto = new UpdateUserDto(updateUserDto);
-    const errors = dto.validate();
-    if (errors.length > 0) {
-      return { success: false, message: 'Validation errors', errors };
-    }
+    const errors = new UpdateUserDto(updateUserDto).validate();
+    if (errors.length > 0) throw new BadRequestException(errors);
 
     // Validar duplicados
-    if (dto.documentNumber) {
-      const duplicateDoc = this.users.find(
-        (u) => u.documentNumber === dto.documentNumber && u.id !== id
-      );
-      if (duplicateDoc) {
-        return {
-          success: false,
-          message: 'Document number already exists.',
-          errors: ['The document number is already registered by another user.'],
-        };
+    if (updateUserDto.email || updateUserDto.documentnumber) {
+      const duplicate = await this.usersRepository.findOne({
+        where: [
+          { email: updateUserDto.email, userid: Not(id) },
+          { documentnumber: updateUserDto.documentnumber, userid: Not(id) },
+        ],
+      });
+      if (duplicate) {
+        throw new BadRequestException('Email or document number already exists.');
       }
     }
 
-    if (dto.email) {
-      const duplicateEmail = this.users.find(
-        (u) => u.email === dto.email && u.id !== id
-      );
-      if (duplicateEmail) {
-        return {
-          success: false,
-          message: 'Email already exists.',
-          errors: ['The email is already registered by another user.'],
-        };
-      }
+    // Validar tipo de documento (si viene)
+    if (updateUserDto.typeid) {
+      const docType = await this.docTypeRepository.findOne({
+        where: { typeofdocumentid: updateUserDto.typeid },
+      });
+      if (!docType) throw new BadRequestException('Invalid document type.');
     }
 
-    const filteredDto = Object.fromEntries(
-      Object.entries(dto).filter(([_, value]) => value !== undefined)
-    );
-
-    const updatedUser = {
-      ...this.users[userIndex],
-      ...filteredDto,
-      updatedAt: new Date(),
-    };
-
-    this.users[userIndex] = updatedUser;
-
-    return {
-      success: true,
-      message: `User with ID ${id} updated successfully.`,
-      data: updatedUser,
-    };
-  }
-
-
-  remove(id: number) {
-    const index = this.users.findIndex((u) => u.id === id);
-
-    if (index === -1) {
-      return {
-        success: false,
-        message: `User with ID ${id} was not found.`,
-      };
+    // Validar estado (si viene)
+    if (updateUserDto.stateid) {
+      const state = await this.statesRepository.findOne({
+        where: { stateid: updateUserDto.stateid },
+      });
+      if (!state) throw new BadRequestException('Invalid state.');
     }
 
-    const deletedUser = this.users[index];
+    // Actualizar usuario
+    const updatedUser = this.usersRepository.merge(user, {
+      name: updateUserDto.name ?? user.name,
+      lastname: updateUserDto.lastname ?? user.lastname,
+      email: updateUserDto.email ?? user.email,
+      password: updateUserDto.password ?? user.password,
+      phone: updateUserDto.phone ?? user.phone,
+      documentnumber: updateUserDto.documentnumber ?? user.documentnumber,
+      image: updateUserDto.image ?? user.image,
+      updateat: new Date(),
+      typeid: updateUserDto.typeid ?? user.typeid,
+      stateid: updateUserDto.stateid ?? user.stateid,
+    });
 
-    this.users.splice(index, 1);
-
-    return {
-      success: true,
-      message: `User with ID ${id} removed successfully.`,
-      data: deletedUser,
-    };
+    const saved = await this.usersRepository.save(updatedUser);
+    return { success: true, message: 'User updated successfully.', data: saved };
   }
 
+  // Eliminar usuario
+  async remove(id: number) {
+    const user = await this.usersRepository.findOne({ where: { userid: id } });
+    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
+
+    await this.usersRepository.remove(user);
+    return { success: true, message: `User with ID ${id} deleted.` };
+  }
 }

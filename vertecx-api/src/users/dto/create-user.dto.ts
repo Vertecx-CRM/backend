@@ -1,102 +1,97 @@
 export class CreateUserDto {
-  firstName: string;
-  secondName?: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  phoneNumber: string;
-  documentType: string;
-  documentNumber: string;
-  image?: string;
-  status: boolean;
+  name: string;                 // Obligatorio
+  lastname: string;             // Obligatorio
+  email: string;                // Obligatorio
+  password: string;             // Obligatorio
+  confirmPassword: string;      // Obligatorio
+  phone: string;                // Obligatorio (string, 7–15 dígitos)
+  typeid: number;               // Obligatorio (FK tipo documento)
+  documentnumber: string;       // Obligatorio (string, 5–20 dígitos)
+  image?: string;               // Opcional
+  stateid: number;              // Obligatorio (FK estado)
 
   constructor(data: any) {
-    this.firstName = (data.firstName || '').trim();
-    this.secondName = (data.secondName || '').trim();
-    this.email = (data.email || '').trim();
-    this.password = (data.password || '').trim();
-    this.confirmPassword = (data.confirmPassword || '').trim();
-    this.phoneNumber = (data.phoneNumber || '').trim();
-    this.documentType = (data.documentType || '').trim();
-    this.documentNumber = (data.documentNumber || '').trim();
-    this.image = (data.image || '').trim();
-    this.status = data.status ?? true; 
+    this.name = String(data.name || '').trim();
+    this.lastname = String(data.lastname || '').trim();
+    this.email = String(data.email || '').trim();
+    this.password = String(data.password || '').trim();
+    this.confirmPassword = String(data.confirmPassword || '').trim();
+    this.phone = String(data.phone || '').trim();
+    this.typeid = Number(data.typeid) || 0;
+    this.documentnumber = String(data.documentnumber || '').trim();
+    this.image = data.image ? String(data.image).trim() : '';
+    this.stateid = Number(data.stateid) || 1;
   }
 
   validate(): string[] {
     const errors: string[] = [];
     const hasNumbers = /\d/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const validDocumentTypes = ['CC', 'CE', 'TI', 'NIT', 'PAS']; 
 
-    //  Validar firstName
-    if (!this.firstName) {
-      errors.push('First name is required.');
-    } else if (this.firstName.length < 3) {
-      errors.push('First name must have at least 3 characters.');
-    } else if (this.firstName.length > 50) {
-      errors.push('First name must not exceed 50 characters.');
-    } else if (hasNumbers.test(this.firstName)) {
-      errors.push('First name cannot contain numbers.');
+    // name
+    if (!this.name) {
+      errors.push('Name is required.');
+    } else if (this.name.length < 3) {
+      errors.push('Name must have at least 3 characters.');
+    } else if (hasNumbers.test(this.name)) {
+      errors.push('Name cannot contain numbers.');
     }
 
-    // Validar secondName (si viene)
-    if (this.secondName && hasNumbers.test(this.secondName)) {
-      errors.push('Second name cannot contain numbers.');
+    // lastname
+    if (!this.lastname) {
+      errors.push('Lastname is required.');
+    } else if (hasNumbers.test(this.lastname)) {
+      errors.push('Lastname cannot contain numbers.');
     }
 
-    // Validar email
+    // email
     if (!this.email) {
       errors.push('Email is required.');
     } else if (!emailRegex.test(this.email)) {
       errors.push('Email format is invalid.');
     }
 
-    // Validar password
+    // password
     if (!this.password) {
       errors.push('Password is required.');
     } else if (this.password.length < 6) {
       errors.push('Password must have at least 6 characters.');
     }
 
-    // Validar confirmPassword
+    // confirm password
     if (!this.confirmPassword) {
       errors.push('Confirm password is required.');
     } else if (this.password !== this.confirmPassword) {
       errors.push('Passwords do not match.');
     }
 
-    // Validar phoneNumber
-    if (!this.phoneNumber) {
-      errors.push('Phone number is required.');
-    } else if (!/^[0-9]{7,15}$/.test(this.phoneNumber)) {
-      errors.push('Phone number must contain only digits (7–15 characters).');
+    // phone
+    if (!this.phone) {
+      errors.push('Phone is required.');
+    } else if (!/^[0-9]{7,15}$/.test(this.phone)) {
+      errors.push('Phone must contain only digits (7–15 characters).');
     }
 
-    // Validar documentType
-    if (!this.documentType) {
-      errors.push('Document type is required.');
-    } else if (!validDocumentTypes.includes(this.documentType.toUpperCase())) {
-      errors.push(
-        `Invalid document type. Valid types are: ${validDocumentTypes.join(', ')}.`
-      );
-    }
-
-    // Validar documentNumber
-    if (!this.documentNumber) {
+    // documentnumber
+    if (!this.documentnumber) {
       errors.push('Document number is required.');
-    } else if (!/^[0-9]{5,20}$/.test(this.documentNumber)) {
-      errors.push('Document number must contain only digits.');
+    } else if (!/^[0-9]{5,20}$/.test(this.documentnumber)) {
+      errors.push('Document number must contain only digits (5–20 characters).');
     }
 
-    // Validar image
+    // typeid
+    if (!this.typeid || isNaN(this.typeid)) {
+      errors.push('Type ID (typeid) is required and must be a valid number.');
+    }
+
+    // stateid
+    if (!this.stateid || isNaN(this.stateid)) {
+      errors.push('State ID (stateid) is required and must be a valid number.');
+    }
+
+    // image
     if (this.image && typeof this.image !== 'string') {
       errors.push('Image must be a string (URL or base64).');
-    }
-
-    // Validar status
-    if (typeof this.status !== 'boolean') {
-      errors.push('Status must be a boolean value (true or false).');
     }
 
     return errors;
