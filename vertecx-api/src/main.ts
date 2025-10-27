@@ -5,12 +5,12 @@ import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      whitelist: true, // elimina props no declaradas en DTO
+      forbidNonWhitelisted: true, // lanza error si llegan props extra
+      transform: true, // convierte tipos (string→number/date) según DTO
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
   const config = new DocumentBuilder()

@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Roles } from './roles.entity';
 import { Privileges } from 'src/shared/entities/privileges.entity';
+import { Permissions } from 'src/shared/entities/permissions.entity';
 
 @Entity('roleconfiguration')
 export class Roleconfiguration {
