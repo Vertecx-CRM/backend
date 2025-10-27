@@ -18,5 +18,6 @@ import { Roleconfiguration } from './entities/roleconfiguration.entity';
   ],
   controllers: [RolesController],
   providers: [RolesService],
+  exports: [RolesService],
 })
 export class RolesModule {}

@@ -7,12 +7,14 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Put,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleConfigurationDto } from './dto/update-role.dto';
 import { Roles } from './entities/roles.entity';
+import { UpdateRoleMatrixDto } from './dto/update-role-matrix.dto';
 
 @ApiTags('Roles')
 @Controller('roles')
@@ -33,8 +35,32 @@ export class RolesController {
   @Get()
   @ApiOperation({ summary: 'Listar todos los roles' })
   @ApiResponse({ status: 200, description: 'Lista de roles.' })
-  async findAll(): Promise<Roles[]> {
+  async findAll() {
     return this.rolesService.findAll();
+  }
+
+  // MATRIZ PARA EL FRONT (pinta el checklist)
+  @Get(':id/matrix')
+  @ApiOperation({
+    summary:
+      'Obtener la matriz de módulos (permissions) y privilegios del rol para pintar el checklist',
+  })
+  async getMatrix(@Param('id', ParseIntPipe) roleid: number) {
+    return this.rolesService.getRoleMatrix(roleid);
+  }
+
+  // REEMPLAZA TODA LA CONFIGURACIÓN DEL ROL SEGÚN EL CHECKLIST
+  @Put(':id/configurations')
+  @ApiOperation({
+    summary:
+      'Reemplazar TODAS las configuraciones (permission+privilege) del rol según el checklist',
+  })
+  @ApiResponse({ status: 200, description: 'Configuración actualizada.' })
+  async replaceMatrix(
+    @Param('id', ParseIntPipe) roleid: number,
+    @Body() dto: UpdateRoleMatrixDto,
+  ) {
+    return this.rolesService.replaceRoleMatrix(roleid, dto);
   }
 
   // 🔹 GET ONE ROLE
