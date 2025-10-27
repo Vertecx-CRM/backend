@@ -1,99 +1,62 @@
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsNumber,
+  IsNotEmpty,
+  Length,
+  Matches,
+  IsBoolean,
+  ValidateIf,
+} from 'class-validator';
+import { Match } from '../decorators/match.decorator';
+
+
 export class CreateUserDto {
+  @IsString({ message: 'El nombre debe ser un texto.' })
+  @Length(3, 50, { message: 'El nombre debe tener entre 3 y 50 caracteres.' })
+  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
+    message: 'El nombre no puede contener números ni caracteres especiales.',
+  })
   name: string;
+
+  @IsString({ message: 'El apellido debe ser un texto.' })
+  @Length(2, 50, { message: 'El apellido debe tener entre 2 y 50 caracteres.' })
+  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
+    message: 'El apellido no puede contener números ni caracteres especiales.',
+  })
   lastname: string;
+
+  @IsEmail({}, { message: 'El formato del correo electrónico es inválido.' })
   email: string;
+
+  @IsString({ message: 'La contraseña debe ser texto.' })
+  @Length(6, 100, { message: 'La contraseña debe tener al menos 6 caracteres.' })
   password: string;
-  confirmPassword: string;     
+
+  @IsString({ message: 'La confirmación de contraseña debe ser texto.' })
+  @Match('password', { message: 'Las contraseñas no coinciden.' })
+  confirmPassword: string;
+
+  @IsString({ message: 'El teléfono debe ser texto numérico.' })
+  @Matches(/^[0-9]{7,15}$/, {
+    message: 'El teléfono debe tener entre 7 y 15 dígitos numéricos.',
+  })
   phone: string;
+
+  @IsNumber({}, { message: 'El tipo de documento debe ser un número válido.' })
   typeid: number;
+
+  @IsString({ message: 'El número de documento debe ser texto numérico.' })
+  @Matches(/^[0-9]{5,20}$/, {
+    message: 'El número de documento debe tener entre 5 y 20 dígitos numéricos.',
+  })
   documentnumber: string;
+
+  @IsOptional()
+  @IsString({ message: 'La imagen debe ser una cadena de texto (URL o base64).' })
   image?: string;
+
+  @IsNumber({}, { message: 'El estado debe ser un número válido.' })
   stateid: number;
-
-  constructor(data: any) {
-    this.name = String(data.name || '').trim();
-    this.lastname = String(data.lastname || '').trim();
-    this.email = String(data.email || '').trim();
-    this.password = String(data.password || '').trim();
-    this.confirmPassword = String(data.confirmPassword || '').trim();
-    this.phone = String(data.phone || '').trim();
-    this.typeid = Number(data.typeid) || 0;
-    this.documentnumber = String(data.documentnumber || '').trim();
-    this.image = data.image ? String(data.image).trim() : '';
-    this.stateid = Number(data.stateid) || 1;
-  }
-
-  validate(): string[] {
-    const errors: string[] = [];
-    const hasNumbers = /\d/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    // name
-    if (!this.name) {
-      errors.push('Name is required.');
-    } else if (this.name.length < 3) {
-      errors.push('Name must have at least 3 characters.');
-    } else if (hasNumbers.test(this.name)) {
-      errors.push('Name cannot contain numbers.');
-    }
-
-    // lastname
-    if (!this.lastname) {
-      errors.push('Lastname is required.');
-    } else if (hasNumbers.test(this.lastname)) {
-      errors.push('Lastname cannot contain numbers.');
-    }
-
-    // email
-    if (!this.email) {
-      errors.push('Email is required.');
-    } else if (!emailRegex.test(this.email)) {
-      errors.push('Email format is invalid.');
-    }
-
-    // password
-    if (!this.password) {
-      errors.push('Password is required.');
-    } else if (this.password.length < 6) {
-      errors.push('Password must have at least 6 characters.');
-    }
-
-    // confirm password
-    if (!this.confirmPassword) {
-      errors.push('Confirm password is required.');
-    } else if (this.password !== this.confirmPassword) {
-      errors.push('Passwords do not match.');
-    }
-
-    // phone
-    if (!this.phone) {
-      errors.push('Phone is required.');
-    } else if (!/^[0-9]{7,15}$/.test(this.phone)) {
-      errors.push('Phone must contain only digits (7–15 characters).');
-    }
-
-    // documentnumber
-    if (!this.documentnumber) {
-      errors.push('Document number is required.');
-    } else if (!/^[0-9]{5,20}$/.test(this.documentnumber)) {
-      errors.push('Document number must contain only digits (5–20 characters).');
-    }
-
-    // typeid
-    if (!this.typeid || isNaN(this.typeid)) {
-      errors.push('Type ID (typeid) is required and must be a valid number.');
-    }
-
-    // stateid
-    if (!this.stateid || isNaN(this.stateid)) {
-      errors.push('State ID (stateid) is required and must be a valid number.');
-    }
-
-    // image
-    if (this.image && typeof this.image !== 'string') {
-      errors.push('Image must be a string (URL or base64).');
-    }
-
-    return errors;
-  }
 }

@@ -22,11 +22,7 @@ export class UsersService {
 
   // 🟢 Crear usuario
   async create(createUserDto: CreateUserDto) {
-    // 1️⃣ Validación DTO
-    const errors = new CreateUserDto(createUserDto).validate();
-    if (errors.length > 0) throw new BadRequestException(errors);
-
-    // 2️⃣ Verificar duplicados
+    // 1️⃣ Verificar duplicados
     const exists = await this.usersRepository.findOne({
       where: [
         { documentnumber: createUserDto.documentnumber },
@@ -34,26 +30,32 @@ export class UsersService {
       ],
     });
     if (exists) {
-      throw new BadRequestException('A user with the same email or document number already exists.');
+      throw new BadRequestException(
+        'Ya existe un usuario con el mismo correo o número de documento.',
+      );
     }
 
-    // 3️⃣ Verificar tipo de documento
+    // 2️⃣ Verificar tipo de documento
     const documentType = await this.docTypeRepository.findOne({
       where: { typeofdocumentid: createUserDto.typeid },
     });
     if (!documentType) {
-      throw new BadRequestException(`Invalid document type (typeid: ${createUserDto.typeid}).`);
+      throw new BadRequestException(
+        `Tipo de documento inválido (typeid: ${createUserDto.typeid}).`,
+      );
     }
 
-    // 4️⃣ Verificar estado
+    // 3️⃣ Verificar estado
     const state = await this.statesRepository.findOne({
       where: { stateid: createUserDto.stateid },
     });
     if (!state) {
-      throw new BadRequestException(`Invalid state (stateid: ${createUserDto.stateid}).`);
+      throw new BadRequestException(
+        `Estado inválido (stateid: ${createUserDto.stateid}).`,
+      );
     }
 
-    // 5️⃣ Crear el nuevo usuario
+    // 4️⃣ Crear usuario
     const newUser = this.usersRepository.create({
       name: createUserDto.name,
       lastname: createUserDto.lastname,
@@ -68,11 +70,11 @@ export class UsersService {
       stateid: state.stateid,
     });
 
-    // 6️⃣ Guardar usuario
+    // 5️⃣ Guardar usuario
     const saved = await this.usersRepository.save(newUser);
     return {
       success: true,
-      message: 'User created successfully.',
+      message: 'Usuario creado correctamente.',
       data: saved,
     };
   }
@@ -93,17 +95,14 @@ export class UsersService {
       relations: ['states', 'typeofdocuments'],
     });
 
-    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
     return { success: true, data: user };
   }
 
   // 🟠 Actualizar usuario
   async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.usersRepository.findOne({ where: { userid: id } });
-    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
-
-    const errors = new UpdateUserDto(updateUserDto).validate();
-    if (errors.length > 0) throw new BadRequestException(errors);
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
     // Validar duplicados
     if (updateUserDto.email || updateUserDto.documentnumber) {
@@ -114,7 +113,9 @@ export class UsersService {
         ],
       });
       if (duplicate) {
-        throw new BadRequestException('Email or document number already exists.');
+        throw new BadRequestException(
+          'Ya existe un usuario con el mismo correo o número de documento.',
+        );
       }
     }
 
@@ -123,7 +124,8 @@ export class UsersService {
       const docType = await this.docTypeRepository.findOne({
         where: { typeofdocumentid: updateUserDto.typeid },
       });
-      if (!docType) throw new BadRequestException('Invalid document type.');
+      if (!docType)
+        throw new BadRequestException('Tipo de documento inválido.');
     }
 
     // Validar estado (si viene)
@@ -131,33 +133,29 @@ export class UsersService {
       const state = await this.statesRepository.findOne({
         where: { stateid: updateUserDto.stateid },
       });
-      if (!state) throw new BadRequestException('Invalid state.');
+      if (!state) throw new BadRequestException('Estado inválido.');
     }
 
     // Actualizar usuario
     const updatedUser = this.usersRepository.merge(user, {
-      name: updateUserDto.name ?? user.name,
-      lastname: updateUserDto.lastname ?? user.lastname,
-      email: updateUserDto.email ?? user.email,
-      password: updateUserDto.password ?? user.password,
-      phone: updateUserDto.phone ?? user.phone,
-      documentnumber: updateUserDto.documentnumber ?? user.documentnumber,
-      image: updateUserDto.image ?? user.image,
+      ...updateUserDto,
       updateat: new Date(),
-      typeid: updateUserDto.typeid ?? user.typeid,
-      stateid: updateUserDto.stateid ?? user.stateid,
     });
 
     const saved = await this.usersRepository.save(updatedUser);
-    return { success: true, message: 'User updated successfully.', data: saved };
+    return {
+      success: true,
+      message: 'Usuario actualizado correctamente.',
+      data: saved,
+    };
   }
 
-  // Eliminar usuario
+  // 🔴 Eliminar usuario
   async remove(id: number) {
     const user = await this.usersRepository.findOne({ where: { userid: id } });
-    if (!user) throw new NotFoundException(`User with ID ${id} not found.`);
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
     await this.usersRepository.remove(user);
-    return { success: true, message: `User with ID ${id} deleted.` };
+    return { success: true, message: `Usuario con ID ${id} eliminado.` };
   }
 }
