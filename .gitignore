@@ -144,3 +144,5 @@ node_modules/
 scripts/
 scripts/generate-entities.ts
 dist/
+node_modules/
+/node_modules
