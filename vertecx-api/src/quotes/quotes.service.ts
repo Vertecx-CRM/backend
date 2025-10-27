@@ -1,9 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Quotes } from './entities/quotes.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class QuotesService {
+  constructor(
+    @InjectRepository(Quotes)
+    private readonly quotesRepo: Repository<Quotes>,
+  ) {}
+
   create(createQuoteDto: CreateQuoteDto) {
     return 'This action adds a new quote';
   }

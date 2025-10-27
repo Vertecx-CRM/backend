@@ -1,44 +1,41 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CreateSupplierDto {
   @IsInt()
+  @IsNotEmpty()
   userid: number;
 
-  @IsInt()
-  stateid: number;
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  servicetype: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  contactname: string;
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
   nit: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(120)
+  @IsOptional()
+  @MaxLength(200)
   address?: string;
 
+  @IsInt()
   @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  city?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  zipcode?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(150)
-  companyname: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(5)
-  rating: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  image: string;
+  @Min(0)
+  @Max(5)
+  rating?: number;
 }

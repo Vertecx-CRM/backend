@@ -1,50 +1,33 @@
-import { States } from 'src/shared/entities/states.entity';
-import { Users } from 'src/users/entities/users.entity';
 import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
+import { Users } from 'src/users/entities/users.entity';
 
 @Entity('suppliers')
 export class Suppliers {
   @PrimaryGeneratedColumn()
   supplierid: number;
 
-  @Column({ nullable: false })
-  userid: number;
+  @Column({ nullable: false, length: 120 })
+  servicetype: string;
 
-  @Column({ nullable: false })
-  stateid: number;
+  @Column({ nullable: false, length: 120 })
+  contactname: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: false, unique: true, length: 50 })
   nit: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: false, length: 200 })
   address: string;
 
-  @Column({ nullable: true })
-  city: string;
+  @Column({ type: 'smallint', default: 0 })
+  rating: number;
 
-  @Column({ nullable: true })
-  zipcode: string;
-
-  @Column({ nullable: false })
-  companyname: string;
-
-  @Column({ nullable: false })
-  rating: string;
-
-  @Column({ nullable: false })
-  image: string;
-
-  @ManyToOne(() => Users)
+  @OneToOne(() => Users, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userid' })
-  users: Users;
-
-  @ManyToOne(() => States)
-  @JoinColumn({ name: 'stateid' })
-  states: States;
+  user: Users;
 }
