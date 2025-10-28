@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsInt, IsNotEmpty, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { IsEmail, IsInt, IsNotEmpty, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateSupplierDto {
   @IsString()
@@ -54,4 +54,9 @@ export class CreateSupplierDto {
   @IsNotEmpty()
   @MaxLength(255)
   image: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  rating: number;
 }
