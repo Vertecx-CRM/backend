@@ -33,12 +33,6 @@ export class CreateSupplierDto {
   @MaxLength(200)
   address: string;
 
-  @IsString()
-  @Transform(({ value }) => String(value).trim())
-  @IsNotEmpty()
-  @MaxLength(120)
-  servicetype: string;
-
   @IsInt()
   @Min(1)
   stateid: number;

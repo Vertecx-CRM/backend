@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, Index, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { States } from 'src/shared/entities/states.entity';
 
-@Entity('suppliersdanier')
+@Entity('suppliers')
 @Index(['name'], { unique: true })
 @Index(['nit'], { unique: true })
 @Index(['phone'], { unique: true })
@@ -24,9 +24,6 @@ export class Suppliers {
 
   @Column({ type: 'varchar', length: 200, nullable: false })
   address: string;
-
-  @Column({ type: 'varchar', length: 120, nullable: false })
-  servicetype: string;
 
   @Column({ type: 'int', nullable: false })
   stateid: number;
