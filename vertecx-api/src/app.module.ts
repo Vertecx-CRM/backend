@@ -16,6 +16,7 @@ import { QuotesModule } from './quotes/quotes.module';
 import { RequestsModule } from './requests/requests.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesmanagementModule } from './purchases/purchasesmanagement.module';
+import { TypeofdocumentsModule } from './typeofdocuments/typeofdocuments.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { PurchasesmanagementModule } from './purchases/purchasesmanagement.modul
     QuotesModule,
     RequestsModule,
     SuppliersModule,
+    TypeofdocumentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

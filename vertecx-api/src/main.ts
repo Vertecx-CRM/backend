@@ -5,14 +5,30 @@ import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Habilitar CORS
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
+  // Global ValidationPipe (activa las validaciones de class-validator)
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // elimina props no declaradas en DTO
-      forbidNonWhitelisted: true, // lanza error si llegan props extra
-      transform: true, // convierte tipos (string→number/date) según DTO
-      transformOptions: { enableImplicitConversion: true },
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true, 
+      transformOptions: {
+        enableImplicitConversion: true, 
+      },
     }),
   );
+
+  // Swagger
   const config = new DocumentBuilder()
     .setTitle('Vertecx API')
     .setDescription('Documentación de la API de Vertecx')
@@ -21,8 +37,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(3000);
-  console.log('🚀 API corriendo en http://localhost:3000/api/docs');
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  console.log(`🚀 API corriendo en http://localhost:${port}/api/docs`);
 }
+
 bootstrap();
