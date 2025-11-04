@@ -1,41 +1,56 @@
-import {
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-  Min,
-  Max,
-} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsInt, IsNotEmpty, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateSupplierDto {
-  @IsInt()
+  @IsString()
+  @Transform(({ value }) => String(value).trim())
   @IsNotEmpty()
-  userid: number;
+  @MaxLength(150)
+  name: string;
 
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  servicetype: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  contactname: string;
-
-  @IsString()
+  @Transform(({ value }) => String(value).trim())
   @IsNotEmpty()
   @MaxLength(50)
   nit: string;
 
   @IsString()
-  @IsOptional()
+  @Transform(({ value }) => String(value).replace(/[^\d+]/g, ''))
+  @IsNotEmpty()
+  @MaxLength(20)
+  @Matches(/^\+?\d{7,15}$/)
+  phone: string;
+
+  @IsEmail()
+  @Transform(({ value }) => String(value).trim().toLowerCase())
+  @IsNotEmpty()
+  @MaxLength(160)
+  email: string;
+
+  @IsString()
+  @Transform(({ value }) => String(value).trim())
+  @IsNotEmpty()
   @MaxLength(200)
-  address?: string;
+  address: string;
 
   @IsInt()
-  @IsOptional()
+  @Min(1)
+  stateid: number;
+
+  @IsString()
+  @Transform(({ value }) => String(value).trim())
+  @IsNotEmpty()
+  @MaxLength(120)
+  contactname: string;
+
+  @IsString()
+  @Transform(({ value }) => String(value).trim())
+  @IsNotEmpty()
+  @MaxLength(255)
+  image: string;
+
+  @IsInt()
   @Min(0)
   @Max(5)
-  rating?: number;
+  rating: number;
 }

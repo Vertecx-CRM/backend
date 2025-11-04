@@ -10,6 +10,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3001',
+      'http://localhost:3000',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -37,9 +38,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`🚀 API corriendo en http://localhost:${port}/api/docs`);
+
+  await app.listen(3001);
+  console.log('🚀 API corriendo en http://localhost:3001/api/docs');
 }
 
 bootstrap();
