@@ -39,6 +39,19 @@ export class RolesController {
     return this.rolesService.findAll();
   }
 
+  // 🔹 GET DETAIL (rol + permisos + privilegios)
+  @Get(':id/detail')
+  @ApiOperation({
+    summary: 'Obtener el detalle de un rol (rol + permisos + privilegios)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Detalle del rol con sus configuraciones.',
+  })
+  async findDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.rolesService.findOneDetail(id);
+  }
+
   // MATRIZ PARA EL FRONT (pinta el checklist)
   @Get(':id/matrix')
   @ApiOperation({
@@ -63,7 +76,7 @@ export class RolesController {
     return this.rolesService.replaceRoleMatrix(roleid, dto);
   }
 
-  // 🔹 GET ONE ROLE
+  // 🔹 GET ONE ROLE (solo los datos del rol)
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un rol por su ID' })
   @ApiResponse({ status: 200, description: 'Rol encontrado.' })

@@ -119,12 +119,39 @@ export class RolesService {
   }
 
   async findOne(id: number): Promise<Roles> {
-    const role = await this.rolesRepo.findOne({
-      where: { roleid: id },
-      relations: ['roleconfigurations'],
-    });
+    const role = await this.rolesRepo.findOne({ where: { roleid: id } });
     if (!role) throw new NotFoundException('Rol no encontrado');
     return role;
+  }
+
+  async findOneDetail(roleid: number) {
+    const role = await this.rolesRepo.findOne({ where: { roleid } });
+    if (!role) throw new NotFoundException('Rol no encontrado');
+
+    const configs = await this.rcRepo.find({
+      where: { roleid },
+      relations: ['permissions', 'privileges'],
+      order: { roleconfigurationid: 'ASC' },
+    });
+
+    return {
+      role: {
+        roleid: role.roleid,
+        name: role.name,
+        status: role.status,
+      },
+      configurations: configs.map((rc) => ({
+        roleconfigurationid: rc.roleconfigurationid,
+        permission: {
+          id: rc.permissionid,
+          module: rc.permissions?.module ?? null,
+        },
+        privilege: {
+          id: rc.privilegeid,
+          name: rc.privileges?.name ?? null,
+        },
+      })),
+    };
   }
 
   async updateConfigurations(dto: UpdateRoleConfigurationDto) {
@@ -328,8 +355,19 @@ export class RolesService {
     return this.getRoleMatrix(roleid);
   }
 
-  async remove(id: number): Promise<void> {
-    const role = await this.findOne(id);
-    await this.rolesRepo.remove(role);
+  async remove(roleid: number): Promise<void> {
+    const role = await this.rolesRepo.findOne({ where: { roleid } });
+    if (!role) throw new NotFoundException('Rol no encontrado');
+
+    await this.dataSource.transaction(async (manager) => {
+      const cfgs = await manager.find(Roleconfiguration, { where: { roleid } });
+      if (cfgs.length) {
+        await manager.delete(
+          Roleconfiguration,
+          cfgs.map((c) => c.roleconfigurationid),
+        );
+      }
+      await manager.delete(Roles, { roleid });
+    });
   }
 }
