@@ -7,8 +7,8 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity('productsuppliers')
-export class Productsuppliers {
+@Entity('categoriessuppliers')
+export class categoriessuppliers{
   @PrimaryGeneratedColumn()
   productsupplierid: number;
 
