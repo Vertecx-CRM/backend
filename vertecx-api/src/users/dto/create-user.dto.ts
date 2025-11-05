@@ -7,7 +7,6 @@ import {
   Matches,
 } from 'class-validator';
 
-
 export class CreateUserDto {
   @IsString({ message: 'El nombre debe ser un texto.' })
   @Length(3, 50, { message: 'El nombre debe tener entre 3 y 50 caracteres.' })
@@ -36,7 +35,6 @@ export class CreateUserDto {
   typeid: number;
 
   @IsString({ message: 'El número de documento debe ser texto numérico.' })
-
   @Matches(/^[0-9]{5,20}$/, {
     message: 'El número de documento debe tener entre 5 y 20 dígitos numéricos.',
   })
@@ -48,4 +46,7 @@ export class CreateUserDto {
 
   @IsNumber({}, { message: 'El estado debe ser un número válido.' })
   stateid: number;
+
+  @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
+  roleconfigurationid: number;
 }
