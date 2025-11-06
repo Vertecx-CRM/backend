@@ -31,6 +31,7 @@ export class UsersService {
       where: [
         { documentnumber: createUserDto.documentnumber },
         { email: createUserDto.email },
+        { phone: createUserDto.phone },
       ],
     });
 
@@ -81,9 +82,17 @@ export class UsersService {
   // Listar todos
   async findAll() {
     const users = await this.usersRepository.find({
-      relations: ['states', 'typeofdocuments'],
+      relations: [
+        'states',
+        'typeofdocuments',
+        'roleconfiguration',
+        'roleconfiguration.roles',
+        'roleconfiguration.permissions',
+        'roleconfiguration.privileges',
+      ],
       order: { userid: 'ASC' },
     });
+
     return { success: true, data: users };
   }
 
@@ -91,7 +100,14 @@ export class UsersService {
   async findOne(id: number) {
     const user = await this.usersRepository.findOne({
       where: { userid: id },
-      relations: ['states', 'typeofdocuments'],
+      relations: [
+        'states',
+        'typeofdocuments',
+        'roleconfiguration',
+        'roleconfiguration.roles',       
+        'roleconfiguration.permissions', 
+        'roleconfiguration.privileges',  
+      ],
     });
 
     if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
