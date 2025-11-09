@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, DeepPartial } from 'typeorm';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
 import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
 import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
@@ -138,7 +138,7 @@ export class PurchasesmanagementService {
         createdat: dto.createdat,
         updatedat: dto.updatedat,
         amount: totalAmount,
-      });
+      } as DeepPartial<Purchasesmanagement>);
 
       const savedPurchase = await manager.save(purchase);
 

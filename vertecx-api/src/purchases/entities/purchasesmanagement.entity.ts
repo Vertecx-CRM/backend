@@ -1,4 +1,3 @@
-import { Products } from 'src/products/entities/products.entity';
 import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Suppliers } from 'src/suppliers/entities/suppliers.entity';
@@ -8,7 +7,6 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
-  ManyToMany,
   OneToMany,
 } from 'typeorm';
 
@@ -37,11 +35,11 @@ export class Purchasesmanagement {
   @JoinColumn({ name: 'stateid' })
   state: States;
 
-  @Column({ nullable: false, default: () => 'CURRENT_TIMESTAMP' })
-  createdat: string;
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdat: Date;
 
-  @Column({ nullable: false, default: () => 'CURRENT_TIMESTAMP' })
-  updatedat: string;
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  updatedat: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   amount: number;

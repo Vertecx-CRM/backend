@@ -7,11 +7,11 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
-import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
 import { PurchasesmanagementService } from './purchasesmanagement.service';
+import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
+import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
 
 @ApiTags('Purchases Management')
 @Controller('purchasesmanagement')
