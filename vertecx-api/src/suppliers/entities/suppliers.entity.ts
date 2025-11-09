@@ -1,51 +1,49 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { States } from 'src/shared/entities/states.entity';
 
 @Entity('suppliers')
+@Index(['name'], { unique: true })
+@Index(['nit'], { unique: true })
+@Index(['phone'], { unique: true })
+@Index(['email'], { unique: true })
 export class Suppliers {
   @PrimaryGeneratedColumn()
   supplierid: number;
 
-  @Column({ length: 150, nullable: false })
+  @Column({ type: 'varchar', length: 150, nullable: false })
   name: string;
 
-  @Column({ length: 50, nullable: false, unique: true })
+  @Column({ type: 'varchar', length: 50, nullable: false })
   nit: string;
 
-  @Column({ length: 20, nullable: false })
+  @Column({ type: 'varchar', length: 20, nullable: false })
   phone: string;
 
-  @Column({ length: 160, nullable: false })
+  @Column({ type: 'varchar', length: 160, nullable: false })
   email: string;
 
-  @Column({ length: 200, nullable: false })
+  @Column({ type: 'varchar', length: 200, nullable: false })
   address: string;
 
-  @Column({ nullable: false })
-  state: number;
+  @Column({ type: 'int', nullable: false })
+  stateid: number;
 
-  @ManyToOne(() => States)
-  @JoinColumn({ name: 'state' })
-  stateRelation: States;
-
-  @Column({ length: 120, nullable: false })
+  @Column({ type: 'varchar', length: 120, nullable: false })
   contactname: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: false })
   image: string;
 
   @Column({ type: 'smallint', default: 0 })
   rating: number;
 
-  @Column({ type: 'timestamp with time zone', nullable: false })
+  @ManyToOne(() => States)
+  @JoinColumn({ name: 'stateid' })
+  state: States;
+
+  @CreateDateColumn()
   createat: Date;
 
-  @Column({ type: 'timestamp with time zone', nullable: false })
+  @UpdateDateColumn()
   updateat: Date;
 }

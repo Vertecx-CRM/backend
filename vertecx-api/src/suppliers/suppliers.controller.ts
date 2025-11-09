@@ -14,7 +14,7 @@ export class SuppliersController {
 
   @Post('bulk')
   createBulk(@Body(new ParseArrayPipe({ items: CreateSupplierDto })) dtos: CreateSupplierDto[]) {
-    return this.suppliersService.createMany(dtos);
+    return Promise.all(dtos.map((d) => this.suppliersService.create(d)));
   }
 
   @Get()

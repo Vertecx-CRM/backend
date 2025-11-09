@@ -7,7 +7,7 @@ import { Users } from 'src/users/entities/users.entity';
 import { States } from 'src/shared/entities/states.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Suppliers, Users, States])],
+  imports: [TypeOrmModule.forFeature([Suppliers, States])],
   controllers: [SuppliersController],
   providers: [SuppliersService],
   exports: [SuppliersService],
