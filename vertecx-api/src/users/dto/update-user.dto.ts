@@ -64,4 +64,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsNumber({}, { message: 'El estado debe ser un número válido.' })
   stateid?: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
+  roleconfigurationid?: number;
 }
