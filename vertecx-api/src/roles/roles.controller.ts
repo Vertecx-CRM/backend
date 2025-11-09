@@ -9,7 +9,7 @@ import {
   ParseIntPipe,
   Put,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleConfigurationDto } from './dto/update-role.dto';
@@ -52,7 +52,7 @@ export class RolesController {
     return this.rolesService.findOneDetail(id);
   }
 
-  // MATRIZ PARA EL FRONT (pinta el checklist)
+  // 🔹 MATRIZ PARA EL FRONT (pinta el checklist)
   @Get(':id/matrix')
   @ApiOperation({
     summary:
@@ -62,7 +62,7 @@ export class RolesController {
     return this.rolesService.getRoleMatrix(roleid);
   }
 
-  // REEMPLAZA TODA LA CONFIGURACIÓN DEL ROL SEGÚN EL CHECKLIST
+  // 🔹 REEMPLAZA TODA LA CONFIGURACIÓN DEL ROL SEGÚN EL CHECKLIST
   @Put(':id/configurations')
   @ApiOperation({
     summary:
@@ -84,9 +84,34 @@ export class RolesController {
     return this.rolesService.findOne(id);
   }
 
+  // 🟢 NUEVO PATCH (actualiza name/status o configuraciones parciales)
   @Patch('configurations')
   @ApiOperation({
-    summary: 'Actualizar configuraciones (permission + privilege) de un rol',
+    summary:
+      'Actualizar nombre, estado o configuraciones específicas de un rol (sin reemplazar toda la matriz)',
+  })
+  @ApiBody({
+    type: UpdateRoleConfigurationDto,
+    examples: {
+      withRole: {
+        summary: 'Editar name/status del rol y configs',
+        value: {
+          role: { roleid: 2, name: 'Supervisor', status: 'Activo' },
+          configurations: [
+            { roleconfigurationid: 2, roleid: 2 },
+            { roleconfigurationid: 5, permissionid: 4, privilegeid: 6 },
+          ],
+        },
+      },
+      onlyConfigs: {
+        summary: 'Solo actualizar configs',
+        value: {
+          configurations: [
+            { roleconfigurationid: 7, permissionid: 1, privilegeid: 2 },
+          ],
+        },
+      },
+    },
   })
   async updateConfigurations(@Body() dto: UpdateRoleConfigurationDto) {
     return this.rolesService.updateConfigurations(dto);

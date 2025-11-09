@@ -1,11 +1,14 @@
+// dto/update-role.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsArray,
-  ArrayMinSize,
   ValidateNested,
+  IsString,
+  MinLength,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -31,19 +34,49 @@ export class RoleConfigUpdateItem {
   privilegeid?: number;
 }
 
+export class RolePatchDto {
+  @ApiProperty({ example: 1, description: 'ID del rol a editar' })
+  @IsInt()
+  @IsNotEmpty()
+  roleid: number;
+
+  @ApiPropertyOptional({ example: 'Administrador' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Activo' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['Activo', 'Inactivo'])
+  status?: string;
+}
+
 export class UpdateRoleConfigurationDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: [RoleConfigUpdateItem],
     example: [
       { roleconfigurationid: 2, roleid: 2 },
       { roleconfigurationid: 5, permissionid: 4, privilegeid: 6 },
     ],
     description:
-      'Lista de configuraciones a actualizar (se puede cambiar roleid/permissionid/privilegeid)',
+      'Lista de configuraciones a actualizar (se puede cambiar roleid/permissionid/privilegeid). Opcional si solo se edita el rol.',
   })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => RoleConfigUpdateItem)
-  configurations: RoleConfigUpdateItem[];
+  configurations?: RoleConfigUpdateItem[];
+
+  @ApiPropertyOptional({
+    type: RolePatchDto,
+    example: { roleid: 2, name: 'Supervisor', status: 'Activo' },
+    description:
+      'Edición opcional del rol en la misma operación (name/status).',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RolePatchDto)
+  role?: RolePatchDto;
 }

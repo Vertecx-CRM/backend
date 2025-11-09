@@ -18,52 +18,25 @@ export class RolesService {
   constructor(
     @InjectRepository(Roles)
     private readonly rolesRepo: Repository<Roles>,
-
     @InjectRepository(Roleconfiguration)
     private readonly rcRepo: Repository<Roleconfiguration>,
-
     @InjectRepository(Permissions)
     private readonly permissionsRepo: Repository<Permissions>,
-
     @InjectRepository(Privileges)
     private readonly privilegesRepo: Repository<Privileges>,
-
     private readonly dataSource: DataSource,
   ) {}
 
-  private async ensurePermissionsAndPrivileges(
-    configurations: { permissionid: number; privilegeid: number }[],
-  ) {
-    for (const config of configurations) {
-      const permission = await this.permissionsRepo.findOne({
-        where: { permissionid: config.permissionid },
-      });
-      if (!permission) {
-        throw new BadRequestException(
-          `El permiso con ID ${config.permissionid} no existe`,
-        );
-      }
-
-      const privilege = await this.privilegesRepo.findOne({
-        where: { privilegeid: config.privilegeid },
-      });
-      if (!privilege) {
-        throw new BadRequestException(
-          `El privilegio con ID ${config.privilegeid} no existe`,
-        );
-      }
-    }
-  }
-
-  private async ensureUniqueRoleName(name: string, excludeId?: number) {
-    const qb = this.rolesRepo
-      .createQueryBuilder('r')
-      .where('LOWER(r.name) = LOWER(:name)', { name });
-
-    if (excludeId) qb.andWhere('r.roleid <> :id', { id: excludeId });
-
-    const exists = await qb.getExists();
-    if (exists) throw new BadRequestException('El nombre del rol ya existe.');
+  private normalizeStatus(input?: string | boolean): 'active' | 'inactive' {
+    if (typeof input === 'boolean') return input ? 'active' : 'inactive';
+    const s = String(input ?? 'active')
+      .toLowerCase()
+      .trim();
+    if (s === 'activo' || s === 'active' || s === '1' || s === 'true')
+      return 'active';
+    if (s === 'inactivo' || s === 'inactive' || s === '0' || s === 'false')
+      return 'inactive';
+    return 'active';
   }
 
   async create(dto: CreateRoleDto): Promise<Roles> {
@@ -72,7 +45,7 @@ export class RolesService {
 
     const role = this.rolesRepo.create({
       name: dto.name,
-      status: typeof dto.status === 'string' ? dto.status : 'active',
+      status: this.normalizeStatus(dto.status),
     });
     const savedRole = await this.rolesRepo.save(role);
 
@@ -154,90 +127,155 @@ export class RolesService {
     };
   }
 
-  async updateConfigurations(dto: UpdateRoleConfigurationDto) {
-    const updatedConfigs = [];
-
-    for (const item of dto.configurations) {
-      const current = await this.rcRepo.findOne({
-        where: { roleconfigurationid: item.roleconfigurationid },
+  private async ensurePermissionsAndPrivileges(
+    configurations: { permissionid: number; privilegeid: number }[],
+  ) {
+    for (const config of configurations) {
+      const permission = await this.permissionsRepo.findOne({
+        where: { permissionid: config.permissionid },
       });
-      if (!current) {
-        throw new NotFoundException(
-          `La configuración con ID ${item.roleconfigurationid} no existe`,
-        );
-      }
-
-      const next = {
-        roleid: item.roleid ?? current.roleid,
-        permissionid: item.permissionid ?? current.permissionid,
-        privilegeid: item.privilegeid ?? current.privilegeid,
-      };
-
-      if (item.roleid !== undefined && item.roleid !== current.roleid) {
-        const role = await this.rolesRepo.findOne({
-          where: { roleid: next.roleid },
-        });
-        if (!role)
-          throw new BadRequestException(
-            `El rol con ID ${next.roleid} no existe`,
-          );
-      }
-
-      if (
-        item.permissionid !== undefined &&
-        item.permissionid !== current.permissionid
-      ) {
-        const perm = await this.permissionsRepo.findOne({
-          where: { permissionid: next.permissionid },
-        });
-        if (!perm) {
-          throw new BadRequestException(
-            `El permiso con ID ${next.permissionid} no existe`,
-          );
-        }
-      }
-
-      if (
-        item.privilegeid !== undefined &&
-        item.privilegeid !== current.privilegeid
-      ) {
-        const priv = await this.privilegesRepo.findOne({
-          where: { privilegeid: next.privilegeid },
-        });
-        if (!priv) {
-          throw new BadRequestException(
-            `El privilegio con ID ${next.privilegeid} no existe`,
-          );
-        }
-      }
-
-      const dup = await this.rcRepo.findOne({
-        where: {
-          roleid: next.roleid,
-          permissionid: next.permissionid,
-          privilegeid: next.privilegeid,
-        },
-      });
-      if (dup && dup.roleconfigurationid !== current.roleconfigurationid) {
+      if (!permission) {
         throw new BadRequestException(
-          'Ya existe una configuración con ese roleid/permissionid/privilegeid',
+          `El permiso con ID ${config.permissionid} no existe`,
         );
       }
-
-      const merged = this.rcRepo.merge(current, next);
-      const saved = await this.rcRepo.save(merged);
-      updatedConfigs.push(saved);
+      const privilege = await this.privilegesRepo.findOne({
+        where: { privilegeid: config.privilegeid },
+      });
+      if (!privilege) {
+        throw new BadRequestException(
+          `El privilegio con ID ${config.privilegeid} no existe`,
+        );
+      }
     }
+  }
 
-    return updatedConfigs;
+  private async ensureUniqueRoleName(name: string, excludeId?: number) {
+    const qb = this.rolesRepo
+      .createQueryBuilder('r')
+      .where('LOWER(r.name) = LOWER(:name)', { name });
+    if (excludeId) qb.andWhere('r.roleid <> :id', { id: excludeId });
+    const exists = await qb.getExists();
+    if (exists) throw new BadRequestException('El nombre del rol ya existe.');
+  }
+
+  async updateConfigurations(dto: UpdateRoleConfigurationDto) {
+    return this.dataSource.transaction(async (manager) => {
+      let patchedRole: Roles | undefined;
+      if (dto.role) {
+        const role = await manager.findOne(Roles, {
+          where: { roleid: dto.role.roleid },
+        });
+        if (!role) throw new NotFoundException('Rol no encontrado');
+
+        if (dto.role.name) {
+          const exists = await manager
+            .createQueryBuilder(Roles, 'r')
+            .where('LOWER(r.name) = LOWER(:name)', { name: dto.role.name })
+            .andWhere('r.roleid <> :id', { id: role.roleid })
+            .getExists();
+          if (exists)
+            throw new BadRequestException('El nombre del rol ya existe');
+          role.name = dto.role.name;
+        }
+        if (dto.role.status !== undefined) {
+          role.status = this.normalizeStatus(dto.role.status);
+        }
+        patchedRole = await manager.save(Roles, role);
+      }
+
+      const items = dto.configurations ?? [];
+      const updatedConfigs: Roleconfiguration[] = [];
+
+      for (const item of items) {
+        const current = await manager.findOne(Roleconfiguration, {
+          where: { roleconfigurationid: item.roleconfigurationid },
+        });
+        if (!current) {
+          throw new NotFoundException(
+            `La configuración con ID ${item.roleconfigurationid} no existe`,
+          );
+        }
+
+        const next = {
+          roleid: item.roleid ?? current.roleid,
+          permissionid: item.permissionid ?? current.permissionid,
+          privilegeid: item.privilegeid ?? current.privilegeid,
+        };
+
+        if (item.roleid !== undefined && item.roleid !== current.roleid) {
+          const role = await manager.findOne(Roles, {
+            where: { roleid: next.roleid },
+          });
+          if (!role)
+            throw new BadRequestException(
+              `El rol con ID ${next.roleid} no existe`,
+            );
+        }
+
+        if (
+          item.permissionid !== undefined &&
+          item.permissionid !== current.permissionid
+        ) {
+          const perm = await manager.findOne(Permissions, {
+            where: { permissionid: next.permissionid },
+          });
+          if (!perm) {
+            throw new BadRequestException(
+              `El permiso con ID ${next.permissionid} no existe`,
+            );
+          }
+        }
+
+        if (
+          item.privilegeid !== undefined &&
+          item.privilegeid !== current.privilegeid
+        ) {
+          const priv = await manager.findOne(Privileges, {
+            where: { privilegeid: next.privilegeid },
+          });
+          if (!priv) {
+            throw new BadRequestException(
+              `El privilegio con ID ${next.privilegeid} no existe`,
+            );
+          }
+        }
+
+        const dup = await manager.findOne(Roleconfiguration, {
+          where: {
+            roleid: next.roleid,
+            permissionid: next.permissionid,
+            privilegeid: next.privilegeid,
+          },
+        });
+        if (dup && dup.roleconfigurationid !== current.roleconfigurationid) {
+          throw new BadRequestException(
+            'Ya existe una configuración con ese roleid/permissionid/privilegeid',
+          );
+        }
+
+        const merged = manager.merge(Roleconfiguration, current, next);
+        const saved = await manager.save(Roleconfiguration, merged);
+        updatedConfigs.push(saved);
+      }
+
+      return {
+        role: patchedRole
+          ? {
+              roleid: patchedRole.roleid,
+              name: patchedRole.name,
+              status: patchedRole.status,
+            }
+          : null,
+        configurations: updatedConfigs,
+      };
+    });
   }
 
   async getRoleMatrix(roleid: number) {
-    // 1) Verificar rol
     const role = await this.rolesRepo.findOne({ where: { roleid } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
-    // 2) Traer todos los módulos (permissions) y todos los privilegios
     const [permissions, privileges, current] = await Promise.all([
       this.permissionsRepo.find({ order: { permissionid: 'ASC' } }),
       this.privilegesRepo.find({ order: { privilegeid: 'ASC' } }),
@@ -247,12 +285,10 @@ export class RolesService {
       }),
     ]);
 
-    // 3) Set con combinaciones actuales (para marcar checked)
     const currentSet = new Set(
       current.map((rc) => `${rc.permissionid}:${rc.privilegeid}`),
     );
 
-    // 4) Construir matriz: una fila por módulo con columnas de privilegios
     return {
       role: { roleid: role.roleid, name: role.name, status: role.status },
       modules: permissions.map((perm) => ({
@@ -263,7 +299,6 @@ export class RolesService {
           name: priv.name,
           checked: currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
         })),
-        // útil para “Seleccionar todos”
         allSelected: privileges.every((priv) =>
           currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
         ),
@@ -272,11 +307,18 @@ export class RolesService {
   }
 
   async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
-    // 1) Verificar rol
     const role = await this.rolesRepo.findOne({ where: { roleid } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
-    // 2) Validar que existan todos los permissions enviados
+    if (
+      !dto.items?.length ||
+      dto.items.every((i) => !i.privilegeids || i.privilegeids.length === 0)
+    ) {
+      throw new BadRequestException(
+        'Debe asignar al menos un permiso/privilegio al rol.',
+      );
+    }
+
     const permIds = dto.items.map((i) => i.permissionid);
     const perms = await this.permissionsRepo
       .createQueryBuilder('p')
@@ -287,7 +329,6 @@ export class RolesService {
       throw new BadRequestException('Algún permissionid no existe');
     }
 
-    // 3) Validar que existan todos los privilegeids enviados
     const allPrivIds = [...new Set(dto.items.flatMap((i) => i.privilegeids))];
     if (allPrivIds.length > 0) {
       const privs = await this.privilegesRepo
@@ -299,7 +340,6 @@ export class RolesService {
       }
     }
 
-    // 4) Construir el conjunto “deseado” (roleid, permissionid, privilegeid)
     const desiredTuples = new Set<string>();
     dto.items.forEach((i) => {
       (i.privilegeids || []).forEach((privId) => {
@@ -307,13 +347,11 @@ export class RolesService {
       });
     });
 
-    // 5) Traer lo actual
     const current = await this.rcRepo.find({ where: { roleid } });
     const currentTuples = new Set(
       current.map((rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
     );
 
-    // 6) Diferencias
     const toDelete = current.filter(
       (rc) =>
         !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
@@ -335,7 +373,6 @@ export class RolesService {
       }
     });
 
-    // 7) Ejecutar (transacción)
     await this.dataSource.transaction(async (manager) => {
       if (toDelete.length) {
         await manager.delete(
@@ -351,7 +388,6 @@ export class RolesService {
       }
     });
 
-    // 8) Responder con el estado final (opcional)
     return this.getRoleMatrix(roleid);
   }
 
