@@ -8,10 +8,7 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: [
-      'http://localhost:3001',
-      'http://localhost:3000',
-    ],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -39,7 +36,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(3001);
+  await app.listen(3001, '0.0.0.0');
   console.log('🚀 API corriendo en http://localhost:3001/api/docs');
 }
 

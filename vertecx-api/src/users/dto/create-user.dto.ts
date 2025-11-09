@@ -3,14 +3,9 @@ import {
   IsEmail,
   IsOptional,
   IsNumber,
-  IsNotEmpty,
   Length,
   Matches,
-  IsBoolean,
-  ValidateIf,
 } from 'class-validator';
-import { Match } from '../decorators/match.decorator';
-
 
 export class CreateUserDto {
   @IsString({ message: 'El nombre debe ser un texto.' })
@@ -29,14 +24,6 @@ export class CreateUserDto {
 
   @IsEmail({}, { message: 'El formato del correo electrónico es inválido.' })
   email: string;
-
-  @IsString({ message: 'La contraseña debe ser texto.' })
-  @Length(6, 100, { message: 'La contraseña debe tener al menos 6 caracteres.' })
-  password: string;
-
-  @IsString({ message: 'La confirmación de contraseña debe ser texto.' })
-  @Match('password', { message: 'Las contraseñas no coinciden.' })
-  confirmPassword: string;
 
   @IsString({ message: 'El teléfono debe ser texto numérico.' })
   @Matches(/^[0-9]{7,15}$/, {
@@ -59,4 +46,7 @@ export class CreateUserDto {
 
   @IsNumber({}, { message: 'El estado debe ser un número válido.' })
   stateid: number;
+
+  @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
+  roleconfigurationid: number;
 }
