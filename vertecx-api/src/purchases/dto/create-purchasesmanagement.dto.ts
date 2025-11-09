@@ -1,42 +1,65 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsDate, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsNotEmpty,
+  IsDate,
+  IsNumber,
+  ValidateNested,
+  IsArray,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+
+// DTO para los productos de la compra
+export class PurchaseProductItemDto {
+  @ApiProperty()
+  @IsInt()
+  productid: number;
+
+  @ApiProperty()
+  @IsInt()
+  @Min(1)
+  quantity: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  unitprice: number;
+}
 
 export class CreatePurchasesmanagementDto {
   @ApiProperty()
-  @IsInt()
+  @IsString()
   @IsNotEmpty()
-  purchaseorderid: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  numberoforder?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  reference?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  stateid?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  supplierid?: number;
+  numberoforder: string;
 
   @ApiProperty()
+  @IsString()
   @IsNotEmpty()
-  @Type(() => Date)
-  @IsDate()
-  createddate: Date;
+  reference: string;
 
   @ApiProperty()
-  @IsNotEmpty()
+  @IsInt()
+  supplierid: number;
+
+  @ApiProperty()
+  @IsInt()
+  stateid: number;
+
+  @ApiProperty({ type: [PurchaseProductItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseProductItemDto)
+  products: PurchaseProductItemDto[];
+
+  @ApiProperty()
   @Type(() => Date)
   @IsDate()
-  updateddate: Date;
+  createdat: Date;
+
+  @ApiProperty()
+  @Type(() => Date)
+  @IsDate()
+  updatedat: Date;
 }
