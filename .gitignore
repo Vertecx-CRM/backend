@@ -1,44 +1,7 @@
-<<<<<<< HEAD
-# compiled output
-/dist
-/node_modules
-/build
-
-=======
->>>>>>> e569cadcb0b2009fad2017d6305709392462e46e
 # Logs
 logs
 *.log
 npm-debug.log*
-<<<<<<< HEAD
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# OS
-.DS_Store
-
-# Tests
-/coverage
-/.nyc_output
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-=======
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
@@ -108,7 +71,6 @@ web_modules/
 
 # Yarn Integrity file
 .yarn-integrity
->>>>>>> e569cadcb0b2009fad2017d6305709392462e46e
 
 # dotenv environment variable files
 .env
@@ -117,20 +79,6 @@ web_modules/
 .env.production.local
 .env.local
 
-<<<<<<< HEAD
-# temp directory
-.temp
-.tmp
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-=======
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -196,5 +144,5 @@ node_modules/
 scripts/
 scripts/generate-entities.ts
 dist/
-
->>>>>>> e569cadcb0b2009fad2017d6305709392462e46e
+node_modules/
+/node_modules

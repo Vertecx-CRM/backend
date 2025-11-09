@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Suppliers } from './entities/suppliers.entity';
@@ -45,16 +41,26 @@ export class SuppliersService {
     await this.ensureUnique({ nit: dto.nit, phone: dto.phone, email: dto.email });
     const entity = this.repo.create(dto);
     const saved = await this.repo.save(entity);
-    return { message: 'Proveedor registrado correctamente', data: saved };
+    const withState = await this.repo.findOne({
+      where: { supplierid: saved.supplierid },
+      relations: ['state'],
+    });
+    return { message: 'Proveedor registrado correctamente', data: withState };
   }
 
-  async findAll() {
-    const data = await this.repo.find();
-    return { message: 'OK', data };
-  }
+async findAll() {
+  const data = await this.repo.find({
+    relations: ['state'],
+    order: { supplierid: 'ASC' },
+  });
+  return { message: 'OK', data };
+}
 
   async findOne(id: number) {
-    const entity = await this.repo.findOne({ where: { supplierid: id } });
+    const entity = await this.repo.findOne({
+      where: { supplierid: id },
+      relations: ['state'],
+    });
     if (!entity) throw new NotFoundException('Proveedor no encontrado');
     return { message: 'OK', data: entity };
   }
@@ -64,14 +70,15 @@ export class SuppliersService {
     if (!current) throw new NotFoundException('Proveedor no encontrado');
     const stateid = dto.stateid ?? current.stateid;
     await this.ensureState(stateid);
-    await this.ensureUnique(
-      { nit: dto.nit, phone: dto.phone, email: dto.email },
-      id,
-    );
+    await this.ensureUnique({ nit: dto.nit, phone: dto.phone, email: dto.email }, id);
     const entity = await this.repo.preload({ supplierid: id, ...dto });
     if (!entity) throw new NotFoundException('Proveedor no encontrado');
     const saved = await this.repo.save(entity);
-    return { message: 'Proveedor actualizado correctamente', data: saved };
+    const withState = await this.repo.findOne({
+      where: { supplierid: saved.supplierid },
+      relations: ['state'],
+    });
+    return { message: 'Proveedor actualizado correctamente', data: withState };
   }
 
   async remove(id: number) {
