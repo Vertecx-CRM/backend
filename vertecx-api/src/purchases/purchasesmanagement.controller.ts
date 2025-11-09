@@ -49,4 +49,11 @@ export class PurchasesmanagementController {
   remove(@Param('id') id: number) {
     return this.service.remove(id);
   }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancelar un registro de compras' })
+  @ApiResponse({ status: 200, type: Purchasesmanagement })
+  cancel(@Param('id') id: number) {
+    return this.service.cancel(id);
+  }
 }

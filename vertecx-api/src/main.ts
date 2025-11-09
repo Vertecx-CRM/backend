@@ -9,7 +9,9 @@ async function bootstrap() {
   // Habilitar CORS
   app.enableCors({
     origin: [
-      'http://localhost:3001',
+      'http://localhost:3000', // frontend Next.js
+      'http://localhost:3001', // Swagger UI base
+      'http://localhost:3001/api/docs', // Swagger docs page
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -21,9 +23,9 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true, 
+      transform: true,
       transformOptions: {
-        enableImplicitConversion: true, 
+        enableImplicitConversion: true,
       },
     }),
   );
