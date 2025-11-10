@@ -48,6 +48,9 @@ export class Users {
   @Column({ nullable: false })
   stateid: number;
 
+  @Column({ nullable: false })
+  roleconfigurationid: number;
+
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
   states: States;
@@ -55,5 +58,9 @@ export class Users {
   @ManyToOne(() => Typeofdocuments)
   @JoinColumn({ name: 'typeid' })
   typeofdocuments: Typeofdocuments;
+
+  @ManyToOne(() => Roleconfiguration, (roleconfiguration) => roleconfiguration.users)
+  @JoinColumn({ name: 'roleconfigurationid' })
+  roleconfiguration: Roleconfiguration;
 
 }
