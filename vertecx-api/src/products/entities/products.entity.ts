@@ -4,8 +4,10 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { Productcategories } from './productcategories.entity';
+import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
 
 @Entity('products')
 export class Products {
@@ -21,8 +23,11 @@ export class Products {
   @PrimaryGeneratedColumn()
   productid: number;
 
+  @Column({ nullable: true })
+  productpriceofsale: number;
+
   @Column({ nullable: false })
-  productprice: number;
+  productpriceofsupplier: number;
 
   @Column({ nullable: true })
   productstock: number;
@@ -39,4 +44,10 @@ export class Products {
   @ManyToOne(() => Productcategories)
   @JoinColumn({ name: 'categoryid' })
   productcategories: Productcategories;
+
+  @OneToMany(
+    () => PurchaseProduct,
+    (purchaseProduct) => purchaseProduct.product,
+  )
+  purchaseProducts: PurchaseProduct[];
 }

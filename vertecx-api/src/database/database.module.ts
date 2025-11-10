@@ -15,8 +15,9 @@ import * as fs from 'fs';
         username: config.get<string>('DB_USER'),
         password: config.get<string>('DB_PASS'),
         database: config.get<string>('DB_NAME'),
+        synchronize: config.get<string>('DB_SYNC') === 'true',
         autoLoadEntities: true,
-        synchronize: config.get<boolean>('DB_SYNC'),
+
         ssl: {
           rejectUnauthorized: true,
           ca: fs.readFileSync('src/certs/ca.pem').toString(),

@@ -1,5 +1,7 @@
+import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+
 import {
   Entity,
   Column,
@@ -10,29 +12,8 @@ import {
 
 @Entity('users')
 export class Users {
-  @Column({ nullable: true })
-  createat: Date;
-
-  @Column({ nullable: false })
-  stateid: number;
-
-  @Column({ nullable: true })
-  updateat: Date;
-
-  @Column({ nullable: false })
-  typeid: number;
-
   @PrimaryGeneratedColumn()
   userid: number;
-
-  @Column({ nullable: false })
-  phone: string;
-
-  @Column({ nullable: false })
-  documentnumber: string;
-
-  @Column({ nullable: true })
-  image: string;
 
   @Column({ nullable: false })
   name: string;
@@ -41,10 +22,34 @@ export class Users {
   lastname: string;
 
   @Column({ nullable: false })
+  documentnumber: string;
+
+  @Column({ nullable: false })
+  phone: string;
+
+  @Column({ nullable: false })
   email: string;
 
   @Column({ nullable: false })
   password: string;
+
+  @Column({ nullable: true })
+  image: string;
+
+  @Column({ nullable: true })
+  createat: Date;
+
+  @Column({ nullable: true })
+  updateat: Date;
+
+  @Column({ nullable: false })
+  typeid: number;
+
+  @Column({ nullable: false })
+  stateid: number;
+
+  @Column({ nullable: false })
+  roleconfigurationid: number;
 
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
@@ -53,4 +58,8 @@ export class Users {
   @ManyToOne(() => Typeofdocuments)
   @JoinColumn({ name: 'typeid' })
   typeofdocuments: Typeofdocuments;
+
+  @ManyToOne(() => Roleconfiguration, (roleconfiguration) => roleconfiguration.users)
+  @JoinColumn({ name: 'roleconfigurationid' })
+  roleconfiguration: Roleconfiguration;
 }
