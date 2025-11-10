@@ -7,11 +7,11 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
-import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
 import { PurchasesmanagementService } from './purchasesmanagement.service';
+import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
+import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
 
 @ApiTags('Purchases Management')
 @Controller('purchasesmanagement')
@@ -48,5 +48,12 @@ export class PurchasesmanagementController {
   @ApiOperation({ summary: 'Eliminar un registro de compras' })
   remove(@Param('id') id: number) {
     return this.service.remove(id);
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancelar un registro de compras' })
+  @ApiResponse({ status: 200, type: Purchasesmanagement })
+  cancel(@Param('id') id: number) {
+    return this.service.cancel(id);
   }
 }

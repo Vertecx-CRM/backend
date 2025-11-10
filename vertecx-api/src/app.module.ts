@@ -16,9 +16,15 @@ import { QuotesModule } from './quotes/quotes.module';
 import { RequestsModule } from './requests/requests.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesmanagementModule } from './purchases/purchasesmanagement.module';
+import { TypeofdocumentsModule } from './typeofdocuments/typeofdocuments.module';
+import { MailModule } from './shared/mail/mail.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     DatabaseModule,
     SalesModule,
     UsersModule,
@@ -34,6 +40,8 @@ import { PurchasesmanagementModule } from './purchases/purchasesmanagement.modul
     QuotesModule,
     RequestsModule,
     SuppliersModule,
+    TypeofdocumentsModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
