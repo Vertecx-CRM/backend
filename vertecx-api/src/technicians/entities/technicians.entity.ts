@@ -1,29 +1,31 @@
-import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
-import { Users } from 'src/users/entities/users.entity';
 import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
+import { Users } from 'src/users/entities/users.entity';
+import { TechnicianTypeMap } from './technician-type-map.entity';
 
 @Entity('technicians')
+@Index('ux_technicians_userid', ['userid'], { unique: true })
 export class Technicians {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ name: 'technicianid' })
   technicianid: number;
 
-  @Column({ nullable: false })
+  @Column({ name: 'userid', type: 'int', nullable: false })
   userid: number;
 
-  @Column({ nullable: false })
-  roleconfigurationid: number;
+  @Column({ name: 'cv', type: 'varchar', length: 250, nullable: true })
+  cv?: string;
 
-  @ManyToOne(() => Users)
-  @JoinColumn({ name: 'userid' })
-  users: Users;
+  @ManyToOne(() => Users, { onDelete: 'CASCADE', eager: true })
+  @JoinColumn({ name: 'userid', referencedColumnName: 'userid' })
+  user: Users;
 
-  @ManyToOne(() => Roleconfiguration)
-  @JoinColumn({ name: 'roleconfigurationid' })
-  roleconfiguration: Roleconfiguration;
+  @OneToMany(() => TechnicianTypeMap, (map) => map.technician, { eager: true })
+  typesMap: TechnicianTypeMap[];
 }
