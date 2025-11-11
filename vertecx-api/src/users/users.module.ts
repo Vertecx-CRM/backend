@@ -6,9 +6,13 @@ import { Users } from './entities/users.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { Technicians } from 'src/technicians/entities/technicians.entity';
+import { Customers } from 'src/customers/entities/customers.entity';
+import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
+import { Techniciantypes } from 'src/technicians/entities/technician_types.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Users, Typeofdocuments, States, Roleconfiguration])],
+  imports: [TypeOrmModule.forFeature([Users, Typeofdocuments, States, Roleconfiguration, Technicians, Customers, TechnicianTypeMap, Techniciantypes])],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [TypeOrmModule, UsersService],

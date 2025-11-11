@@ -26,4 +26,7 @@ export class Customers {
   @JoinColumn({ name: 'userid' })
   users: Users;
 
+  @ManyToOne(() => States)
+  @JoinColumn({ name: 'stateid' })
+  states: States;
 }

@@ -5,6 +5,8 @@ import {
   IsNumber,
   Length,
   Matches,
+  IsInt,
+  IsArray,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -49,4 +51,21 @@ export class CreateUserDto {
 
   @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
   roleconfigurationid: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  techniciantypeids?: number[];
+
+  @IsOptional()
+  @IsString()
+  CV?: string;
+
+  @IsOptional()
+  @IsString()
+  customercity?: string;
+
+  @IsOptional()
+  @IsString()
+  customerzipcode?: string;
 }

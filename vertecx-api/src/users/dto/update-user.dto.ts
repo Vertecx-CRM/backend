@@ -5,6 +5,8 @@ import {
   Length,
   Matches,
   IsNumber,
+  IsInt,
+  IsArray,
 } from 'class-validator';
 import { Match } from '../decorators/match.decorator';
 
@@ -68,4 +70,21 @@ export class UpdateUserDto {
   @IsOptional()
   @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
   roleconfigurationid?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  techniciantypeids?: number[];
+
+  @IsOptional()
+  @IsString()
+  CV?: string;
+
+  @IsOptional()
+  @IsString()
+  customercity?: string;
+
+  @IsOptional()
+  @IsString()
+  customerzipcode?: string;
 }
