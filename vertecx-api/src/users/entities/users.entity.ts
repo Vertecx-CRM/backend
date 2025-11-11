@@ -1,6 +1,8 @@
+import { Customers } from 'src/customers/entities/customers.entity';
 import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+import { Technicians } from 'src/technicians/entities/technicians.entity';
 
 import {
   Entity,
@@ -8,6 +10,7 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('users')
@@ -62,4 +65,10 @@ export class Users {
   @ManyToOne(() => Roleconfiguration, (roleconfiguration) => roleconfiguration.users)
   @JoinColumn({ name: 'roleconfigurationid' })
   roleconfiguration: Roleconfiguration;
+
+  @OneToMany(() => Technicians, technician => technician.users)
+  technicians: Technicians[];
+
+  @OneToMany(() => Customers, customer => customer.users)
+  customers: Customers[];
 }

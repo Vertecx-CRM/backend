@@ -16,12 +16,6 @@ export class Customers {
   @Column({ nullable: false })
   userid: number;
 
-  @Column({ nullable: false })
-  stateid: number;
-
-  @Column({ nullable: true })
-  customeraddress: string;
-
   @Column({ nullable: true })
   customercity: string;
 
@@ -31,8 +25,4 @@ export class Customers {
   @ManyToOne(() => Users)
   @JoinColumn({ name: 'userid' })
   users: Users;
-
-  @ManyToOne(() => States)
-  @JoinColumn({ name: 'stateid' })
-  states: States;
 }
