@@ -5,7 +5,6 @@ import {
   IsNumber,
   Length,
   Matches,
-  IsInt,
   IsArray,
 } from 'class-validator';
 
@@ -17,12 +16,8 @@ export class CreateUserDto {
   })
   name: string;
 
-  @IsString({ message: 'El apellido debe ser un texto.' })
-  @Length(2, 50, { message: 'El apellido debe tener entre 2 y 50 caracteres.' })
-  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
-    message: 'El apellido no puede contener números ni caracteres especiales.',
-  })
-  lastname: string;
+  @IsOptional()
+  lastname?: string;
 
   @IsEmail({}, { message: 'El formato del correo electrónico es inválido.' })
   email: string;
@@ -36,11 +31,9 @@ export class CreateUserDto {
   @IsNumber({}, { message: 'El tipo de documento debe ser un número válido.' })
   typeid: number;
 
-  @IsString({ message: 'El número de documento debe ser texto numérico.' })
-  @Matches(/^[0-9]{5,20}$/, {
-    message: 'El número de documento debe tener entre 5 y 20 dígitos numéricos.',
-  })
-  documentnumber: string;
+  @IsString({ message: 'El número de documento debe ser texto.' })
+  @IsOptional()
+  documentnumber?: string;
 
   @IsOptional()
   @IsString({ message: 'La imagen debe ser una cadena de texto (URL o base64).' })
@@ -54,7 +47,6 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsArray()
-  @IsNumber({}, { each: true })
   techniciantypeids?: number[];
 
   @IsOptional()
@@ -68,4 +60,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   customerzipcode?: string;
+
+  @IsOptional()
+  isNit?: boolean;
 }

@@ -91,6 +91,31 @@ export class UsersService {
     });
     if (!state) throw new BadRequestException('Estado inválido.');
 
+    // Detectar si es NIT
+    const isNit = documentType.name?.toUpperCase() === 'NIT';
+    createUserDto.isNit = isNit;
+
+
+    // Si es NIT, limpiar apellido y asignar rol cliente automáticamente
+    if (isNit) {
+      createUserDto.lastname = null;
+
+      // Buscar rol "cliente" si no se envió explícitamente
+      if (!createUserDto.roleconfigurationid) {
+        const clienteRole = await this.roleConfigRepo.findOne({
+          where: { roles: { name: 'cliente' } },
+          relations: ['roles'],
+        });
+
+        if (!clienteRole) {
+          throw new BadRequestException(
+            'No se encontró la configuración de rol para clientes.',
+          );
+        }
+        createUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+      }
+    }
+
     // Generar contraseña aleatoria
     const plainPassword = generateRandomPassword(10);
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
@@ -106,23 +131,22 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(newUser);
 
-    // Manejo de técnico o cliente
+    // 🔹 Manejo de técnico o cliente
     const roleName = await this.getRoleNameByRoleConfigId(
       createUserDto.roleconfigurationid,
     );
 
     if (roleName === 'tecnico') {
-      // 1. Crear técnico
+      // Crear técnico
       const technician = this.technicianRepo.create({
         userid: saved.userid,
         CV: createUserDto.CV ?? '',
       });
       const savedTechnician = await this.technicianRepo.save(technician);
 
-      // 2. Si se pasaron tipos, crear relaciones en la tabla puente
+      // Si se pasaron tipos, crear relaciones
       const typeIds = createUserDto.techniciantypeids || [];
       if (typeIds.length > 0) {
-        // Validar que los techniciantypeid existan
         const validTypes = await this.technicianTypeRepo.find({
           where: { techniciantypeid: In(typeIds) },
         });
@@ -131,17 +155,17 @@ export class UsersService {
           throw new BadRequestException('Uno o más tipos de técnico no son válidos.');
         }
 
-        // Crear entradas en la tabla puente
         const mappings = typeIds.map(typeId =>
           this.technicianTypeMapRepo.create({
             technicianid: savedTechnician.technicianid,
             techniciantypeid: typeId,
-          })
+          }),
         );
 
         await this.technicianTypeMapRepo.save(mappings);
       }
     } else if (roleName === 'cliente') {
+      // Crear cliente (empresa o persona)
       const customer = this.customerRepo.create({
         userid: saved.userid,
         customercity: createUserDto.customercity ?? null,
@@ -150,23 +174,24 @@ export class UsersService {
       await this.customerRepo.save(customer);
     }
 
-    // Enviar correo con la contraseña generada
-    await this.mailService.sendUserPassword(
-      saved.email,
-      saved.name,
-      plainPassword,
-    );
+    // Enviar correo con contraseña (solo si tiene email válido)
+    if (saved.email) {
+      await this.mailService.sendUserPassword(saved.email, saved.name, plainPassword);
+    }
 
     return {
       success: true,
       message:
-        'Usuario creado correctamente y contraseña enviada al correo.',
+        isNit
+          ? 'Empresa registrada correctamente (NIT) y contraseña enviada al correo.'
+          : 'Usuario creado correctamente y contraseña enviada al correo.',
       data: {
         ...saved,
         password: undefined,
       },
     };
   }
+
 
   // Listar todos
   async findAll() {
@@ -218,6 +243,10 @@ export class UsersService {
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
+    // Verificar si el correo fue modificado
+    const emailChanged =
+      updateUserDto.email && updateUserDto.email !== user.email;
+
     // Validar duplicados
     if (
       updateUserDto.email ||
@@ -239,12 +268,34 @@ export class UsersService {
     }
 
     // Validar tipo de documento (si viene)
+    let isNit = false;
     if (updateUserDto.typeid) {
       const docType = await this.docTypeRepository.findOne({
         where: { typeofdocumentid: updateUserDto.typeid },
       });
       if (!docType)
         throw new BadRequestException('Tipo de documento inválido.');
+
+      // Detectar si es NIT
+      isNit = docType.name?.toUpperCase() === 'NIT';
+      updateUserDto.isNit = isNit;
+
+      if (isNit) {
+        updateUserDto.lastname = null;
+
+        if (!updateUserDto.roleconfigurationid) {
+          const clienteRole = await this.roleConfigRepo.findOne({
+            where: { roles: { name: 'cliente' } },
+            relations: ['roles'],
+          });
+          if (!clienteRole) {
+            throw new BadRequestException(
+              'No se encontró la configuración de rol para clientes.',
+            );
+          }
+          updateUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+        }
+      }
     }
 
     // Validar estado (si viene)
@@ -255,7 +306,15 @@ export class UsersService {
       if (!state) throw new BadRequestException('Estado inválido.');
     }
 
-    // Actualizar usuario
+    // Generar nueva contraseña si cambia el correo
+    let newPlainPassword: string | null = null;
+    if (emailChanged) {
+      newPlainPassword = generateRandomPassword(10);
+      const hashed = await bcrypt.hash(newPlainPassword, 10);
+      updateUserDto.password = hashed;
+    }
+
+    // Actualizar datos principales
     const updatedUser = this.usersRepository.merge(user, {
       ...updateUserDto,
       updateat: new Date(),
@@ -263,7 +322,28 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // 👇 Manejo de técnico o cliente tras actualización
+    // 🔹 Si cambió el correo → enviar nueva contraseña
+    if (emailChanged && newPlainPassword) {
+      await this.mailService.sendUserPassword(
+        saved.email,
+        saved.name,
+        newPlainPassword,
+      );
+    }
+
+    // 🔹 Enviar correo informando cambios realizados
+    const changedFields = Object.keys(updateUserDto)
+      .filter((key) => key !== 'password' && key !== 'updateat')
+      .map((key) => `${key}: ${updateUserDto[key]}`)
+      .join('<br/>');
+
+    await this.mailService.sendUpdateNotification(
+      saved.email,
+      saved.name,
+      changedFields,
+    );
+
+    // Manejo técnico/cliente
     const usedRoleConfigId =
       updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
     const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
@@ -276,19 +356,15 @@ export class UsersService {
     });
 
     if (roleName === 'tecnico') {
-      // Eliminar cliente si existe
       if (existingCustomer) {
         await this.customerRepo.remove(existingCustomer);
       }
 
       let savedTechnician: Technicians;
-
       if (existingTechnician) {
-        // Actualizar CV del técnico
         existingTechnician.CV = updateUserDto.CV ?? existingTechnician.CV;
         savedTechnician = await this.technicianRepo.save(existingTechnician);
       } else {
-        // Crear nuevo técnico
         const newTech = this.technicianRepo.create({
           userid: id,
           CV: updateUserDto.CV ?? '',
@@ -296,33 +372,30 @@ export class UsersService {
         savedTechnician = await this.technicianRepo.save(newTech);
       }
 
-      // 👇 Manejar los tipos de técnico (muchos a muchos)
       const typeIds = updateUserDto.techniciantypeids || [];
+      await this.technicianTypeMapRepo.delete({
+        technicianid: savedTechnician.technicianid,
+      });
 
-      // 1. Eliminar todas las relaciones actuales (para simplificar: reemplazo total)
-      await this.technicianTypeMapRepo.delete({ technicianid: savedTechnician.technicianid });
-
-      // 2. Si hay nuevos tipos, validar y crear relaciones
       if (typeIds.length > 0) {
         const validTypes = await this.technicianTypeRepo.find({
           where: { techniciantypeid: In(typeIds) },
         });
-
         if (validTypes.length !== typeIds.length) {
-          throw new BadRequestException('Uno o más tipos de técnico no son válidos.');
+          throw new BadRequestException(
+            'Uno o más tipos de técnico no son válidos.',
+          );
         }
 
-        const mappings = typeIds.map(typeId =>
+        const mappings = typeIds.map((typeId) =>
           this.technicianTypeMapRepo.create({
             technicianid: savedTechnician.technicianid,
             techniciantypeid: typeId,
-          })
+          }),
         );
-
         await this.technicianTypeMapRepo.save(mappings);
       }
-    } else if (roleName === 'cliente') {
-      // Eliminar técnico si existe
+    } else if (roleName === 'cliente' || isNit) {
       if (existingTechnician) {
         await this.technicianRepo.remove(existingTechnician);
       }
@@ -332,8 +405,7 @@ export class UsersService {
           customercity:
             updateUserDto.customercity ?? existingCustomer.customercity,
           customerzipcode:
-            updateUserDto.customerzipcode ??
-            existingCustomer.customerzipcode,
+            updateUserDto.customerzipcode ?? existingCustomer.customerzipcode,
         });
         await this.customerRepo.save(existingCustomer);
       } else {
@@ -345,7 +417,6 @@ export class UsersService {
         await this.customerRepo.save(newCust);
       }
     } else {
-      // Rol no es técnico ni cliente → eliminar ambos si existen
       if (existingTechnician) {
         await this.technicianRepo.remove(existingTechnician);
       }
@@ -356,10 +427,14 @@ export class UsersService {
 
     return {
       success: true,
-      message: 'Usuario actualizado correctamente.',
+      message: emailChanged
+        ? 'Usuario actualizado. Se envió nueva contraseña y notificación al nuevo correo.'
+        : 'Usuario actualizado correctamente.',
       data: saved,
     };
   }
+
+
 
   // Eliminar usuario
   async remove(id: number) {
@@ -369,7 +444,11 @@ export class UsersService {
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
-    // Opcional: eliminar registros relacionados en technicians/customers
+    // Enviar correo de notificación si tiene correo válido
+    if (user.email) {
+      await this.mailService.sendAccountDeletionNotice(user.email, user.name);
+    }
+
     const tech = await this.technicianRepo.findOne({ where: { userid: id } });
     const cust = await this.customerRepo.findOne({ where: { userid: id } });
 
@@ -377,6 +456,8 @@ export class UsersService {
     if (cust) await this.customerRepo.remove(cust);
 
     await this.usersRepository.remove(user);
-    return { success: true, message: `Usuario con ID ${id} eliminado.` };
+
+    return { success: true, message: `Usuario con ID ${id} eliminado y notificación enviada.` };
   }
+
 }
