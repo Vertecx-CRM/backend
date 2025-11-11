@@ -62,4 +62,5 @@ export class Users {
   @ManyToOne(() => Roleconfiguration, (roleconfiguration) => roleconfiguration.users)
   @JoinColumn({ name: 'roleconfigurationid' })
   roleconfiguration: Roleconfiguration;
+
 }

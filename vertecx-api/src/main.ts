@@ -8,11 +8,7 @@ async function bootstrap() {
 
   // Habilitar CORS
   app.enableCors({
-    origin: [
-      'http://localhost:3000', // frontend Next.js
-      'http://localhost:3001', // Swagger UI base
-      'http://localhost:3001/api/docs', // Swagger docs page
-    ],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
