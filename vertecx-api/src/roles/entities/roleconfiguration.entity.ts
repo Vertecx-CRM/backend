@@ -39,4 +39,5 @@ export class Roleconfiguration {
 
   @OneToMany(() => Users, (user) => user.roleconfiguration)
   users: Users[];
+
 }

@@ -1,4 +1,27 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateRequestDto } from './create-request.dto';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
 
-export class UpdateRequestDto extends PartialType(CreateRequestDto) {}
+export class UpdateServiceRequestDto {
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsIn(['MANTENIMIENTO', 'INSTALACION'])
+  serviceType?: 'MANTENIMIENTO' | 'INSTALACION';
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  stateId?: number;
+
+  @IsOptional()
+  @IsInt()
+  serviceId?: number;
+
+  @IsOptional()
+  @IsInt()
+  clientId?: number;
+}

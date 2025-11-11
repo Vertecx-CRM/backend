@@ -1,3 +1,6 @@
+import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
+import { Users } from 'src/users/entities/users.entity';
 import {
   Entity,
   Column,
@@ -5,7 +8,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
-  Index,
+  OneToMany,
 } from 'typeorm';
 import { Users } from 'src/users/entities/users.entity';
 import { TechnicianTypeMap } from './technician-type-map.entity';
@@ -19,13 +22,13 @@ export class Technicians {
   @Column({ name: 'userid', type: 'int', nullable: false })
   userid: number;
 
-  @Column({ name: 'cv', type: 'varchar', length: 250, nullable: true })
-  cv?: string;
+  @Column({ nullable: false })
+  CV: string;
 
   @ManyToOne(() => Users, { onDelete: 'CASCADE', eager: true })
   @JoinColumn({ name: 'userid', referencedColumnName: 'userid' })
   user: Users;
 
-  @OneToMany(() => TechnicianTypeMap, (map) => map.technician, { eager: true })
-  typesMap: TechnicianTypeMap[];
+  @OneToMany(() => TechnicianTypeMap, (typeMap) => typeMap.technician)
+  technicianTypeMaps: TechnicianTypeMap[];
 }
