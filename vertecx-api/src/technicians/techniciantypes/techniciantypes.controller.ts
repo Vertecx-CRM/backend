@@ -1,4 +1,3 @@
-// src/technicians/techniciantypes.controller.ts
 import { Controller, Get } from '@nestjs/common';
 import { TechniciantypesService } from './techniciantypes.service';
 import { Techniciantypes } from '../entities/technician_types.entity';

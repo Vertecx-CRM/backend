@@ -1,4 +1,3 @@
-// technicians/entities/technician-type-map.entity.ts
 import { Techniciantypes } from 'src/technicians/entities/technician_types.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
