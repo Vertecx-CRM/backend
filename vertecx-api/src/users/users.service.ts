@@ -131,7 +131,7 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(newUser);
 
-    // 🔹 Manejo de técnico o cliente
+    // Manejo de técnico o cliente
     const roleName = await this.getRoleNameByRoleConfigId(
       createUserDto.roleconfigurationid,
     );
@@ -322,7 +322,7 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // 🔹 Si cambió el correo → enviar nueva contraseña
+    // Si cambió el correo → enviar nueva contraseña
     if (emailChanged && newPlainPassword) {
       await this.mailService.sendUserPassword(
         saved.email,
@@ -331,17 +331,55 @@ export class UsersService {
       );
     }
 
-    // 🔹 Enviar correo informando cambios realizados
-    const changedFields = Object.keys(updateUserDto)
-      .filter((key) => key !== 'password' && key !== 'updateat')
-      .map((key) => `${key}: ${updateUserDto[key]}`)
-      .join('<br/>');
+    // Traducción y formato amigable de los cambios
+    const fieldTranslations: Record<string, string> = {
+      name: 'Nombre',
+      lastname: 'Apellido',
+      email: 'Correo electrónico',
+      phone: 'Teléfono',
+      documentnumber: 'Número de documento',
+      typeid: 'Tipo de documento',
+      image: 'Imagen de perfil',
+      stateid: 'Estado',
+      roleconfigurationid: 'Rol',
+      CV: 'Hoja de vida (CV)',
+      customercity: 'Ciudad del cliente',
+      customerzipcode: 'Código postal',
+      isNit: '¿Es NIT?',
+    };
 
-    await this.mailService.sendUpdateNotification(
-      saved.email,
-      saved.name,
-      changedFields,
+    const translatedChanges = await Promise.all(
+      Object.entries(updateUserDto)
+        .filter(([key]) => key !== 'password' && key !== 'updateat')
+        .map(async ([key, value]) => {
+          const label = fieldTranslations[key] || key;
+
+          // Si el valor es null o vacío
+          if (value === null || value === undefined || value === '') {
+            return `<b>${label}:</b> No hay información`;
+          }
+
+          // Mostrar nombre del rol si es roleconfigurationid
+          if (key === 'roleconfigurationid') {
+            const roleName = await this.getRoleNameByRoleConfigId(Number(value));
+            return `<b>${label}:</b> ${roleName.charAt(0).toUpperCase() + roleName.slice(1)}`;
+          }
+
+          // Mostrar texto claro para booleans
+          if (typeof value === 'boolean') {
+            return `<b>${label}:</b> ${value ? 'Sí' : 'No'}`;
+          }
+
+          // Mostrar texto legible por defecto
+          return `<b>${label}:</b> ${value}`;
+        }),
     );
+
+    const formattedHtml = translatedChanges.join('<br/>');
+
+    // Enviar correo con los cambios formateados
+    await this.mailService.sendUpdateNotification(saved.email, saved.name, formattedHtml);
+
 
     // Manejo técnico/cliente
     const usedRoleConfigId =
