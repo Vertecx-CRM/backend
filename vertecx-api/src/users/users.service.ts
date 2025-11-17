@@ -218,6 +218,13 @@ export class UsersService {
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
+    // Guardamos el email actual para comparar
+    const oldEmail = user.email;
+
+    // Estos se usarán solo si el correo cambia
+    let newPlainPassword: string | null = null;
+    let newHashedPassword: string | null = null;
+
     // Validar duplicados
     if (
       updateUserDto.email ||
@@ -247,7 +254,6 @@ export class UsersService {
         throw new BadRequestException('Tipo de documento inválido.');
     }
 
-    // Validar estado (si viene)
     if (updateUserDto.stateid) {
       const state = await this.statesRepository.findOne({
         where: { stateid: updateUserDto.stateid },
@@ -255,15 +261,20 @@ export class UsersService {
       if (!state) throw new BadRequestException('Estado inválido.');
     }
 
-    // Actualizar usuario
+    if (updateUserDto.email && updateUserDto.email !== oldEmail) {
+      newPlainPassword = generateRandomPassword(10);
+      newHashedPassword = await bcrypt.hash(newPlainPassword, 10);
+    }
+
     const updatedUser = this.usersRepository.merge(user, {
       ...updateUserDto,
+      ...(newHashedPassword && { password: newHashedPassword }),
       updateat: new Date(),
     });
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // 👇 Manejo de técnico o cliente tras actualización
+    // 👇 Manejo de técnico o cliente tras actualización (SIN CAMBIOS)
     const usedRoleConfigId =
       updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
     const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
@@ -284,11 +295,9 @@ export class UsersService {
       let savedTechnician: Technicians;
 
       if (existingTechnician) {
-        // Actualizar CV del técnico
         existingTechnician.CV = updateUserDto.CV ?? existingTechnician.CV;
         savedTechnician = await this.technicianRepo.save(existingTechnician);
       } else {
-        // Crear nuevo técnico
         const newTech = this.technicianRepo.create({
           userid: id,
           CV: updateUserDto.CV ?? '',
@@ -296,33 +305,33 @@ export class UsersService {
         savedTechnician = await this.technicianRepo.save(newTech);
       }
 
-      // 👇 Manejar los tipos de técnico (muchos a muchos)
       const typeIds = updateUserDto.techniciantypeids || [];
 
-      // 1. Eliminar todas las relaciones actuales (para simplificar: reemplazo total)
-      await this.technicianTypeMapRepo.delete({ technicianid: savedTechnician.technicianid });
+      await this.technicianTypeMapRepo.delete({
+        technicianid: savedTechnician.technicianid,
+      });
 
-      // 2. Si hay nuevos tipos, validar y crear relaciones
       if (typeIds.length > 0) {
         const validTypes = await this.technicianTypeRepo.find({
           where: { techniciantypeid: In(typeIds) },
         });
 
         if (validTypes.length !== typeIds.length) {
-          throw new BadRequestException('Uno o más tipos de técnico no son válidos.');
+          throw new BadRequestException(
+            'Uno o más tipos de técnico no son válidos.',
+          );
         }
 
-        const mappings = typeIds.map(typeId =>
+        const mappings = typeIds.map((typeId) =>
           this.technicianTypeMapRepo.create({
             technicianid: savedTechnician.technicianid,
             techniciantypeid: typeId,
-          })
+          }),
         );
 
         await this.technicianTypeMapRepo.save(mappings);
       }
     } else if (roleName === 'cliente') {
-      // Eliminar técnico si existe
       if (existingTechnician) {
         await this.technicianRepo.remove(existingTechnician);
       }
@@ -345,13 +354,20 @@ export class UsersService {
         await this.customerRepo.save(newCust);
       }
     } else {
-      // Rol no es técnico ni cliente → eliminar ambos si existen
       if (existingTechnician) {
         await this.technicianRepo.remove(existingTechnician);
       }
       if (existingCustomer) {
         await this.customerRepo.remove(existingCustomer);
       }
+    }
+
+    if (newPlainPassword) {
+      await this.mailService.sendUserPassword(
+        saved.email,
+        saved.name,
+        newPlainPassword,
+      );
     }
 
     return {
@@ -361,7 +377,6 @@ export class UsersService {
     };
   }
 
-  // Eliminar usuario
   async remove(id: number) {
     const user = await this.usersRepository.findOne({
       where: { userid: id },
@@ -369,7 +384,6 @@ export class UsersService {
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
-    // Opcional: eliminar registros relacionados en technicians/customers
     const tech = await this.technicianRepo.findOne({ where: { userid: id } });
     const cust = await this.customerRepo.findOne({ where: { userid: id } });
 

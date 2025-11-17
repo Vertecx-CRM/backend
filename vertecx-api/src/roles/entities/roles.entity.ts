@@ -9,7 +9,7 @@ export class Roles {
   @Column({ nullable: true })
   status: string;
 
-  @Column({ nullable: false, unique: true })
+  @Column({ nullable: false })
   name: string;
 
   @OneToMany(() => Roleconfiguration, (roleConfig) => roleConfig.roles)

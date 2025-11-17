@@ -9,7 +9,7 @@ import {
   ParseIntPipe,
   Put,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleConfigurationDto } from './dto/update-role.dto';
@@ -21,7 +21,6 @@ import { UpdateRoleMatrixDto } from './dto/update-role-matrix.dto';
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
-  // 🔹 CREATE ROLE (con permisos y privilegios)
   @Post()
   @ApiOperation({
     summary: 'Crear un nuevo rol con sus permisos y privilegios',
@@ -31,7 +30,6 @@ export class RolesController {
     return this.rolesService.create(dto);
   }
 
-  // 🔹 GET ALL ROLES
   @Get()
   @ApiOperation({ summary: 'Listar todos los roles' })
   @ApiResponse({ status: 200, description: 'Lista de roles.' })
@@ -39,20 +37,6 @@ export class RolesController {
     return this.rolesService.findAll();
   }
 
-  // 🔹 GET DETAIL (rol + permisos + privilegios)
-  @Get(':id/detail')
-  @ApiOperation({
-    summary: 'Obtener el detalle de un rol (rol + permisos + privilegios)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Detalle del rol con sus configuraciones.',
-  })
-  async findDetail(@Param('id', ParseIntPipe) id: number) {
-    return this.rolesService.findOneDetail(id);
-  }
-
-  // 🔹 MATRIZ PARA EL FRONT (pinta el checklist)
   @Get(':id/matrix')
   @ApiOperation({
     summary:
@@ -62,7 +46,14 @@ export class RolesController {
     return this.rolesService.getRoleMatrix(roleid);
   }
 
-  // 🔹 REEMPLAZA TODA LA CONFIGURACIÓN DEL ROL SEGÚN EL CHECKLIST
+    @Get(':id/detail')
+  @ApiOperation({
+    summary: 'Obtener detalle del rol (info básica + configuraciones)',
+  })
+  async getDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.rolesService.getRoleDetail(id);
+  }
+
   @Put(':id/configurations')
   @ApiOperation({
     summary:
@@ -76,7 +67,6 @@ export class RolesController {
     return this.rolesService.replaceRoleMatrix(roleid, dto);
   }
 
-  // 🔹 GET ONE ROLE (solo los datos del rol)
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un rol por su ID' })
   @ApiResponse({ status: 200, description: 'Rol encontrado.' })
@@ -84,40 +74,14 @@ export class RolesController {
     return this.rolesService.findOne(id);
   }
 
-  // 🟢 NUEVO PATCH (actualiza name/status o configuraciones parciales)
   @Patch('configurations')
   @ApiOperation({
-    summary:
-      'Actualizar nombre, estado o configuraciones específicas de un rol (sin reemplazar toda la matriz)',
-  })
-  @ApiBody({
-    type: UpdateRoleConfigurationDto,
-    examples: {
-      withRole: {
-        summary: 'Editar name/status del rol y configs',
-        value: {
-          role: { roleid: 2, name: 'Supervisor', status: 'Activo' },
-          configurations: [
-            { roleconfigurationid: 2, roleid: 2 },
-            { roleconfigurationid: 5, permissionid: 4, privilegeid: 6 },
-          ],
-        },
-      },
-      onlyConfigs: {
-        summary: 'Solo actualizar configs',
-        value: {
-          configurations: [
-            { roleconfigurationid: 7, permissionid: 1, privilegeid: 2 },
-          ],
-        },
-      },
-    },
+    summary: 'Actualizar configuraciones (permission + privilege) de un rol',
   })
   async updateConfigurations(@Body() dto: UpdateRoleConfigurationDto) {
     return this.rolesService.updateConfigurations(dto);
   }
 
-  // 🔹 DELETE ROLE
   @Delete(':id')
   @ApiOperation({
     summary: 'Eliminar un rol (solo si no está vinculado a usuarios)',

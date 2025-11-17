@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateProductsCategoryDto } from './dto/create-products-category.dto';
 import { UpdateProductsCategoryDto } from './dto/update-products-category.dto';
+import { ProductCategory } from './entities/product-category.entity';
 
 @Injectable()
 export class ProductsCategoriesService {
