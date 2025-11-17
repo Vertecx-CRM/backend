@@ -1,5 +1,5 @@
 // src/technicians/technicians.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -21,16 +21,9 @@ export class TechniciansService {
     private readonly usersService: UsersService,
   ) {}
 
-  /**
-   * Crear técnico = crear user con rol de técnico + registrar technician + technician_type_map.
-   * Todo eso lo hace UsersService.create, nosotros solo adaptamos el DTO.
-   */
   async create(dto: CreateTechnicianDto) {
-    // ⚠️ Ajusta esto al id real del rol "Técnico" en tu tabla roleconfiguration
     const TECH_ROLE_CONFIGURATION_ID = dto.roleconfigurationid ?? 3;
-    // ⚠️ Ajusta esto al stateid de "Activo" en tu tabla states
     const ACTIVE_STATE_ID = 1;
-    // ⚠️ Ajusta esto al typeid del tipo de documento que estés usando (CC, etc.)
     const DEFAULT_DOCUMENT_TYPE_ID = 1;
 
     const userDto: CreateUserDto = {
@@ -45,42 +38,91 @@ export class TechniciansService {
       CV: dto.CV,
       techniciantypeids: dto.techniciantypeids,
     };
+
     return this.usersService.create(userDto);
   }
 
   async findAll() {
-
     return this.techniciansRepo.find({
-      relations: ['users', 'technicianTypeMaps', 'technicianTypeMaps.techniciantype'],
+      relations: [
+        'users',
+        'technicianTypeMaps',
+        'technicianTypeMaps.techniciantype',
+      ],
     });
   }
 
   async findOne(id: number) {
-    return this.techniciansRepo.findOne({
+    const technician = await this.techniciansRepo.findOne({
       where: { technicianid: id },
-      relations: ['users', 'technicianTypeMaps', 'technicianTypeMaps.techniciantype'],
+      relations: [
+        'users',
+        'users.typeofdocuments',
+        'users.states',
+        'users.roleconfiguration',
+        'users.roleconfiguration.roles',
+        'technicianTypeMaps',
+        'technicianTypeMaps.techniciantype',
+      ],
     });
+
+    if (!technician) {
+      throw new NotFoundException('Técnico no encontrado');
+    }
+
+    technician.technicianTypeMaps = technician.technicianTypeMaps.sort(
+      (a, b) => a.techniciantype.name.localeCompare(b.techniciantype.name),
+    );
+
+    return technician;
   }
 
-  async update(userId: number, dto: UpdateTechnicianDto) {
-    const userDto: UpdateUserDto = {
-      name: dto.name,
-      lastname: dto.lastname,
-      email: dto.email,
-      documentnumber: dto.documentnumber,
-      phone: dto.phone,
-      CV: dto.CV,
-      techniciantypeids: dto.techniciantypeids,
-    };
+  async update(technicianId: number, dto: UpdateTechnicianDto) {
+    const technician = await this.techniciansRepo.findOne({
+      where: { technicianid: technicianId },
+      relations: ['users'],
+    });
 
-    return this.usersService.update(userId, userDto);
+    if (!technician) {
+      throw new NotFoundException('Técnico no encontrado');
+    }
+
+    const userDto: UpdateUserDto = {};
+
+    if (dto.name !== undefined) userDto.name = dto.name;
+    if (dto.lastname !== undefined) userDto.lastname = dto.lastname;
+    if (dto.email !== undefined) userDto.email = dto.email;
+    if (dto.documentnumber !== undefined)
+      userDto.documentnumber = dto.documentnumber;
+    if (dto.phone !== undefined) userDto.phone = dto.phone;
+    if (dto.CV !== undefined) userDto.CV = dto.CV;
+    if (dto.techniciantypeids !== undefined) {
+      userDto.techniciantypeids = dto.techniciantypeids;
+    }
+    if (dto.roleconfigurationid !== undefined) {
+      userDto.roleconfigurationid = dto.roleconfigurationid;
+    }
+
+    await this.usersService.update(technician.userid, userDto);
+
+    return this.findOne(technicianId);
   }
 
   async remove(technicianId: number) {
-    // Ojo: aquí solo borras el técnico. Si quieres borrar también el usuario,
-    // hay que definir primero la regla de negocio antes de tocarlo.
+    const technician = await this.techniciansRepo.findOne({
+      where: { technicianid: technicianId },
+    });
+
+    if (!technician) {
+      throw new NotFoundException('Técnico no encontrado');
+    }
+
+    // Primero limpiamos la tabla puente para evitar problemas de FK
     await this.typeMapRepo.delete({ technicianid: technicianId });
-    await this.techniciansRepo.delete(technicianId);
+
+    // Luego delegamos al UsersService para que elimine el usuario
+    await this.usersService.remove(technician.userid);
+
     return { message: 'Técnico eliminado correctamente' };
   }
 }

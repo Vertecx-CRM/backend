@@ -1,5 +1,6 @@
 // src/technicians/technicians.controller.ts
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 import { TechniciansService } from './technicians.service';
 import { CreateTechnicianDto } from './dto/create-technician.dto';
 import { UpdateTechnicianDto } from './dto/update-technician.dto';
@@ -20,14 +21,13 @@ export class TechniciansController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    // aquí id sería el technicianid (el de la tabla technicians)
     return this.techniciansService.findOne(+id);
   }
 
-  @Patch(':userId')
-  update(@Param('userId') userId: string, @Body() updateTechnicianDto: UpdateTechnicianDto) {
-    // 👀 aquí decidimos que el id es el userid, porque update llama a UsersService.update
-    return this.techniciansService.update(+userId, updateTechnicianDto);
+  @Patch(':id')
+  @ApiBody({ type: UpdateTechnicianDto })
+  update(@Param('id') id: string, @Body() updateTechnicianDto: UpdateTechnicianDto) {
+    return this.techniciansService.update(+id, updateTechnicianDto);
   }
 
   @Delete(':id')

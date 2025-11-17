@@ -51,7 +51,9 @@ export class UsersService {
     private readonly dataSource: DataSource,
   ) { }
 
-  private async getRoleNameByRoleConfigId(roleConfigId: number): Promise<string> {
+  private async getRoleNameByRoleConfigId(
+    roleConfigId: number,
+  ): Promise<string> {
     const roleConfig = await this.roleConfigRepo.findOne({
       where: { roleconfigurationid: roleConfigId },
       relations: ['roles'],
@@ -112,31 +114,29 @@ export class UsersService {
     );
 
     if (roleName === 'tecnico') {
-      // 1. Crear técnico
       const technician = this.technicianRepo.create({
         userid: saved.userid,
         CV: createUserDto.CV ?? '',
       });
       const savedTechnician = await this.technicianRepo.save(technician);
 
-      // 2. Si se pasaron tipos, crear relaciones en la tabla puente
       const typeIds = createUserDto.techniciantypeids || [];
       if (typeIds.length > 0) {
-        // Validar que los techniciantypeid existan
         const validTypes = await this.technicianTypeRepo.find({
           where: { techniciantypeid: In(typeIds) },
         });
 
         if (validTypes.length !== typeIds.length) {
-          throw new BadRequestException('Uno o más tipos de técnico no son válidos.');
+          throw new BadRequestException(
+            'Uno o más tipos de técnico no son válidos.',
+          );
         }
 
-        // Crear entradas en la tabla puente
-        const mappings = typeIds.map(typeId =>
+        const mappings = typeIds.map((typeId) =>
           this.technicianTypeMapRepo.create({
             technicianid: savedTechnician.technicianid,
             techniciantypeid: typeId,
-          })
+          }),
         );
 
         await this.technicianTypeMapRepo.save(mappings);
@@ -150,7 +150,6 @@ export class UsersService {
       await this.customerRepo.save(customer);
     }
 
-    // Enviar correo con la contraseña generada
     await this.mailService.sendUserPassword(
       saved.email,
       saved.name,
@@ -218,25 +217,30 @@ export class UsersService {
     if (!user)
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
 
-    // Guardamos el email actual para comparar
     const oldEmail = user.email;
 
-    // Estos se usarán solo si el correo cambia
     let newPlainPassword: string | null = null;
     let newHashedPassword: string | null = null;
 
-    // Validar duplicados
-    if (
-      updateUserDto.email ||
-      updateUserDto.documentnumber ||
-      updateUserDto.phone
-    ) {
+    // Validar duplicados solo con los campos que vienen
+    const duplicateWhere: any[] = [];
+
+    if (updateUserDto.email) {
+      duplicateWhere.push({ email: updateUserDto.email, userid: Not(id) });
+    }
+    if (updateUserDto.documentnumber) {
+      duplicateWhere.push({
+        documentnumber: updateUserDto.documentnumber,
+        userid: Not(id),
+      });
+    }
+    if (updateUserDto.phone) {
+      duplicateWhere.push({ phone: updateUserDto.phone, userid: Not(id) });
+    }
+
+    if (duplicateWhere.length > 0) {
       const duplicate = await this.usersRepository.findOne({
-        where: [
-          { email: updateUserDto.email, userid: Not(id) },
-          { documentnumber: updateUserDto.documentnumber, userid: Not(id) },
-          { phone: updateUserDto.phone, userid: Not(id) },
-        ],
+        where: duplicateWhere,
       });
       if (duplicate) {
         throw new BadRequestException(
@@ -245,7 +249,6 @@ export class UsersService {
       }
     }
 
-    // Validar tipo de documento (si viene)
     if (updateUserDto.typeid) {
       const docType = await this.docTypeRepository.findOne({
         where: { typeofdocumentid: updateUserDto.typeid },
@@ -274,20 +277,39 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // 👇 Manejo de técnico o cliente tras actualización (SIN CAMBIOS)
+    // --- Manejo de técnico o cliente tras actualización ---
+
     const usedRoleConfigId =
       updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
     const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
 
-    const existingTechnician = await this.technicianRepo.findOne({
-      where: { userid: id },
-    });
-    const existingCustomer = await this.customerRepo.findOne({
-      where: { userid: id },
-    });
+    let existingTechnician: Technicians | null = null;
+    let existingCustomer: Customers | null = null;
 
     if (roleName === 'tecnico') {
-      // Eliminar cliente si existe
+      // SOLO buscamos técnico; no tocamos customers (para evitar el error de stateid)
+      existingTechnician = await this.technicianRepo.findOne({
+        where: { userid: id },
+      });
+    } else if (roleName === 'cliente') {
+      // Cliente: necesitamos ambos
+      existingTechnician = await this.technicianRepo.findOne({
+        where: { userid: id },
+      });
+      existingCustomer = await this.customerRepo.findOne({
+        where: { userid: id },
+      });
+    } else {
+      // Cualquier otro rol: cargamos ambos por si toca limpiar
+      existingTechnician = await this.technicianRepo.findOne({
+        where: { userid: id },
+      });
+      existingCustomer = await this.customerRepo.findOne({
+        where: { userid: id },
+      });
+    }
+
+    if (roleName === 'tecnico') {
       if (existingCustomer) {
         await this.customerRepo.remove(existingCustomer);
       }
@@ -381,16 +403,44 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { userid: id },
     });
-    if (!user)
+
+    if (!user) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
+    }
 
-    const tech = await this.technicianRepo.findOne({ where: { userid: id } });
-    const cust = await this.customerRepo.findOne({ where: { userid: id } });
+    const roleName = await this.getRoleNameByRoleConfigId(
+      user.roleconfigurationid,
+    );
 
-    if (tech) await this.technicianRepo.remove(tech);
-    if (cust) await this.customerRepo.remove(cust);
+    const technician = await this.technicianRepo.findOne({
+      where: { userid: id },
+    });
+
+    if (technician) {
+      await this.technicianTypeMapRepo.delete({
+        technicianid: technician.technicianid,
+      });
+
+      await this.technicianRepo.remove(technician);
+    }
+
+    if (roleName === 'cliente') {
+      const customer = await this.customerRepo.findOne({
+        where: { userid: id },
+      });
+
+      if (customer) {
+        await this.customerRepo.remove(customer);
+      }
+    }
 
     await this.usersRepository.remove(user);
-    return { success: true, message: `Usuario con ID ${id} eliminado.` };
+
+    return {
+      success: true,
+      message: `Usuario con ID ${id} eliminado.`,
+    };
   }
+
+
 }
