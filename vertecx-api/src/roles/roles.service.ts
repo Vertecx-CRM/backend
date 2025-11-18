@@ -31,10 +31,6 @@ export class RolesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  /* ------------------------------------------------------
-     Helpers
-  ------------------------------------------------------ */
-
   private normalizeStatus(status?: string): string | undefined {
     if (status === undefined || status === null) return undefined;
     const v = String(status).toLowerCase().trim();
@@ -78,10 +74,6 @@ export class RolesService {
     if (exists) throw new BadRequestException('El nombre del rol ya existe.');
   }
 
-  /* ------------------------------------------------------
-     CREATE
-  ------------------------------------------------------ */
-
   async create(dto: CreateRoleDto): Promise<Roles> {
     await this.ensureUniqueRoleName(dto.name);
     await this.ensurePermissionsAndPrivileges(dto.roleconfigurations);
@@ -103,10 +95,6 @@ export class RolesService {
 
     return savedRole;
   }
-
-  /* ------------------------------------------------------
-     GET ALL
-  ------------------------------------------------------ */
 
   async findAll() {
     const configurations = await this.rcRepo.find({
@@ -178,7 +166,6 @@ export class RolesService {
   async updateConfigurations(dto: UpdateRoleConfigurationDto) {
     const updatedConfigs = [];
 
-    // 1) Si viene info del rol, actualizar nombre/estado
     if (dto.role) {
       const role = await this.rolesRepo.findOne({
         where: { roleid: dto.role.roleid },
@@ -190,13 +177,11 @@ export class RolesService {
         );
       }
 
-      // actualizar nombre
       if (dto.role.name && dto.role.name !== role.name) {
         await this.ensureUniqueRoleName(dto.role.name, role.roleid);
         role.name = dto.role.name;
       }
 
-      // actualizar estado normalizado
       if (dto.role.status !== undefined) {
         const normalized = this.normalizeStatus(dto.role.status);
         if (normalized) {
@@ -207,7 +192,6 @@ export class RolesService {
       await this.rolesRepo.save(role);
     }
 
-    // 2) Actualización individual de configuraciones
     for (const item of dto.configurations) {
       const current = await this.rcRepo.findOne({
         where: { roleconfigurationid: item.roleconfigurationid },
@@ -224,7 +208,6 @@ export class RolesService {
         privilegeid: item.privilegeid ?? current.privilegeid,
       };
 
-      // validar role
       if (item.roleid !== undefined && item.roleid !== current.roleid) {
         const role = await this.rolesRepo.findOne({
           where: { roleid: next.roleid },
@@ -236,7 +219,6 @@ export class RolesService {
         }
       }
 
-      // validar permiso
       if (
         item.permissionid !== undefined &&
         item.permissionid !== current.permissionid
@@ -251,7 +233,6 @@ export class RolesService {
         }
       }
 
-      // validar privilegio
       if (
         item.privilegeid !== undefined &&
         item.privilegeid !== current.privilegeid
@@ -266,7 +247,6 @@ export class RolesService {
         }
       }
 
-      // validar duplicado
       const dup = await this.rcRepo.findOne({
         where: {
           roleid: next.roleid,
@@ -326,17 +306,14 @@ export class RolesService {
   }
 
 async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
-  // 1) Verificar rol
   const role = await this.rolesRepo.findOne({ where: { roleid } });
   if (!role) throw new NotFoundException('Rol no encontrado');
 
-  // 0) Si no mandan items o viene vacío, NO tocamos las configuraciones.
-  //    Esto permite que el frontend llame al endpoint aunque solo se cambie el nombre/estado.
+
   if (!dto.items || dto.items.length === 0) {
     return this.getRoleMatrix(roleid);
   }
 
-  // 2) Validar que existan todos los permissions enviados
   const permIds = dto.items.map((i) => i.permissionid);
   const perms = await this.permissionsRepo
     .createQueryBuilder('p')
@@ -347,7 +324,6 @@ async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
     throw new BadRequestException('Algún permissionid no existe');
   }
 
-  // 3) Validar que existan todos los privilegeids enviados
   const allPrivIds = [...new Set(dto.items.flatMap((i) => i.privilegeids))];
   if (allPrivIds.length > 0) {
     const privs = await this.privilegesRepo
@@ -359,7 +335,6 @@ async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
     }
   }
 
-  // 4) Construir el conjunto “deseado” (roleid, permissionid, privilegeid)
   const desiredTuples = new Set<string>();
   dto.items.forEach((i) => {
     (i.privilegeids || []).forEach((privId) => {
@@ -367,13 +342,11 @@ async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
     });
   });
 
-  // 5) Traer lo actual
   const current = await this.rcRepo.find({ where: { roleid } });
   const currentTuples = new Set(
     current.map((rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
   );
 
-  // 6) Diferencias
   const toDelete = current.filter(
     (rc) =>
       !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
@@ -395,7 +368,6 @@ async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
     }
   });
 
-  // 7) Ejecutar (transacción)
   await this.dataSource.transaction(async (manager) => {
     if (toDelete.length) {
       await manager.delete(
