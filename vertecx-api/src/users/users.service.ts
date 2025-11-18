@@ -49,7 +49,7 @@ export class UsersService {
     private readonly mailService: MailService,
 
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   private async getRoleNameByRoleConfigId(
     roleConfigId: number,
@@ -92,6 +92,29 @@ export class UsersService {
       where: { stateid: createUserDto.stateid },
     });
     if (!state) throw new BadRequestException('Estado inválido.');
+
+    // Detectar si es NIT
+    const isNit = documentType.name?.toUpperCase() === 'NIT';
+    createUserDto.isNit = isNit;
+
+    // Si es NIT, limpiar apellido y asignar rol cliente automáticamente
+    if (isNit) {
+      createUserDto.lastname = null;
+
+      if (!createUserDto.roleconfigurationid) {
+        const clienteRole = await this.roleConfigRepo.findOne({
+          where: { roles: { name: 'cliente' } },
+          relations: ['roles'],
+        });
+
+        if (!clienteRole) {
+          throw new BadRequestException(
+            'No se encontró la configuración de rol para clientes.',
+          );
+        }
+        createUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+      }
+    }
 
     // Generar contraseña aleatoria
     const plainPassword = generateRandomPassword(10);
@@ -150,16 +173,20 @@ export class UsersService {
       await this.customerRepo.save(customer);
     }
 
-    await this.mailService.sendUserPassword(
-      saved.email,
-      saved.name,
-      plainPassword,
-    );
+    // Enviar correo con contraseña (solo si tiene email válido)
+    if (saved.email) {
+      await this.mailService.sendUserPassword(
+        saved.email,
+        saved.name,
+        plainPassword,
+      );
+    }
 
     return {
       success: true,
-      message:
-        'Usuario creado correctamente y contraseña enviada al correo.',
+      message: isNit
+        ? 'Empresa registrada correctamente (NIT) y contraseña enviada al correo.'
+        : 'Usuario creado correctamente y contraseña enviada al correo.',
       data: {
         ...saved,
         password: undefined,
@@ -219,9 +246,6 @@ export class UsersService {
 
     const oldEmail = user.email;
 
-    let newPlainPassword: string | null = null;
-    let newHashedPassword: string | null = null;
-
     // Validar duplicados solo con los campos que vienen
     const duplicateWhere: any[] = [];
 
@@ -249,12 +273,34 @@ export class UsersService {
       }
     }
 
+    // Validar tipo de documento (si viene)
+    let isNit = false;
     if (updateUserDto.typeid) {
       const docType = await this.docTypeRepository.findOne({
         where: { typeofdocumentid: updateUserDto.typeid },
       });
       if (!docType)
         throw new BadRequestException('Tipo de documento inválido.');
+
+      isNit = docType.name?.toUpperCase() === 'NIT';
+      updateUserDto.isNit = isNit;
+
+      if (isNit) {
+        updateUserDto.lastname = null;
+
+        if (!updateUserDto.roleconfigurationid) {
+          const clienteRole = await this.roleConfigRepo.findOne({
+            where: { roles: { name: 'cliente' } },
+            relations: ['roles'],
+          });
+          if (!clienteRole) {
+            throw new BadRequestException(
+              'No se encontró la configuración de rol para clientes.',
+            );
+          }
+          updateUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+        }
+      }
     }
 
     if (updateUserDto.stateid) {
@@ -264,21 +310,87 @@ export class UsersService {
       if (!state) throw new BadRequestException('Estado inválido.');
     }
 
-    if (updateUserDto.email && updateUserDto.email !== oldEmail) {
+    // Generar nueva contraseña si cambia el correo
+    let newPlainPassword: string | null = null;
+    const emailChanged =
+      !!updateUserDto.email && updateUserDto.email !== oldEmail;
+
+    if (emailChanged) {
       newPlainPassword = generateRandomPassword(10);
-      newHashedPassword = await bcrypt.hash(newPlainPassword, 10);
+      const hashed = await bcrypt.hash(newPlainPassword, 10);
+      updateUserDto.password = hashed;
     }
 
+    // Actualizar datos principales
     const updatedUser = this.usersRepository.merge(user, {
       ...updateUserDto,
-      ...(newHashedPassword && { password: newHashedPassword }),
       updateat: new Date(),
     });
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // --- Manejo de técnico o cliente tras actualización ---
+    // Si cambió el correo → enviar nueva contraseña
+    if (emailChanged && newPlainPassword) {
+      await this.mailService.sendUserPassword(
+        saved.email,
+        saved.name,
+        newPlainPassword,
+      );
+    }
 
+    // Traducción y formato amigable de los cambios
+    const fieldTranslations: Record<string, string> = {
+      name: 'Nombre',
+      lastname: 'Apellido',
+      email: 'Correo electrónico',
+      phone: 'Teléfono',
+      documentnumber: 'Número de documento',
+      typeid: 'Tipo de documento',
+      image: 'Imagen de perfil',
+      stateid: 'Estado',
+      roleconfigurationid: 'Rol',
+      CV: 'Hoja de vida (CV)',
+      customercity: 'Ciudad del cliente',
+      customerzipcode: 'Código postal',
+      isNit: '¿Es NIT?',
+    };
+
+    const translatedChanges = await Promise.all(
+      Object.entries(updateUserDto)
+        .filter(([key]) => key !== 'password' && key !== 'updateat')
+        .map(async ([key, value]) => {
+          const label = fieldTranslations[key] || key;
+
+          if (value === null || value === undefined || value === '') {
+            return `<b>${label}:</b> No hay información`;
+          }
+
+          if (key === 'roleconfigurationid') {
+            const roleName = await this.getRoleNameByRoleConfigId(
+              Number(value),
+            );
+            return `<b>${label}:</b> ${
+              roleName.charAt(0).toUpperCase() + roleName.slice(1)
+            }`;
+          }
+
+          if (typeof value === 'boolean') {
+            return `<b>${label}:</b> ${value ? 'Sí' : 'No'}`;
+          }
+
+          return `<b>${label}:</b> ${value}`;
+        }),
+    );
+
+    const formattedHtml = translatedChanges.join('<br/>');
+
+    await this.mailService.sendUpdateNotification(
+      saved.email,
+      saved.name,
+      formattedHtml,
+    );
+
+    // Manejo técnico/cliente
     const usedRoleConfigId =
       updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
     const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
@@ -287,12 +399,10 @@ export class UsersService {
     let existingCustomer: Customers | null = null;
 
     if (roleName === 'tecnico') {
-      // SOLO buscamos técnico; no tocamos customers (para evitar el error de stateid)
       existingTechnician = await this.technicianRepo.findOne({
         where: { userid: id },
       });
     } else if (roleName === 'cliente') {
-      // Cliente: necesitamos ambos
       existingTechnician = await this.technicianRepo.findOne({
         where: { userid: id },
       });
@@ -300,7 +410,6 @@ export class UsersService {
         where: { userid: id },
       });
     } else {
-      // Cualquier otro rol: cargamos ambos por si toca limpiar
       existingTechnician = await this.technicianRepo.findOne({
         where: { userid: id },
       });
@@ -327,33 +436,37 @@ export class UsersService {
         savedTechnician = await this.technicianRepo.save(newTech);
       }
 
-      const typeIds = updateUserDto.techniciantypeids || [];
+      // ⬇️ Solo tocar los tipos si vienen en el DTO
+      if (updateUserDto.techniciantypeids !== undefined) {
+        const typeIds = updateUserDto.techniciantypeids;
 
-      await this.technicianTypeMapRepo.delete({
-        technicianid: savedTechnician.technicianid,
-      });
-
-      if (typeIds.length > 0) {
-        const validTypes = await this.technicianTypeRepo.find({
-          where: { techniciantypeid: In(typeIds) },
+        // Primero limpiamos los tipos anteriores
+        await this.technicianTypeMapRepo.delete({
+          technicianid: savedTechnician.technicianid,
         });
 
-        if (validTypes.length !== typeIds.length) {
-          throw new BadRequestException(
-            'Uno o más tipos de técnico no son válidos.',
+        if (typeIds.length > 0) {
+          const validTypes = await this.technicianTypeRepo.find({
+            where: { techniciantypeid: In(typeIds) },
+          });
+
+          if (validTypes.length !== typeIds.length) {
+            throw new BadRequestException(
+              'Uno o más tipos de técnico no son válidos.',
+            );
+          }
+
+          const mappings = typeIds.map((typeId) =>
+            this.technicianTypeMapRepo.create({
+              technicianid: savedTechnician.technicianid,
+              techniciantypeid: typeId,
+            }),
           );
+
+          await this.technicianTypeMapRepo.save(mappings);
         }
-
-        const mappings = typeIds.map((typeId) =>
-          this.technicianTypeMapRepo.create({
-            technicianid: savedTechnician.technicianid,
-            techniciantypeid: typeId,
-          }),
-        );
-
-        await this.technicianTypeMapRepo.save(mappings);
       }
-    } else if (roleName === 'cliente') {
+    } else if (roleName === 'cliente' || isNit) {
       if (existingTechnician) {
         await this.technicianRepo.remove(existingTechnician);
       }
@@ -384,17 +497,11 @@ export class UsersService {
       }
     }
 
-    if (newPlainPassword) {
-      await this.mailService.sendUserPassword(
-        saved.email,
-        saved.name,
-        newPlainPassword,
-      );
-    }
-
     return {
       success: true,
-      message: 'Usuario actualizado correctamente.',
+      message: emailChanged
+        ? 'Usuario actualizado. Se envió nueva contraseña y notificación al nuevo correo.'
+        : 'Usuario actualizado correctamente.',
       data: saved,
     };
   }
@@ -435,12 +542,6 @@ export class UsersService {
     }
 
     await this.usersRepository.remove(user);
-
-    return {
-      success: true,
-      message: `Usuario con ID ${id} eliminado.`,
-    };
+    return { success: true, message: `Usuario con ID ${id} eliminado.` };
   }
-
-
 }

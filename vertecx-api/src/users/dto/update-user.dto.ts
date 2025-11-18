@@ -20,11 +20,6 @@ export class UpdateUserDto {
   name?: string;
 
   @IsOptional()
-  @IsString({ message: 'El apellido debe ser texto.' })
-  @Length(2, 50, { message: 'El apellido debe tener entre 2 y 50 caracteres.' })
-  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
-    message: 'El apellido no puede contener números ni caracteres especiales.',
-  })
   lastname?: string;
 
   @IsOptional()
@@ -52,11 +47,8 @@ export class UpdateUserDto {
   @IsNumber({}, { message: 'El tipo de documento debe ser un número válido.' })
   typeid?: number;
 
+  @IsString({ message: 'El número de documento debe ser texto.' })
   @IsOptional()
-  @IsString({ message: 'El número de documento debe ser texto numérico.' })
-  @Matches(/^[0-9]{5,20}$/, {
-    message: 'El número de documento debe tener entre 5 y 20 dígitos numéricos.',
-  })
   documentnumber?: string;
 
   @IsOptional()
@@ -87,4 +79,7 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   customerzipcode?: string;
+
+  @IsOptional()
+  isNit?: boolean;
 }
