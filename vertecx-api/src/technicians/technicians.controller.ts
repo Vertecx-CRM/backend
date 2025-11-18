@@ -1,4 +1,3 @@
-// src/technicians/technicians.controller.ts
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { ApiBody } from '@nestjs/swagger';
 import { TechniciansService } from './technicians.service';

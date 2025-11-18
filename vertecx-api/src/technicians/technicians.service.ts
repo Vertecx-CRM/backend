@@ -117,10 +117,8 @@ export class TechniciansService {
       throw new NotFoundException('Técnico no encontrado');
     }
 
-    // Primero limpiamos la tabla puente para evitar problemas de FK
     await this.typeMapRepo.delete({ technicianid: technicianId });
 
-    // Luego delegamos al UsersService para que elimine el usuario
     await this.usersService.remove(technician.userid);
 
     return { message: 'Técnico eliminado correctamente' };

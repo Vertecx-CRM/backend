@@ -1,4 +1,3 @@
-// src/technicians/dto/create-technician.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
