@@ -6,6 +6,7 @@ import {
   IsArray,
   ArrayMinSize,
   ValidateNested,
+  IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -31,7 +32,34 @@ export class RoleConfigUpdateItem {
   privilegeid?: number;
 }
 
+export class UpdateRoleInfoDto {
+  @ApiProperty({ example: 1 })
+  @IsInt()
+  @IsNotEmpty()
+  roleid: number;
+
+  @ApiPropertyOptional({ example: 'Administrador' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'active' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
 export class UpdateRoleConfigurationDto {
+  @ApiPropertyOptional({
+    type: UpdateRoleInfoDto,
+    description:
+      'Información opcional del rol a actualizar (name/status). Si viene, se actualiza el rol.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateRoleInfoDto)
+  role?: UpdateRoleInfoDto;
+
   @ApiProperty({
     type: [RoleConfigUpdateItem],
     example: [

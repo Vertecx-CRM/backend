@@ -21,7 +21,6 @@ import { UpdateRoleMatrixDto } from './dto/update-role-matrix.dto';
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
-  // 🔹 CREATE ROLE (con permisos y privilegios)
   @Post()
   @ApiOperation({
     summary: 'Crear un nuevo rol con sus permisos y privilegios',
@@ -31,7 +30,6 @@ export class RolesController {
     return this.rolesService.create(dto);
   }
 
-  // 🔹 GET ALL ROLES
   @Get()
   @ApiOperation({ summary: 'Listar todos los roles' })
   @ApiResponse({ status: 200, description: 'Lista de roles.' })
@@ -39,7 +37,6 @@ export class RolesController {
     return this.rolesService.findAll();
   }
 
-  // MATRIZ PARA EL FRONT (pinta el checklist)
   @Get(':id/matrix')
   @ApiOperation({
     summary:
@@ -49,7 +46,14 @@ export class RolesController {
     return this.rolesService.getRoleMatrix(roleid);
   }
 
-  // REEMPLAZA TODA LA CONFIGURACIÓN DEL ROL SEGÚN EL CHECKLIST
+    @Get(':id/detail')
+  @ApiOperation({
+    summary: 'Obtener detalle del rol (info básica + configuraciones)',
+  })
+  async getDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.rolesService.getRoleDetail(id);
+  }
+
   @Put(':id/configurations')
   @ApiOperation({
     summary:
@@ -63,7 +67,6 @@ export class RolesController {
     return this.rolesService.replaceRoleMatrix(roleid, dto);
   }
 
-  // 🔹 GET ONE ROLE
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un rol por su ID' })
   @ApiResponse({ status: 200, description: 'Rol encontrado.' })
@@ -79,7 +82,6 @@ export class RolesController {
     return this.rolesService.updateConfigurations(dto);
   }
 
-  // 🔹 DELETE ROLE
   @Delete(':id')
   @ApiOperation({
     summary: 'Eliminar un rol (solo si no está vinculado a usuarios)',

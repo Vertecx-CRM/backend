@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { ApiBody } from '@nestjs/swagger';
 import { TechniciansService } from './technicians.service';
 import { CreateTechnicianDto } from './dto/create-technician.dto';
 import { UpdateTechnicianDto } from './dto/update-technician.dto';
@@ -23,6 +24,7 @@ export class TechniciansController {
   }
 
   @Patch(':id')
+  @ApiBody({ type: UpdateTechnicianDto })
   update(@Param('id') id: string, @Body() updateTechnicianDto: UpdateTechnicianDto) {
     return this.techniciansService.update(+id, updateTechnicianDto);
   }
