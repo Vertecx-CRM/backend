@@ -20,6 +20,7 @@ import { TypeofdocumentsModule } from './typeofdocuments/typeofdocuments.module'
 import { MailModule } from './shared/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
 import { TechniciantypesModule } from './technicians/techniciantypes/techniciantypes.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { TechniciantypesModule } from './technicians/techniciantypes/techniciant
     TypeofdocumentsModule,
     MailModule,
     TechniciantypesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
