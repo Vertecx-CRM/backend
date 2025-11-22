@@ -1,4 +1,3 @@
-// src/technicians/technicians.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,23 +15,25 @@ export class TechniciansService {
   constructor(
     @InjectRepository(Technicians)
     private readonly techniciansRepo: Repository<Technicians>,
+
     @InjectRepository(TechnicianTypeMap)
     private readonly typeMapRepo: Repository<TechnicianTypeMap>,
+
     private readonly usersService: UsersService,
   ) {}
 
   async create(dto: CreateTechnicianDto) {
     const TECH_ROLE_CONFIGURATION_ID = dto.roleconfigurationid ?? 3;
     const ACTIVE_STATE_ID = 1;
-    const DEFAULT_DOCUMENT_TYPE_ID = 1;
 
+    // ✅ USANDO EL TYPEID REAL QUE VIENE DEL FRONTEND
     const userDto: CreateUserDto = {
       name: dto.name,
       lastname: dto.lastname,
       email: dto.email,
       documentnumber: dto.documentnumber,
       phone: dto.phone,
-      typeid: DEFAULT_DOCUMENT_TYPE_ID,
+      typeid: dto.typeid, // ← AQUÍ EL CAMBIO CORRECTO
       stateid: ACTIVE_STATE_ID,
       roleconfigurationid: TECH_ROLE_CONFIGURATION_ID,
       CV: dto.CV,
@@ -42,15 +43,17 @@ export class TechniciansService {
     return this.usersService.create(userDto);
   }
 
-  async findAll() {
-    return this.techniciansRepo.find({
-      relations: [
-        'users',
-        'technicianTypeMaps',
-        'technicianTypeMaps.techniciantype',
-      ],
-    });
-  }
+async findAll() {
+  return this.techniciansRepo.find({
+    relations: [
+      'users',
+      'users.typeofdocuments',     
+      'users.states',             
+      'technicianTypeMaps',
+      'technicianTypeMaps.techniciantype',
+    ],
+  });
+}
 
   async findOne(id: number) {
     const technician = await this.techniciansRepo.findOne({
@@ -96,6 +99,10 @@ export class TechniciansService {
       userDto.documentnumber = dto.documentnumber;
     if (dto.phone !== undefined) userDto.phone = dto.phone;
     if (dto.CV !== undefined) userDto.CV = dto.CV;
+
+    // Si viene typeid en el PATCH también se permite actualizar
+    if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
+
     if (dto.techniciantypeids !== undefined) {
       userDto.techniciantypeids = dto.techniciantypeids;
     }

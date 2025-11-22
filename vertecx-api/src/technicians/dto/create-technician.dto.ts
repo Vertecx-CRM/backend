@@ -57,6 +57,15 @@ export class CreateTechnicianDto {
   @IsNotEmpty()
   CV: string;
 
+  // ✅ SE AGREGA ESTE CAMPO
+  @ApiProperty({
+    example: 2,
+    description: 'ID del tipo de documento (FK en users.typeid)',
+  })
+  @IsInt()
+  @IsNotEmpty()
+  typeid: number;
+
   @ApiProperty({
     type: [Number],
     example: [1, 2],
