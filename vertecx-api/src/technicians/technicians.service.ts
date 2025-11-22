@@ -26,14 +26,13 @@ export class TechniciansService {
     const TECH_ROLE_CONFIGURATION_ID = dto.roleconfigurationid ?? 3;
     const ACTIVE_STATE_ID = 1;
 
-    // ✅ USANDO EL TYPEID REAL QUE VIENE DEL FRONTEND
     const userDto: CreateUserDto = {
       name: dto.name,
       lastname: dto.lastname,
       email: dto.email,
       documentnumber: dto.documentnumber,
       phone: dto.phone,
-      typeid: dto.typeid, // ← AQUÍ EL CAMBIO CORRECTO
+      typeid: dto.typeid, 
       stateid: ACTIVE_STATE_ID,
       roleconfigurationid: TECH_ROLE_CONFIGURATION_ID,
       CV: dto.CV,
