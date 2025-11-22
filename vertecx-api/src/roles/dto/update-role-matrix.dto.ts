@@ -21,7 +21,6 @@ class RoleMatrixItemDto {
   })
   @IsArray()
   @IsInt({ each: true })
-  // Puede ser [] si deselecciona todo un módulo
   privilegeids: number[];
 }
 
@@ -36,7 +35,6 @@ export class UpdateRoleMatrixDto {
       'Lista de módulos con los privilegios seleccionados. Reemplaza toda la configuración del rol.',
   })
   @IsArray()
-  @ArrayNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => RoleMatrixItemDto)
   items: RoleMatrixItemDto[];
