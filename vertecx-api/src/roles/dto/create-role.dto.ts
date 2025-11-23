@@ -7,12 +7,16 @@ import {
   IsArray,
   ArrayMinSize,
   IsBoolean,
+  Matches,
 } from 'class-validator';
 
 export class CreateRoleDto {
   @ApiProperty({ example: 'Administrador' })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^(?!admin$)/i, {
+    message: 'No se puede crear un rol con el nombre "admin".',
+  })
   name: string;
 
   @ApiProperty({ example: 'Rol con todos los permisos', required: false })

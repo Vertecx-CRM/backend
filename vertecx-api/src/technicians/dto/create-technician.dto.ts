@@ -58,6 +58,14 @@ export class CreateTechnicianDto {
   CV: string;
 
   @ApiProperty({
+    example: 2,
+    description: 'ID del tipo de documento (FK en users.typeid)',
+  })
+  @IsInt()
+  @IsNotEmpty()
+  typeid: number;
+
+  @ApiProperty({
     type: [Number],
     example: [1, 2],
     description: 'IDs de tipos de técnico',

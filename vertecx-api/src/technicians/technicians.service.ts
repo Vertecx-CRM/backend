@@ -1,4 +1,3 @@
-// src/technicians/technicians.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,8 +15,10 @@ export class TechniciansService {
   constructor(
     @InjectRepository(Technicians)
     private readonly techniciansRepo: Repository<Technicians>,
+
     @InjectRepository(TechnicianTypeMap)
     private readonly typeMapRepo: Repository<TechnicianTypeMap>,
+
     private readonly usersService: UsersService,
   ) {}
 
@@ -25,7 +26,6 @@ export class TechniciansService {
     const TECH_ROLE_ID =
       dto.roleid ?? (await this.usersService.getRoleIdByName('tecnico'));
     const ACTIVE_STATE_ID = 1;
-    const DEFAULT_DOCUMENT_TYPE_ID = 1;
 
     const userDto: CreateUserDto = {
       name: dto.name,
@@ -33,7 +33,7 @@ export class TechniciansService {
       email: dto.email,
       documentnumber: dto.documentnumber,
       phone: dto.phone,
-      typeid: DEFAULT_DOCUMENT_TYPE_ID,
+      typeid: dto.typeid, 
       stateid: ACTIVE_STATE_ID,
       roleid: TECH_ROLE_ID,
       CV: dto.CV,
@@ -97,6 +97,9 @@ export class TechniciansService {
       userDto.documentnumber = dto.documentnumber;
     if (dto.phone !== undefined) userDto.phone = dto.phone;
     if (dto.CV !== undefined) userDto.CV = dto.CV;
+
+    if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
+
     if (dto.techniciantypeids !== undefined) {
       userDto.techniciantypeids = dto.techniciantypeids;
     }

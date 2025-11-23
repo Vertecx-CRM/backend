@@ -9,21 +9,21 @@ import {
   OneToMany,
 } from 'typeorm';
 
-@Entity('technicians')
-export class Technicians {
-  @PrimaryGeneratedColumn()
-  technicianid: number;
+  @Entity('technicians')
+  export class Technicians {
+    @PrimaryGeneratedColumn()
+    technicianid: number;
 
-  @Column({ nullable: false })
-  userid: number;
+    @Column({ nullable: false })
+    userid: number;
 
-  @Column({ nullable: false })
-  CV: string;
+    @Column({ nullable: false })
+    CV: string;
 
-  @ManyToOne(() => Users)
-  @JoinColumn({ name: 'userid' })
-  users: Users;
+    @ManyToOne(() => Users)
+    @JoinColumn({ name: 'userid' })
+    users: Users;
 
-  @OneToMany(() => TechnicianTypeMap, (typeMap) => typeMap.technician)
-  technicianTypeMaps: TechnicianTypeMap[];
-}
+    @OneToMany(() => TechnicianTypeMap, (typeMap) => typeMap.technician)
+    technicianTypeMaps: TechnicianTypeMap[];
+  }
