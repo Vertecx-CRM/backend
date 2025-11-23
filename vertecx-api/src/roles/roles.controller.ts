@@ -30,6 +30,12 @@ export class RolesController {
     return this.rolesService.create(dto);
   }
 
+  @Get('list')
+  @ApiOperation({ summary: 'Listar todos los roles básicos' })
+  async list() {
+    return this.rolesService.listRoles();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Listar todos los roles' })
   @ApiResponse({ status: 200, description: 'Lista de roles.' })

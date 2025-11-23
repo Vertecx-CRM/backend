@@ -23,7 +23,8 @@ export class TechniciansService {
   ) {}
 
   async create(dto: CreateTechnicianDto) {
-    const TECH_ROLE_CONFIGURATION_ID = dto.roleconfigurationid ?? 3;
+    const TECH_ROLE_ID =
+      dto.roleid ?? (await this.usersService.getRoleIdByName('tecnico'));
     const ACTIVE_STATE_ID = 1;
 
     const userDto: CreateUserDto = {
@@ -34,7 +35,8 @@ export class TechniciansService {
       phone: dto.phone,
       typeid: dto.typeid, 
       stateid: ACTIVE_STATE_ID,
-      roleconfigurationid: TECH_ROLE_CONFIGURATION_ID,
+      roleid: TECH_ROLE_ID,
+      image: dto.image,
       CV: dto.CV,
       techniciantypeids: dto.techniciantypeids,
     };
@@ -42,17 +44,17 @@ export class TechniciansService {
     return this.usersService.create(userDto);
   }
 
-async findAll() {
-  return this.techniciansRepo.find({
-    relations: [
-      'users',
-      'users.typeofdocuments',     
-      'users.states',             
-      'technicianTypeMaps',
-      'technicianTypeMaps.techniciantype',
-    ],
-  });
-}
+  async findAll() {
+    return this.techniciansRepo.find({
+      relations: [
+        'users',
+        'users.typeofdocuments',
+        'users.roles',
+        'technicianTypeMaps',
+        'technicianTypeMaps.techniciantype',
+      ],
+    });
+  }
 
   async findOne(id: number) {
     const technician = await this.techniciansRepo.findOne({
@@ -61,8 +63,7 @@ async findAll() {
         'users',
         'users.typeofdocuments',
         'users.states',
-        'users.roleconfiguration',
-        'users.roleconfiguration.roles',
+        'users.roles',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',
       ],
@@ -97,6 +98,7 @@ async findAll() {
     if (dto.documentnumber !== undefined)
       userDto.documentnumber = dto.documentnumber;
     if (dto.phone !== undefined) userDto.phone = dto.phone;
+    if (dto.image !== undefined) userDto.image = dto.image;
     if (dto.CV !== undefined) userDto.CV = dto.CV;
 
     if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
@@ -104,8 +106,8 @@ async findAll() {
     if (dto.techniciantypeids !== undefined) {
       userDto.techniciantypeids = dto.techniciantypeids;
     }
-    if (dto.roleconfigurationid !== undefined) {
-      userDto.roleconfigurationid = dto.roleconfigurationid;
+    if (dto.roleid !== undefined) {
+      userDto.roleid = dto.roleid;
     }
 
     await this.usersService.update(technician.userid, userDto);
