@@ -34,7 +34,7 @@ export class RequestsService {
 
   async create(dto: CreateRequestDto) {
     await this.ensureStateExists(dto.stateId);
-    const scheduledAt = dto.scheduledAt ? localMidnight(dto.scheduledAt) ?? new Date(dto.scheduledAt) : null;
+    const scheduledAt = dto.scheduledAt ? localMidnight(dto.scheduledAt) ?? new Date(dto.scheduledAt) : new Date();
     const entity = this.repo.create({
       scheduledAt,
       serviceType: dto.serviceType,

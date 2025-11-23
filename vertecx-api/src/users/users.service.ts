@@ -66,6 +66,66 @@ export class UsersService {
     return roleConfig.roles.name.trim().toLowerCase();
   }
 
+  private buildPlaceholders(values: number[]) {
+    return values.map((_, idx) => `$${idx + 1}`).join(', ');
+  }
+
+  private async countQuotesByOrders(
+    field: 'clientid' | 'technicalid',
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const placeholders = this.buildPlaceholders(ids);
+    const [result] = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count
+       FROM quotes q
+       JOIN ordersservices os ON os.ordersservicesid = q.ordersservicesid
+       WHERE os.${field} IN (${placeholders})`,
+      ids,
+    );
+    return Number(result?.count ?? 0);
+  }
+
+  private async countByIds(
+    table: string,
+    column: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const placeholders = this.buildPlaceholders(ids);
+    const [result] = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM ${table} WHERE ${column} IN (${placeholders})`,
+      ids,
+    );
+    return Number(result?.count ?? 0);
+  }
+
+  private async hasUserLinkedRecords(
+    customerIds: number[],
+    technicianIds: number[],
+  ): Promise<boolean> {
+    const checks: Promise<number>[] = [];
+
+    if (customerIds.length > 0) {
+      checks.push(this.countByIds('sales', 'customerid', customerIds));
+      checks.push(this.countByIds('servicerequests', 'clientid', customerIds));
+      checks.push(this.countByIds('ordersservices', 'clientid', customerIds));
+      checks.push(this.countQuotesByOrders('clientid', customerIds));
+    }
+
+    if (technicianIds.length > 0) {
+      checks.push(
+        this.countByIds('ordersservices', 'technicalid', technicianIds),
+      );
+      checks.push(this.countQuotesByOrders('technicalid', technicianIds));
+    }
+
+    if (checks.length === 0) return false;
+
+    const totals = await Promise.all(checks);
+    return totals.some((count) => count > 0);
+  }
+
   // Crear usuario
   async create(createUserDto: CreateUserDto) {
     const exists = await this.usersRepository.findOne({
@@ -519,9 +579,21 @@ export class UsersService {
       user.roleconfigurationid,
     );
 
-    const technician = await this.technicianRepo.findOne({
-      where: { userid: id },
-    });
+    const [technician, customer] = await Promise.all([
+      this.technicianRepo.findOne({ where: { userid: id } }),
+      this.customerRepo.findOne({ where: { userid: id } }),
+    ]);
+
+    const hasAssociations = await this.hasUserLinkedRecords(
+      customer ? [customer.customerid] : [],
+      technician ? [technician.technicianid] : [],
+    );
+
+    if (hasAssociations) {
+      throw new BadRequestException(
+        'El usuario no se puede eliminar porque tiene registros asociados (ventas, compras, solicitudes de servicio, ordenes de servicio o cotizaciones).',
+      );
+    }
 
     if (technician) {
       await this.technicianTypeMapRepo.delete({
@@ -532,10 +604,6 @@ export class UsersService {
     }
 
     if (roleName === 'cliente') {
-      const customer = await this.customerRepo.findOne({
-        where: { userid: id },
-      });
-
       if (customer) {
         await this.customerRepo.remove(customer);
       }
