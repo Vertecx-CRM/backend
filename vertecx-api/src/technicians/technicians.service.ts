@@ -36,6 +36,7 @@ export class TechniciansService {
       typeid: dto.typeid, 
       stateid: ACTIVE_STATE_ID,
       roleid: TECH_ROLE_ID,
+      image: dto.image,
       CV: dto.CV,
       techniciantypeids: dto.techniciantypeids,
     };
@@ -47,6 +48,7 @@ export class TechniciansService {
     return this.techniciansRepo.find({
       relations: [
         'users',
+        'users.typeofdocuments',
         'users.roles',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',
@@ -96,6 +98,7 @@ export class TechniciansService {
     if (dto.documentnumber !== undefined)
       userDto.documentnumber = dto.documentnumber;
     if (dto.phone !== undefined) userDto.phone = dto.phone;
+    if (dto.image !== undefined) userDto.image = dto.image;
     if (dto.CV !== undefined) userDto.CV = dto.CV;
 
     if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
