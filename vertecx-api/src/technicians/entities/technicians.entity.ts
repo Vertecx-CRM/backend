@@ -1,4 +1,3 @@
-import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
 import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
 import { Users } from 'src/users/entities/users.entity';
 import {

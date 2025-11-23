@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   BadRequestException,
   NotFoundException,
@@ -15,7 +15,7 @@ import { generateRandomPassword } from 'src/shared/utils/generate-password';
 import * as bcrypt from 'bcrypt';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
-import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { Roles } from 'src/roles/entities/roles.entity';
 import { Techniciantypes } from 'src/technicians/entities/technician_types.entity';
 import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
 
@@ -37,8 +37,8 @@ export class UsersService {
     @InjectRepository(Customers)
     private readonly customerRepo: Repository<Customers>,
 
-    @InjectRepository(Roleconfiguration)
-    private readonly roleConfigRepo: Repository<Roleconfiguration>,
+    @InjectRepository(Roles)
+    private readonly rolesRepo: Repository<Roles>,
 
     @InjectRepository(Techniciantypes)
     private readonly technicianTypeRepo: Repository<Techniciantypes>,
@@ -51,21 +51,31 @@ export class UsersService {
     private readonly dataSource: DataSource,
   ) {}
 
-  private async getRoleNameByRoleConfigId(
-    roleConfigId: number,
-  ): Promise<string> {
-    const roleConfig = await this.roleConfigRepo.findOne({
-      where: { roleconfigurationid: roleConfigId },
-      relations: ['roles'],
-    });
-
-    if (!roleConfig || !roleConfig.roles) {
-      throw new BadRequestException('Configuración de rol inválida.');
+  private async getRoleById(roleId: number): Promise<Roles> {
+    const role = await this.rolesRepo.findOne({ where: { roleid: roleId } });
+    if (!role) {
+      throw new BadRequestException('Rol inválido.');
     }
-
-    return roleConfig.roles.name.trim().toLowerCase();
+    return role;
   }
 
+  private async getRoleNameByRoleId(roleId: number): Promise<string> {
+    const role = await this.getRoleById(roleId);
+    return role.name.trim().toLowerCase();
+  }
+
+  async getRoleIdByName(name: string): Promise<number> {
+    const role = await this.rolesRepo
+      .createQueryBuilder('r')
+      .where('LOWER(r.name) = LOWER(:name)', { name })
+      .getOne();
+
+    if (!role) {
+      throw new BadRequestException('No se encontró el rol "' + name + '".');
+    }
+
+    return role.roleid;
+  }
   private buildPlaceholders(values: number[]) {
     return values.map((_, idx) => `$${idx + 1}`).join(', ');
   }
@@ -138,7 +148,7 @@ export class UsersService {
 
     if (exists) {
       throw new BadRequestException(
-        'Ya existe un usuario con el mismo correo, documento o teléfono.',
+        "Ya existe un usuario con el mismo correo, documento o teléfono.",
       );
     }
 
@@ -153,30 +163,26 @@ export class UsersService {
     });
     if (!state) throw new BadRequestException('Estado inválido.');
 
-    // Detectar si es NIT
     const isNit = documentType.name?.toUpperCase() === 'NIT';
     createUserDto.isNit = isNit;
 
-    // Si es NIT, limpiar apellido y asignar rol cliente automáticamente
     if (isNit) {
       createUserDto.lastname = null;
-
-      if (!createUserDto.roleconfigurationid) {
-        const clienteRole = await this.roleConfigRepo.findOne({
-          where: { roles: { name: 'cliente' } },
-          relations: ['roles'],
-        });
-
-        if (!clienteRole) {
-          throw new BadRequestException(
-            'No se encontró la configuración de rol para clientes.',
-          );
-        }
-        createUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
-      }
     }
 
-    // Generar contraseña aleatoria
+    let resolvedRoleId = createUserDto.roleid;
+
+    if (isNit && !resolvedRoleId) {
+      resolvedRoleId = await this.getRoleIdByName('cliente');
+    }
+
+    if (!resolvedRoleId) {
+      throw new BadRequestException('El rol es obligatorio.');
+    }
+
+    const role = await this.getRoleById(resolvedRoleId);
+    createUserDto.roleid = role.roleid;
+
     const plainPassword = generateRandomPassword(10);
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
@@ -187,14 +193,12 @@ export class UsersService {
       updateat: null,
       typeid: documentType.typeofdocumentid,
       stateid: state.stateid,
+      roleid: role.roleid,
     });
 
     const saved = await this.usersRepository.save(newUser);
 
-    // Manejo de técnico o cliente
-    const roleName = await this.getRoleNameByRoleConfigId(
-      createUserDto.roleconfigurationid,
-    );
+    const roleName = role.name.trim().toLowerCase();
 
     if (roleName === 'tecnico') {
       const technician = this.technicianRepo.create({
@@ -233,7 +237,6 @@ export class UsersService {
       await this.customerRepo.save(customer);
     }
 
-    // Enviar correo con contraseña (solo si tiene email válido)
     if (saved.email) {
       await this.mailService.sendUserPassword(
         saved.email,
@@ -260,10 +263,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.states', 'state')
       .leftJoinAndSelect('user.typeofdocuments', 'docType')
-      .leftJoinAndSelect('user.roleconfiguration', 'rc')
-      .leftJoinAndSelect('rc.roles', 'role')
-      .leftJoinAndSelect('rc.permissions', 'perm')
-      .leftJoinAndSelect('rc.privileges', 'priv')
+      .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('user.technicians', 'tech')
       .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
       .leftJoinAndSelect('typeMap.techniciantype', 'techType')
@@ -280,10 +280,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.states', 'state')
       .leftJoinAndSelect('user.typeofdocuments', 'docType')
-      .leftJoinAndSelect('user.roleconfiguration', 'rc')
-      .leftJoinAndSelect('rc.roles', 'role')
-      .leftJoinAndSelect('rc.permissions', 'perm')
-      .leftJoinAndSelect('rc.privileges', 'priv')
+      .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('user.technicians', 'tech')
       .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
       .leftJoinAndSelect('typeMap.techniciantype', 'techType')
@@ -296,7 +293,7 @@ export class UsersService {
     return { success: true, data: user };
   }
 
-  // Actualizar usuario
+    // Actualizar usuario
   async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.usersRepository.findOne({
       where: { userid: id },
@@ -306,7 +303,6 @@ export class UsersService {
 
     const oldEmail = user.email;
 
-    // Validar duplicados solo con los campos que vienen
     const duplicateWhere: any[] = [];
 
     if (updateUserDto.email) {
@@ -333,7 +329,6 @@ export class UsersService {
       }
     }
 
-    // Validar tipo de documento (si viene)
     let isNit = false;
     if (updateUserDto.typeid) {
       const docType = await this.docTypeRepository.findOne({
@@ -347,19 +342,6 @@ export class UsersService {
 
       if (isNit) {
         updateUserDto.lastname = null;
-
-        if (!updateUserDto.roleconfigurationid) {
-          const clienteRole = await this.roleConfigRepo.findOne({
-            where: { roles: { name: 'cliente' } },
-            relations: ['roles'],
-          });
-          if (!clienteRole) {
-            throw new BadRequestException(
-              'No se encontró la configuración de rol para clientes.',
-            );
-          }
-          updateUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
-        }
       }
     }
 
@@ -370,7 +352,21 @@ export class UsersService {
       if (!state) throw new BadRequestException('Estado inválido.');
     }
 
-    // Generar nueva contraseña si cambia el correo
+    if (updateUserDto.roleid !== undefined) {
+      await this.getRoleById(updateUserDto.roleid);
+    }
+
+    let resolvedRoleId = updateUserDto.roleid ?? user.roleid;
+
+    if (isNit && !updateUserDto.roleid) {
+      resolvedRoleId = await this.getRoleIdByName('cliente');
+      updateUserDto.roleid = resolvedRoleId;
+    }
+
+    if (!resolvedRoleId) {
+      throw new BadRequestException('El rol es obligatorio.');
+    }
+
     let newPlainPassword: string | null = null;
     const emailChanged =
       !!updateUserDto.email && updateUserDto.email !== oldEmail;
@@ -381,15 +377,14 @@ export class UsersService {
       updateUserDto.password = hashed;
     }
 
-    // Actualizar datos principales
     const updatedUser = this.usersRepository.merge(user, {
       ...updateUserDto,
+      roleid: resolvedRoleId,
       updateat: new Date(),
     });
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // Si cambió el correo → enviar nueva contraseña
     if (emailChanged && newPlainPassword) {
       await this.mailService.sendUserPassword(
         saved.email,
@@ -398,7 +393,6 @@ export class UsersService {
       );
     }
 
-    // Traducción y formato amigable de los cambios
     const fieldTranslations: Record<string, string> = {
       name: 'Nombre',
       lastname: 'Apellido',
@@ -408,7 +402,7 @@ export class UsersService {
       typeid: 'Tipo de documento',
       image: 'Imagen de perfil',
       stateid: 'Estado',
-      roleconfigurationid: 'Rol',
+      roleid: 'Rol',
       CV: 'Hoja de vida (CV)',
       customercity: 'Ciudad del cliente',
       customerzipcode: 'Código postal',
@@ -425,10 +419,8 @@ export class UsersService {
             return `<b>${label}:</b> No hay información`;
           }
 
-          if (key === 'roleconfigurationid') {
-            const roleName = await this.getRoleNameByRoleConfigId(
-              Number(value),
-            );
+          if (key === 'roleid') {
+            const roleName = await this.getRoleNameByRoleId(Number(value));
             return `<b>${label}:</b> ${
               roleName.charAt(0).toUpperCase() + roleName.slice(1)
             }`;
@@ -450,10 +442,8 @@ export class UsersService {
       formattedHtml,
     );
 
-    // Manejo técnico/cliente
-    const usedRoleConfigId =
-      updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
-    const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
+    const usedRoleId = resolvedRoleId;
+    const roleName = await this.getRoleNameByRoleId(usedRoleId);
 
     let existingTechnician: Technicians | null = null;
     let existingCustomer: Customers | null = null;
@@ -496,11 +486,9 @@ export class UsersService {
         savedTechnician = await this.technicianRepo.save(newTech);
       }
 
-      // ⬇️ Solo tocar los tipos si vienen en el DTO
       if (updateUserDto.techniciantypeids !== undefined) {
         const typeIds = updateUserDto.techniciantypeids;
 
-        // Primero limpiamos los tipos anteriores
         await this.technicianTypeMapRepo.delete({
           technicianid: savedTechnician.technicianid,
         });
@@ -575,9 +563,7 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
     }
 
-    const roleName = await this.getRoleNameByRoleConfigId(
-      user.roleconfigurationid,
-    );
+    const roleName = await this.getRoleNameByRoleId(user.roleid);
 
     const [technician, customer] = await Promise.all([
       this.technicianRepo.findOne({ where: { userid: id } }),
@@ -613,3 +599,8 @@ export class UsersService {
     return { success: true, message: `Usuario con ID ${id} eliminado.` };
   }
 }
+
+
+
+
+

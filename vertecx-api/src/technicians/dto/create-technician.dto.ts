@@ -68,10 +68,10 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: 3,
-    description: 'ID de configuración de rol para técnico',
+    description: 'ID de rol para técnico',
     required: false,
   })
   @IsOptional()
   @IsInt()
-  roleconfigurationid?: number;
+  roleid?: number;
 }
