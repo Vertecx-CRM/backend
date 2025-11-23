@@ -99,7 +99,6 @@ async findAll() {
     if (dto.phone !== undefined) userDto.phone = dto.phone;
     if (dto.CV !== undefined) userDto.CV = dto.CV;
 
-    // Si viene typeid en el PATCH también se permite actualizar
     if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
 
     if (dto.techniciantypeids !== undefined) {
