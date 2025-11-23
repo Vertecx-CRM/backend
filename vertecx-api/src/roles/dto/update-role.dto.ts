@@ -7,6 +7,7 @@ import {
   ArrayMinSize,
   ValidateNested,
   IsString,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -36,6 +37,9 @@ export class UpdateRoleInfoDto {
   @ApiProperty({ example: 1 })
   @IsInt()
   @IsNotEmpty()
+  @Matches(/^(?!1$)/, {
+    message: 'El rol ADMIN no puede ser editado.',
+  })
   roleid: number;
 
   @ApiPropertyOptional({ example: 'Administrador' })
