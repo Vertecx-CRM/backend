@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Productcategories } from './productcategories.entity';
 import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
+import { OrdersServices } from 'src/order-services/entities/orders-services.entity';
 
 @Entity('products')
 export class Products {
@@ -50,4 +51,7 @@ export class Products {
     (purchaseProduct) => purchaseProduct.product,
   )
   purchaseProducts: PurchaseProduct[];
+
+  @OneToMany(() => OrdersServices, (order) => order.products)
+orders: OrdersServices[];
 }

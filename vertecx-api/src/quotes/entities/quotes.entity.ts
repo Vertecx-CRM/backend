@@ -1,4 +1,4 @@
-import { Ordersservices } from 'src/services/entities/ordersservices.entity';
+import { OrdersServices } from 'src/order-services/entities/orders-services.entity';
 import { States } from 'src/shared/entities/states.entity';
 import {
   Entity,
@@ -25,9 +25,9 @@ export class Quotes {
   @Column({ nullable: true })
   observation: string;
 
-  @ManyToOne(() => Ordersservices)
+  @ManyToOne(() => OrdersServices)
   @JoinColumn({ name: 'ordersservicesid' })
-  ordersservices: Ordersservices;
+  ordersservices: OrdersServices;
 
   @ManyToOne(() => States)
   @JoinColumn({ name: 'quotesid' })

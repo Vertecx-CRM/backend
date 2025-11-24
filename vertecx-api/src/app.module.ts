@@ -20,13 +20,13 @@ import { TypeofdocumentsModule } from './typeofdocuments/typeofdocuments.module'
 import { MailModule } from './shared/mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
 import { TechniciantypesModule } from './technicians/techniciantypes/techniciantypes.module';
-import { DashboardModule } from './dashboard/dashboard.module';
+import { AuthModule } from './auth/auth.module';
+import { OrdersServicesModule } from './order-services/orders-services.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    AuthModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     SalesModule,
     UsersModule,
@@ -41,6 +41,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ServicesModule,
     QuotesModule,
     RequestsModule,
+    OrdersServicesModule,
     SuppliersModule,
     TypeofdocumentsModule,
     MailModule,

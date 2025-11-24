@@ -16,6 +16,9 @@ export class ServiceRequest {
   @Column({ name: 'servicetype', type: 'varchar', length: 255 })
   serviceType: string;
 
+  @Column({ name: 'direccion', type: 'varchar', length: 255 })
+  direccion: string;
+
   @Column({ name: 'description', type: 'text' })
   description: string;
 
