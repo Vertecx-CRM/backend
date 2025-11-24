@@ -12,6 +12,7 @@ import {
 
 @Entity('purchasesmanagement')
 export class Purchasesmanagement {
+
   @PrimaryGeneratedColumn()
   purchaseorderid: number;
 

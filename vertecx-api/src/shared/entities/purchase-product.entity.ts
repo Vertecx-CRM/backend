@@ -10,13 +10,17 @@ import { Purchasesmanagement } from 'src/purchases/entities/purchasesmanagement.
 
 @Entity('purchase_products')
 export class PurchaseProduct {
+
   @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
   purchase_productid: number;
 
-  @Column({ nullable: false })
+  @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
+  purchaseProductId: number;
+
+  @Column({ name: 'purchaseorderid', nullable: false })
   purchaseorderid: number;
 
-  @Column({ nullable: false })
+  @Column({ name: 'productid', nullable: false })
   productid: number;
 
   @Column({ type: 'int', nullable: false })
@@ -28,21 +32,15 @@ export class PurchaseProduct {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   subtotal: number;
 
-  // 🔗 Relación con la orden de compra
   @ManyToOne(
     () => Purchasesmanagement,
     (purchase) => purchase.purchaseProducts,
-    {
-      onDelete: 'CASCADE',
-    },
+    { onDelete: 'CASCADE' },
   )
   @JoinColumn({ name: 'purchaseorderid' })
   purchase: Purchasesmanagement;
 
-  // 🔗 Relación con el producto
-  @ManyToOne(() => Products, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(() => Products, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'productid' })
   product: Products;
 }
