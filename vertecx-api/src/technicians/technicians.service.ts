@@ -33,7 +33,7 @@ export class TechniciansService {
       email: dto.email,
       documentnumber: dto.documentnumber,
       phone: dto.phone,
-      typeid: dto.typeid, 
+      typeid: dto.typeid,
       stateid: ACTIVE_STATE_ID,
       roleid: TECH_ROLE_ID,
       image: dto.image,
@@ -50,6 +50,7 @@ export class TechniciansService {
         'users',
         'users.typeofdocuments',
         'users.roles',
+        'users.states',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',
       ],
@@ -62,7 +63,7 @@ export class TechniciansService {
       relations: [
         'users',
         'users.typeofdocuments',
-        'users.states',
+        'users.states',                // (ya estaba aquí)
         'users.roles',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',

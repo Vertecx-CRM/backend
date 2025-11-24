@@ -104,7 +104,6 @@ export class RolesService {
     return savedRole;
   }
 
-
   async findAll() {
     const configurations = await this.rcRepo.find({
       relations: ['roles', 'permissions', 'privileges'],
@@ -134,7 +133,10 @@ export class RolesService {
   }
 
   async listRoles() {
-    const roles = await this.rolesRepo.find({ order: { roleid: 'ASC' } });
+    const roles = await this.rolesRepo.find({
+      order: { roleid: 'ASC' },
+    });
+
     return { success: true, data: roles };
   }
 
