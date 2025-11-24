@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Roles } from './entities/roles.entity';
@@ -30,14 +26,6 @@ export class RolesService {
 
     private readonly dataSource: DataSource,
   ) {}
-
-  private ensureNotAdmin(roleid: number) {
-    if (roleid === 1) {
-      throw new BadRequestException(
-        'El rol ADMIN no puede ser modificado ni eliminado.',
-      );
-    }
-  }
 
   private normalizeStatus(status?: string): string | undefined {
     if (status === undefined || status === null) return undefined;
@@ -214,11 +202,15 @@ export class RolesService {
   }
 
   async updateConfigurations(dto: UpdateRoleConfigurationDto) {
-    if (dto.role?.roleid === 1) {
-      throw new BadRequestException('El rol ADMIN no puede ser editado.');
-    }
 
     const updatedConfigs = [];
+    const configs = Array.isArray(dto.configurations) ? dto.configurations : [];
+
+    if (!dto.role && configs.length === 0) {
+      throw new BadRequestException(
+        'Debe enviar cambios en el rol o en las configuraciones.',
+      );
+    }
 
     if (dto.role) {
       const role = await this.rolesRepo.findOne({
@@ -246,7 +238,7 @@ export class RolesService {
       await this.rolesRepo.save(role);
     }
 
-    for (const item of dto.configurations) {
+    for (const item of configs) {
       const current = await this.rcRepo.findOne({
         where: { roleconfigurationid: item.roleconfigurationid },
       });
@@ -254,12 +246,6 @@ export class RolesService {
       if (!current) {
         throw new NotFoundException(
           `La configuración ${item.roleconfigurationid} no existe`,
-        );
-      }
-
-      if (current.roleid === 1) {
-        throw new BadRequestException(
-          'Las configuraciones del rol ADMIN no pueden modificarse.',
         );
       }
 
@@ -287,8 +273,6 @@ export class RolesService {
   }
 
   async replaceRoleMatrix(roleid: number, dto: UpdateRoleMatrixDto) {
-    this.ensureNotAdmin(roleid);
-
     const role = await this.rolesRepo.findOne({ where: { roleid } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
@@ -378,8 +362,6 @@ export class RolesService {
   }
 
   async remove(id: number): Promise<void> {
-    this.ensureNotAdmin(id);
-
     const role = await this.rolesRepo.findOne({ where: { roleid: id } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 

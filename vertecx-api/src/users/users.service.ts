@@ -80,10 +80,7 @@ export class UsersService {
     return values.map((_, idx) => `$${idx + 1}`).join(', ');
   }
 
-  private async countQuotesByOrders(
-    field: 'clientid' | 'technicalid',
-    ids: number[],
-  ): Promise<number> {
+  private async countQuotesByOrders(field: string, ids: number[]): Promise<number> {
     if (ids.length === 0) return 0;
     const placeholders = this.buildPlaceholders(ids);
     const [result] = await this.dataSource.query(
@@ -124,16 +121,47 @@ export class UsersService {
     }
 
     if (technicianIds.length > 0) {
-      checks.push(
-        this.countByIds('ordersservices', 'technicalid', technicianIds),
-      );
-      checks.push(this.countQuotesByOrders('technicalid', technicianIds));
+      const techColumn = await this.getOrdersTechnicianColumn();
+      if (techColumn) {
+        checks.push(
+          this.countByIds('ordersservices', techColumn, technicianIds),
+        );
+        checks.push(this.countQuotesByOrders(techColumn, technicianIds));
+      }
     }
 
     if (checks.length === 0) return false;
 
     const totals = await Promise.all(checks);
     return totals.some((count) => count > 0);
+  }
+
+  private ordersTechnicianColumn: string | null | undefined;
+
+  private async getOrdersTechnicianColumn(): Promise<string | null> {
+    if (this.ordersTechnicianColumn !== undefined) {
+      return this.ordersTechnicianColumn;
+    }
+
+    const rows = await this.dataSource.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE LOWER(table_name) = 'ordersservices'
+         AND column_name IN ('technicalid', 'technicianid', 'technical_id', 'technician_id')
+       LIMIT 1`,
+    );
+
+    const found = rows?.[0]?.column_name;
+    this.ordersTechnicianColumn = found ?? null;
+    if (!found) {
+      // Si no hay columna de t�cnico, omitimos el check para no bloquear el borrado
+      console.warn(
+        'No se encontr� la columna de t�cnico en ordersservices (technicalid/technicianid). Se omite la validaci�n de �rdenes para eliminar usuario.',
+      );
+      return null;
+    }
+
+    return this.ordersTechnicianColumn;
   }
 
   // Crear usuario
@@ -545,12 +573,24 @@ export class UsersService {
       }
     }
 
+    const refreshedUser = await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.states', 'state')
+      .leftJoinAndSelect('user.typeofdocuments', 'docType')
+      .leftJoinAndSelect('user.roles', 'role')
+      .leftJoinAndSelect('user.technicians', 'tech')
+      .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
+      .leftJoinAndSelect('typeMap.techniciantype', 'techType')
+      .leftJoinAndSelect('user.customers', 'cust')
+      .where('user.userid = :id', { id })
+      .getOne();
+
     return {
       success: true,
       message: emailChanged
         ? 'Usuario actualizado. Se envió nueva contraseña y notificación al nuevo correo.'
         : 'Usuario actualizado correctamente.',
-      data: saved,
+      data: refreshedUser ?? saved,
     };
   }
 
