@@ -464,11 +464,21 @@ export class UsersService {
 
     const formattedHtml = translatedChanges.join('<br/>');
 
-    await this.mailService.sendUpdateNotification(
-      saved.email,
-      saved.name,
-      formattedHtml,
-    );
+    const onlyStateChange =
+      Object.keys(updateUserDto).length === 1 &&
+      Object.prototype.hasOwnProperty.call(updateUserDto, 'stateid');
+
+    if (!onlyStateChange) {
+      // Enviar correo en segundo plano para no bloquear la respuesta del endpoint
+      this.mailService
+        .sendUpdateNotification(saved.email, saved.name, formattedHtml)
+        .catch((err) =>
+          console.warn(
+            'No se pudo enviar correo de actualizacion (no bloquea la respuesta):',
+            err?.message ?? err,
+          ),
+        );
+    }
 
     const usedRoleId = resolvedRoleId;
     const roleName = await this.getRoleNameByRoleId(usedRoleId);
