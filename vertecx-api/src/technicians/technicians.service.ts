@@ -49,6 +49,7 @@ export class TechniciansService {
       relations: [
         'users',
         'users.typeofdocuments',
+        'users.states',
         'users.roles',
         'users.states',
         'technicianTypeMaps',
@@ -103,6 +104,7 @@ export class TechniciansService {
     if (dto.CV !== undefined) userDto.CV = dto.CV;
 
     if (dto.typeid !== undefined) userDto.typeid = dto.typeid;
+    if (dto.stateid !== undefined) userDto.stateid = dto.stateid;
 
     if (dto.techniciantypeids !== undefined) {
       userDto.techniciantypeids = dto.techniciantypeids;

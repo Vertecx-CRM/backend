@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsArray,
   IsInt,
+  IsIn,
 } from 'class-validator';
 
 export class CreateTechnicianDto {
@@ -91,4 +92,15 @@ export class CreateTechnicianDto {
   @IsOptional()
   @IsInt()
   roleid?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Estado del usuario (1 activo, 2 inactivo)',
+    required: false,
+    enum: [1, 2],
+  })
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 2])
+  stateid?: number;
 }

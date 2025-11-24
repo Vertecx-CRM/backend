@@ -4,10 +4,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsArray,
-  ArrayMinSize,
   ValidateNested,
   IsString,
-  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -37,9 +35,6 @@ export class UpdateRoleInfoDto {
   @ApiProperty({ example: 1 })
   @IsInt()
   @IsNotEmpty()
-  @Matches(/^(?!1$)/, {
-    message: 'El rol ADMIN no puede ser editado.',
-  })
   roleid: number;
 
   @ApiPropertyOptional({ example: 'Administrador' })
@@ -64,18 +59,18 @@ export class UpdateRoleConfigurationDto {
   @Type(() => UpdateRoleInfoDto)
   role?: UpdateRoleInfoDto;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: [RoleConfigUpdateItem],
     example: [
       { roleconfigurationid: 2, roleid: 2 },
       { roleconfigurationid: 5, permissionid: 4, privilegeid: 6 },
     ],
     description:
-      'Lista de configuraciones a actualizar (se puede cambiar roleid/permissionid/privilegeid)',
+      'Lista opcional de configuraciones a actualizar (roleid/permissionid/privilegeid). Si no se envía, solo se actualiza la info del rol.',
   })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => RoleConfigUpdateItem)
-  configurations: RoleConfigUpdateItem[];
+  configurations?: RoleConfigUpdateItem[];
 }

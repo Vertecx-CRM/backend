@@ -100,7 +100,7 @@ export class MailService {
         }
     }
 
-    // 📤 Correo de notificación de eliminación de cuenta
+    // Correo de notificación de eliminación de cuenta
     async sendAccountDeletionNotice(email: string, name: string) {
         try {
             const mailOptions = {
