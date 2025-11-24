@@ -12,6 +12,10 @@ import { OrdersServices } from 'src/order-services/entities/orders-services.enti
 
 @Entity('products')
 export class Products {
+
+  @PrimaryGeneratedColumn()
+  productid: number;
+
   @Column({ nullable: true })
   createddate: string;
 
@@ -20,9 +24,6 @@ export class Products {
 
   @Column({ nullable: true })
   isactive: string;
-
-  @PrimaryGeneratedColumn()
-  productid: number;
 
   @Column({ nullable: true })
   productpriceofsale: number;
@@ -53,5 +54,5 @@ export class Products {
   purchaseProducts: PurchaseProduct[];
 
   @OneToMany(() => OrdersServices, (order) => order.products)
-orders: OrdersServices[];
+  orders: OrdersServices[];
 }
