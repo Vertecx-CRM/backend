@@ -11,7 +11,7 @@ import {
 export class CreateUserDto {
   @IsString({ message: 'El nombre debe ser un texto.' })
   @Length(3, 50, { message: 'El nombre debe tener entre 3 y 50 caracteres.' })
-  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
+  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑüÜ'\s]+$/, {
     message: 'El nombre no puede contener números ni caracteres especiales.',
   })
   name: string;
@@ -42,7 +42,7 @@ export class CreateUserDto {
   @IsNumber({}, { message: 'El estado debe ser un número válido.' })
   stateid: number;
 
-  @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
+  @IsNumber({}, { message: 'El rol debe ser un número válido.' })
   roleid: number;
 
   @IsOptional()

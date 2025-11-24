@@ -11,7 +11,7 @@ import {
 export class CreateTechnicianDto {
   @ApiProperty({
     example: 'kenyah',
-    description: 'Nombre del técnico',
+    description: 'Nombre del tǸcnico',
   })
   @IsString()
   @IsNotEmpty()
@@ -19,7 +19,7 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: 'palacios',
-    description: 'Apellido del técnico',
+    description: 'Apellido del tǸcnico',
   })
   @IsString()
   @IsNotEmpty()
@@ -27,7 +27,7 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: 'kenyahpalacios4@gmail.com',
-    description: 'Correo del técnico',
+    description: 'Correo del tǸcnico',
   })
   @IsEmail()
   @IsNotEmpty()
@@ -35,7 +35,7 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: '5107239',
-    description: 'Número de documento',
+    description: 'Nǧmero de documento',
   })
   @IsString()
   @IsNotEmpty()
@@ -43,15 +43,24 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: '3002633071',
-    description: 'Teléfono del técnico',
+    description: 'TelǸfono del tǸcnico',
   })
   @IsString()
   @IsNotEmpty()
   phone: string;
 
   @ApiProperty({
+    example: 'https://res.cloudinary.com/.../profile.jpg',
+    description: 'URL de la imagen del tǸcnico',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  image?: string;
+
+  @ApiProperty({
     example: 'https://res.cloudinary.com/.../cv.pdf',
-    description: 'URL del CV del técnico',
+    description: 'URL del CV del tǸnico',
   })
   @IsString()
   @IsNotEmpty()
@@ -68,7 +77,7 @@ export class CreateTechnicianDto {
   @ApiProperty({
     type: [Number],
     example: [1, 2],
-    description: 'IDs de tipos de técnico',
+    description: 'IDs de tipos de tǸcnico',
   })
   @IsArray()
   @IsInt({ each: true })
@@ -76,7 +85,7 @@ export class CreateTechnicianDto {
 
   @ApiProperty({
     example: 3,
-    description: 'ID de configuración de rol para técnico',
+    description: 'ID de rol para tǸcnico',
     required: false,
   })
   @IsOptional()

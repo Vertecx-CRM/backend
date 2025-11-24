@@ -133,6 +133,11 @@ export class RolesService {
     }));
   }
 
+  async listRoles() {
+    const roles = await this.rolesRepo.find({ order: { roleid: 'ASC' } });
+    return { success: true, data: roles };
+  }
+
   async findOne(id: number): Promise<Roles> {
     const role = await this.rolesRepo.findOne({
       where: { roleid: id },
@@ -378,18 +383,20 @@ export class RolesService {
     const role = await this.rolesRepo.findOne({ where: { roleid: id } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
+    const [{ count }] = await this.dataSource.query(
+      'SELECT COUNT(*)::int AS count FROM users WHERE roleid = $1',
+      [id],
+    );
+
+    if (Number(count ?? 0) > 0) {
+      throw new BadRequestException(
+        'No se puede eliminar el rol porque tiene usuarios asociados.',
+      );
+    }
+
     const configs = await this.rcRepo.find({
       where: { roleid: id },
-      relations: ['users'],
     });
-
-    // const hasUsers = configs.some((c) => (c.users?.length ?? 0) > 0);
-
-    // if (hasUsers) {
-    //   throw new BadRequestException(
-    //     'No se puede eliminar el rol porque tiene usuarios asociados.',
-    //   );
-    // }
 
     if (configs.length > 0) {
       await this.rcRepo.remove(configs);

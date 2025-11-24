@@ -5,7 +5,6 @@ import {
   Length,
   Matches,
   IsNumber,
-  IsInt,
   IsArray,
 } from 'class-validator';
 import { Match } from '../decorators/match.decorator';
@@ -14,7 +13,7 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString({ message: 'El nombre debe ser texto.' })
   @Length(3, 50, { message: 'El nombre debe tener entre 3 y 50 caracteres.' })
-  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑ\s]+$/, {
+  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑüÜ'\s]+$/, {
     message: 'El nombre no puede contener números ni caracteres especiales.',
   })
   name?: string;
@@ -60,7 +59,7 @@ export class UpdateUserDto {
   stateid?: number;
 
   @IsOptional()
-  @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
+  @IsNumber({}, { message: 'El rol debe ser un número válido.' })
   roleid?: number;
 
   @IsOptional()

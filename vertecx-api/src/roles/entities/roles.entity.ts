@@ -16,6 +16,6 @@ export class Roles {
   @OneToMany(() => Roleconfiguration, (roleConfig) => roleConfig.roles)
   roleconfigurations: Roleconfiguration[];
 
-    @OneToMany(() => Users, (roleid) => roleid.roles)
-  users: Roles[];
+  @OneToMany(() => Users, (user) => user.roles)
+  users: Users[];
 }

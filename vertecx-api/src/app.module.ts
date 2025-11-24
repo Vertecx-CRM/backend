@@ -46,6 +46,7 @@ import { OrdersServicesModule } from './order-services/orders-services.module';
     TypeofdocumentsModule,
     MailModule,
     TechniciantypesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

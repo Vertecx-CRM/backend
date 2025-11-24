@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   BadRequestException,
   NotFoundException,
@@ -15,7 +15,7 @@ import { generateRandomPassword } from 'src/shared/utils/generate-password';
 import * as bcrypt from 'bcrypt';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
-import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { Roles } from 'src/roles/entities/roles.entity';
 import { Techniciantypes } from 'src/technicians/entities/technician_types.entity';
 import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
 
@@ -37,8 +37,8 @@ export class UsersService {
     @InjectRepository(Customers)
     private readonly customerRepo: Repository<Customers>,
 
-    @InjectRepository(Roleconfiguration)
-    private readonly roleConfigRepo: Repository<Roleconfiguration>,
+    @InjectRepository(Roles)
+    private readonly rolesRepo: Repository<Roles>,
 
     @InjectRepository(Techniciantypes)
     private readonly technicianTypeRepo: Repository<Techniciantypes>,
@@ -51,19 +51,89 @@ export class UsersService {
     private readonly dataSource: DataSource,
   ) {}
 
-  private async getRoleNameByRoleConfigId(
-    roleConfigId: number,
-  ): Promise<string> {
-    const roleConfig = await this.roleConfigRepo.findOne({
-      where: { roleid: roleConfigId },
-      relations: ['roles'],
-    });
+  private async getRoleById(roleId: number): Promise<Roles> {
+    const role = await this.rolesRepo.findOne({ where: { roleid: roleId } });
+    if (!role) {
+      throw new BadRequestException('Rol inválido.');
+    }
+    return role;
+  }
 
-    if (!roleConfig || !roleConfig.roles) {
-      throw new BadRequestException('Configuración de rol inválida.');
+  private async getRoleNameByRoleId(roleId: number): Promise<string> {
+    const role = await this.getRoleById(roleId);
+    return role.name.trim().toLowerCase();
+  }
+
+  async getRoleIdByName(name: string): Promise<number> {
+    const role = await this.rolesRepo
+      .createQueryBuilder('r')
+      .where('LOWER(r.name) = LOWER(:name)', { name })
+      .getOne();
+
+    if (!role) {
+      throw new BadRequestException('No se encontró el rol "' + name + '".');
     }
 
-    return roleConfig.roles.name.trim().toLowerCase();
+    return role.roleid;
+  }
+  private buildPlaceholders(values: number[]) {
+    return values.map((_, idx) => `$${idx + 1}`).join(', ');
+  }
+
+  private async countQuotesByOrders(
+    field: 'clientid' | 'technicalid',
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const placeholders = this.buildPlaceholders(ids);
+    const [result] = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count
+       FROM quotes q
+       JOIN ordersservices os ON os.ordersservicesid = q.ordersservicesid
+       WHERE os.${field} IN (${placeholders})`,
+      ids,
+    );
+    return Number(result?.count ?? 0);
+  }
+
+  private async countByIds(
+    table: string,
+    column: string,
+    ids: number[],
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const placeholders = this.buildPlaceholders(ids);
+    const [result] = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM ${table} WHERE ${column} IN (${placeholders})`,
+      ids,
+    );
+    return Number(result?.count ?? 0);
+  }
+
+  private async hasUserLinkedRecords(
+    customerIds: number[],
+    technicianIds: number[],
+  ): Promise<boolean> {
+    const checks: Promise<number>[] = [];
+
+    if (customerIds.length > 0) {
+      checks.push(this.countByIds('sales', 'customerid', customerIds));
+      checks.push(this.countByIds('servicerequests', 'clientid', customerIds));
+      checks.push(this.countByIds('ordersservices', 'clientid', customerIds));
+      checks.push(this.countQuotesByOrders('clientid', customerIds));
+    }
+
+    if (technicianIds.length > 0) {
+      checks.push(
+        this.countByIds('ordersservices', 'technicalid', technicianIds),
+      );
+      checks.push(this.countQuotesByOrders('technicalid', technicianIds));
+    }
+
+    if (checks.length === 0) return false;
+
+    const totals = await Promise.all(checks);
+    return totals.some((count) => count > 0);
   }
 
   // Crear usuario
@@ -78,7 +148,7 @@ export class UsersService {
 
     if (exists) {
       throw new BadRequestException(
-        'Ya existe un usuario con el mismo correo, documento o teléfono.',
+        "Ya existe un usuario con el mismo correo, documento o teléfono.",
       );
     }
 
@@ -93,30 +163,26 @@ export class UsersService {
     });
     if (!state) throw new BadRequestException('Estado inválido.');
 
-    // Detectar si es NIT
     const isNit = documentType.name?.toUpperCase() === 'NIT';
     createUserDto.isNit = isNit;
 
-    // Si es NIT, limpiar apellido y asignar rol cliente automáticamente
     if (isNit) {
       createUserDto.lastname = null;
-
-      if (!createUserDto.roleid) {
-        const clienteRole = await this.roleConfigRepo.findOne({
-          where: { roles: { name: 'cliente' } },
-          relations: ['roles'],
-        });
-
-        if (!clienteRole) {
-          throw new BadRequestException(
-            'No se encontró la configuración de rol para clientes.',
-          );
-        }
-        createUserDto.roleid = clienteRole.roleid;
-      }
     }
 
-    // Generar contraseña aleatoria
+    let resolvedRoleId = createUserDto.roleid;
+
+    if (isNit && !resolvedRoleId) {
+      resolvedRoleId = await this.getRoleIdByName('cliente');
+    }
+
+    if (!resolvedRoleId) {
+      throw new BadRequestException('El rol es obligatorio.');
+    }
+
+    const role = await this.getRoleById(resolvedRoleId);
+    createUserDto.roleid = role.roleid;
+
     const plainPassword = generateRandomPassword(10);
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
@@ -127,14 +193,12 @@ export class UsersService {
       updateat: null,
       typeid: documentType.typeofdocumentid,
       stateid: state.stateid,
+      roleid: role.roleid,
     });
 
     const saved = await this.usersRepository.save(newUser);
 
-    // Manejo de técnico o cliente
-    const roleName = await this.getRoleNameByRoleConfigId(
-      createUserDto.roleid,
-    );
+    const roleName = role.name.trim().toLowerCase();
 
     if (roleName === 'tecnico') {
       const technician = this.technicianRepo.create({
@@ -173,7 +237,6 @@ export class UsersService {
       await this.customerRepo.save(customer);
     }
 
-    // Enviar correo con contraseña (solo si tiene email válido)
     if (saved.email) {
       await this.mailService.sendUserPassword(
         saved.email,
@@ -230,7 +293,7 @@ export class UsersService {
     return { success: true, data: user };
   }
 
-  // Actualizar usuario
+    // Actualizar usuario
   async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.usersRepository.findOne({
       where: { userid: id },
@@ -240,7 +303,6 @@ export class UsersService {
 
     const oldEmail = user.email;
 
-    // Validar duplicados solo con los campos que vienen
     const duplicateWhere: any[] = [];
 
     if (updateUserDto.email) {
@@ -267,7 +329,6 @@ export class UsersService {
       }
     }
 
-    // Validar tipo de documento (si viene)
     let isNit = false;
     if (updateUserDto.typeid) {
       const docType = await this.docTypeRepository.findOne({
@@ -281,19 +342,6 @@ export class UsersService {
 
       if (isNit) {
         updateUserDto.lastname = null;
-
-        if (!updateUserDto.roleid) {
-          const clienteRole = await this.roleConfigRepo.findOne({
-            where: { roles: { name: 'cliente' } },
-            relations: ['roles'],
-          });
-          if (!clienteRole) {
-            throw new BadRequestException(
-              'No se encontró la configuración de rol para clientes.',
-            );
-          }
-          updateUserDto.roleid = clienteRole.roleid;
-        }
       }
     }
 
@@ -304,7 +352,21 @@ export class UsersService {
       if (!state) throw new BadRequestException('Estado inválido.');
     }
 
-    // Generar nueva contraseña si cambia el correo
+    if (updateUserDto.roleid !== undefined) {
+      await this.getRoleById(updateUserDto.roleid);
+    }
+
+    let resolvedRoleId = updateUserDto.roleid ?? user.roleid;
+
+    if (isNit && !updateUserDto.roleid) {
+      resolvedRoleId = await this.getRoleIdByName('cliente');
+      updateUserDto.roleid = resolvedRoleId;
+    }
+
+    if (!resolvedRoleId) {
+      throw new BadRequestException('El rol es obligatorio.');
+    }
+
     let newPlainPassword: string | null = null;
     const emailChanged =
       !!updateUserDto.email && updateUserDto.email !== oldEmail;
@@ -315,15 +377,14 @@ export class UsersService {
       updateUserDto.password = hashed;
     }
 
-    // Actualizar datos principales
     const updatedUser = this.usersRepository.merge(user, {
       ...updateUserDto,
+      roleid: resolvedRoleId,
       updateat: new Date(),
     });
 
     const saved = await this.usersRepository.save(updatedUser);
 
-    // Si cambió el correo → enviar nueva contraseña
     if (emailChanged && newPlainPassword) {
       await this.mailService.sendUserPassword(
         saved.email,
@@ -332,7 +393,6 @@ export class UsersService {
       );
     }
 
-    // Traducción y formato amigable de los cambios
     const fieldTranslations: Record<string, string> = {
       name: 'Nombre',
       lastname: 'Apellido',
@@ -360,9 +420,7 @@ export class UsersService {
           }
 
           if (key === 'roleid') {
-            const roleName = await this.getRoleNameByRoleConfigId(
-              Number(value),
-            );
+            const roleName = await this.getRoleNameByRoleId(Number(value));
             return `<b>${label}:</b> ${
               roleName.charAt(0).toUpperCase() + roleName.slice(1)
             }`;
@@ -384,10 +442,8 @@ export class UsersService {
       formattedHtml,
     );
 
-    // Manejo técnico/cliente
-    const usedRoleConfigId =
-      updateUserDto.roleid ?? saved.roleid;
-    const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
+    const usedRoleId = resolvedRoleId;
+    const roleName = await this.getRoleNameByRoleId(usedRoleId);
 
     let existingTechnician: Technicians | null = null;
     let existingCustomer: Customers | null = null;
@@ -430,11 +486,9 @@ export class UsersService {
         savedTechnician = await this.technicianRepo.save(newTech);
       }
 
-      // ⬇️ Solo tocar los tipos si vienen en el DTO
       if (updateUserDto.techniciantypeids !== undefined) {
         const typeIds = updateUserDto.techniciantypeids;
 
-        // Primero limpiamos los tipos anteriores
         await this.technicianTypeMapRepo.delete({
           technicianid: savedTechnician.technicianid,
         });
@@ -509,13 +563,23 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
     }
 
-    const roleName = await this.getRoleNameByRoleConfigId(
-      user.roleid,
+    const roleName = await this.getRoleNameByRoleId(user.roleid);
+
+    const [technician, customer] = await Promise.all([
+      this.technicianRepo.findOne({ where: { userid: id } }),
+      this.customerRepo.findOne({ where: { userid: id } }),
+    ]);
+
+    const hasAssociations = await this.hasUserLinkedRecords(
+      customer ? [customer.customerid] : [],
+      technician ? [technician.technicianid] : [],
     );
 
-    const technician = await this.technicianRepo.findOne({
-      where: { userid: id },
-    });
+    if (hasAssociations) {
+      throw new BadRequestException(
+        'El usuario no se puede eliminar porque tiene registros asociados (ventas, compras, solicitudes de servicio, ordenes de servicio o cotizaciones).',
+      );
+    }
 
     if (technician) {
       await this.technicianTypeMapRepo.delete({
@@ -526,10 +590,6 @@ export class UsersService {
     }
 
     if (roleName === 'cliente') {
-      const customer = await this.customerRepo.findOne({
-        where: { userid: id },
-      });
-
       if (customer) {
         await this.customerRepo.remove(customer);
       }
@@ -539,3 +599,8 @@ export class UsersService {
     return { success: true, message: `Usuario con ID ${id} eliminado.` };
   }
 }
+
+
+
+
+
