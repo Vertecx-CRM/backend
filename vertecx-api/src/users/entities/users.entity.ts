@@ -1,5 +1,5 @@
 import { Customers } from 'src/customers/entities/customers.entity';
-import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { Roles } from 'src/roles/entities/roles.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
@@ -52,7 +52,7 @@ export class Users {
   stateid: number;
 
   @Column({ nullable: false })
-  roleconfigurationid: number;
+  roleid: number;
 
   @ManyToOne(() => States)
   @JoinColumn({ name: 'stateid' })
@@ -62,9 +62,9 @@ export class Users {
   @JoinColumn({ name: 'typeid' })
   typeofdocuments: Typeofdocuments;
 
-  @ManyToOne(() => Roleconfiguration, (roleconfiguration) => roleconfiguration.users)
-  @JoinColumn({ name: 'roleconfigurationid' })
-  roleconfiguration: Roleconfiguration;
+  @ManyToOne(() => Roles, (role) => role.users)
+  @JoinColumn({ name: 'roleid' })
+  roles: Roles;
 
   @OneToMany(() => Technicians, technician => technician.users)
   technicians: Technicians[];

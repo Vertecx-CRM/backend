@@ -37,7 +37,4 @@ export class Roleconfiguration {
   @JoinColumn({ name: 'privilegeid' })
   privileges: Privileges;
 
-  @OneToMany(() => Users, (user) => user.roleconfiguration)
-  users: Users[];
-
 }

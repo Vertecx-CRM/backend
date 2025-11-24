@@ -23,7 +23,7 @@ export class TechniciansService {
   ) {}
 
   async create(dto: CreateTechnicianDto) {
-    const TECH_ROLE_CONFIGURATION_ID = dto.roleconfigurationid ?? 3;
+    const TECH_ROLE_CONFIGURATION_ID = dto.roleid ?? 3;
     const ACTIVE_STATE_ID = 1;
 
     const userDto: CreateUserDto = {
@@ -34,7 +34,7 @@ export class TechniciansService {
       phone: dto.phone,
       typeid: dto.typeid, 
       stateid: ACTIVE_STATE_ID,
-      roleconfigurationid: TECH_ROLE_CONFIGURATION_ID,
+      roleid: TECH_ROLE_CONFIGURATION_ID,
       CV: dto.CV,
       techniciantypeids: dto.techniciantypeids,
     };
@@ -61,8 +61,7 @@ async findAll() {
         'users',
         'users.typeofdocuments',
         'users.states',
-        'users.roleconfiguration',
-        'users.roleconfiguration.roles',
+        'users.roles',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',
       ],
@@ -104,8 +103,8 @@ async findAll() {
     if (dto.techniciantypeids !== undefined) {
       userDto.techniciantypeids = dto.techniciantypeids;
     }
-    if (dto.roleconfigurationid !== undefined) {
-      userDto.roleconfigurationid = dto.roleconfigurationid;
+    if (dto.roleid !== undefined) {
+      userDto.roleid = dto.roleid;
     }
 
     await this.usersService.update(technician.userid, userDto);

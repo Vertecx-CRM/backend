@@ -61,7 +61,7 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
-  roleconfigurationid?: number;
+  roleid?: number;
 
   @IsOptional()
   @IsArray()

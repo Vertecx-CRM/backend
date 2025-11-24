@@ -43,7 +43,7 @@ export class CreateUserDto {
   stateid: number;
 
   @IsNumber({}, { message: 'La configuración de rol debe ser un número válido.' })
-  roleconfigurationid: number;
+  roleid: number;
 
   @IsOptional()
   @IsArray()

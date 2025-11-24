@@ -383,13 +383,13 @@ export class RolesService {
       relations: ['users'],
     });
 
-    const hasUsers = configs.some((c) => (c.users?.length ?? 0) > 0);
+    // const hasUsers = configs.some((c) => (c.users?.length ?? 0) > 0);
 
-    if (hasUsers) {
-      throw new BadRequestException(
-        'No se puede eliminar el rol porque tiene usuarios asociados.',
-      );
-    }
+    // if (hasUsers) {
+    //   throw new BadRequestException(
+    //     'No se puede eliminar el rol porque tiene usuarios asociados.',
+    //   );
+    // }
 
     if (configs.length > 0) {
       await this.rcRepo.remove(configs);

@@ -81,5 +81,5 @@ export class CreateTechnicianDto {
   })
   @IsOptional()
   @IsInt()
-  roleconfigurationid?: number;
+  roleid?: number;
 }

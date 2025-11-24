@@ -55,7 +55,7 @@ export class UsersService {
     roleConfigId: number,
   ): Promise<string> {
     const roleConfig = await this.roleConfigRepo.findOne({
-      where: { roleconfigurationid: roleConfigId },
+      where: { roleid: roleConfigId },
       relations: ['roles'],
     });
 
@@ -101,7 +101,7 @@ export class UsersService {
     if (isNit) {
       createUserDto.lastname = null;
 
-      if (!createUserDto.roleconfigurationid) {
+      if (!createUserDto.roleid) {
         const clienteRole = await this.roleConfigRepo.findOne({
           where: { roles: { name: 'cliente' } },
           relations: ['roles'],
@@ -112,7 +112,7 @@ export class UsersService {
             'No se encontró la configuración de rol para clientes.',
           );
         }
-        createUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+        createUserDto.roleid = clienteRole.roleid;
       }
     }
 
@@ -133,7 +133,7 @@ export class UsersService {
 
     // Manejo de técnico o cliente
     const roleName = await this.getRoleNameByRoleConfigId(
-      createUserDto.roleconfigurationid,
+      createUserDto.roleid,
     );
 
     if (roleName === 'tecnico') {
@@ -200,10 +200,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.states', 'state')
       .leftJoinAndSelect('user.typeofdocuments', 'docType')
-      .leftJoinAndSelect('user.roleconfiguration', 'rc')
-      .leftJoinAndSelect('rc.roles', 'role')
-      .leftJoinAndSelect('rc.permissions', 'perm')
-      .leftJoinAndSelect('rc.privileges', 'priv')
+      .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('user.technicians', 'tech')
       .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
       .leftJoinAndSelect('typeMap.techniciantype', 'techType')
@@ -220,10 +217,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.states', 'state')
       .leftJoinAndSelect('user.typeofdocuments', 'docType')
-      .leftJoinAndSelect('user.roleconfiguration', 'rc')
-      .leftJoinAndSelect('rc.roles', 'role')
-      .leftJoinAndSelect('rc.permissions', 'perm')
-      .leftJoinAndSelect('rc.privileges', 'priv')
+      .leftJoinAndSelect('user.roles', 'role')
       .leftJoinAndSelect('user.technicians', 'tech')
       .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
       .leftJoinAndSelect('typeMap.techniciantype', 'techType')
@@ -288,7 +282,7 @@ export class UsersService {
       if (isNit) {
         updateUserDto.lastname = null;
 
-        if (!updateUserDto.roleconfigurationid) {
+        if (!updateUserDto.roleid) {
           const clienteRole = await this.roleConfigRepo.findOne({
             where: { roles: { name: 'cliente' } },
             relations: ['roles'],
@@ -298,7 +292,7 @@ export class UsersService {
               'No se encontró la configuración de rol para clientes.',
             );
           }
-          updateUserDto.roleconfigurationid = clienteRole.roleconfigurationid;
+          updateUserDto.roleid = clienteRole.roleid;
         }
       }
     }
@@ -348,7 +342,7 @@ export class UsersService {
       typeid: 'Tipo de documento',
       image: 'Imagen de perfil',
       stateid: 'Estado',
-      roleconfigurationid: 'Rol',
+      roleid: 'Rol',
       CV: 'Hoja de vida (CV)',
       customercity: 'Ciudad del cliente',
       customerzipcode: 'Código postal',
@@ -365,7 +359,7 @@ export class UsersService {
             return `<b>${label}:</b> No hay información`;
           }
 
-          if (key === 'roleconfigurationid') {
+          if (key === 'roleid') {
             const roleName = await this.getRoleNameByRoleConfigId(
               Number(value),
             );
@@ -392,7 +386,7 @@ export class UsersService {
 
     // Manejo técnico/cliente
     const usedRoleConfigId =
-      updateUserDto.roleconfigurationid ?? saved.roleconfigurationid;
+      updateUserDto.roleid ?? saved.roleid;
     const roleName = await this.getRoleNameByRoleConfigId(usedRoleConfigId);
 
     let existingTechnician: Technicians | null = null;
@@ -516,7 +510,7 @@ export class UsersService {
     }
 
     const roleName = await this.getRoleNameByRoleConfigId(
-      user.roleconfigurationid,
+      user.roleid,
     );
 
     const technician = await this.technicianRepo.findOne({
