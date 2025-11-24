@@ -10,7 +10,7 @@ import { Purchasesmanagement } from 'src/purchases/entities/purchasesmanagement.
 
 @Entity('purchase_products')
 export class PurchaseProduct {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
   purchase_productid: number;
 
   @Column({ nullable: false })
