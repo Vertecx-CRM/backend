@@ -22,6 +22,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TechniciantypesModule } from './technicians/techniciantypes/techniciantypes.module';
 import { AuthModule } from './auth/auth.module';
 import { OrdersServicesModule } from './order-services/orders-services.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [

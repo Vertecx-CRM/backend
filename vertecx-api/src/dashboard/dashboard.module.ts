@@ -5,11 +5,13 @@ import { ProductCategory } from "src/products-categories/entities/product-catego
 import { Products } from "src/products/entities/products.entity";
 import { Purchasesmanagement } from "src/purchases/entities/purchasesmanagement.entity";
 import { Sales } from "src/sales/entities/sales.entity";
-import { Ordersservices } from "src/services/entities/ordersservices.entity";
+
 import { States } from "src/shared/entities/states.entity";
 import { DashboardController } from "./dashboard.controller";
 import { DashboardService } from "./dashboard.service";
-import { Servicerequests } from "src/services/entities/servicerequests.entity";
+import { OrdersServices } from "src/order-services/entities/orders-services.entity";
+import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
+
 
 @Module({
   imports: [
@@ -18,10 +20,10 @@ import { Servicerequests } from "src/services/entities/servicerequests.entity";
       Purchasesmanagement,
       ProductCategory,
       Products,
-      Ordersservices,
+      OrdersServices,
       Customers,
       States,
-      Servicerequests
+      ServiceRequest
     ])
   ],
   controllers: [DashboardController],

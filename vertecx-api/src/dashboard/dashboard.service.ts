@@ -5,8 +5,8 @@ import { ProductCategory } from "src/products-categories/entities/product-catego
 import { Products } from "src/products/entities/products.entity";
 import { Purchasesmanagement } from "src/purchases/entities/purchasesmanagement.entity";
 import { Sales } from "src/sales/entities/sales.entity";
-import { Ordersservices } from "src/services/entities/ordersservices.entity";
-import { Servicerequests } from "src/services/entities/servicerequests.entity";
+import { OrdersServices } from "src/order-services/entities/orders-services.entity";
+import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
 import { Repository } from "typeorm";
 
 @Injectable()
@@ -16,9 +16,9 @@ export class DashboardService {
     @InjectRepository(Purchasesmanagement) private purchasesRepo: Repository<Purchasesmanagement>,
     @InjectRepository(ProductCategory) private categoryRepo: Repository<ProductCategory>,
     @InjectRepository(Products) private productRepo: Repository<Products>,
-    @InjectRepository(Ordersservices) private orderRepo: Repository<Ordersservices>,
+    @InjectRepository(OrdersServices) private orderRepo: Repository<OrdersServices>,
     @InjectRepository(Customers) private customerRepo: Repository<Customers>,
-    @InjectRepository(Servicerequests) private serviceRequestsRepo: Repository<Servicerequests>
+    @InjectRepository(ServiceRequest) private serviceRequestsRepo: Repository<ServiceRequest>
   ) { }
 
   // VENTAS POR MES
