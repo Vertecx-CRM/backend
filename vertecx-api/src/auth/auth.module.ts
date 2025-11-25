@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshGuard } from './guards/refresh.guard';
 import { AccessService } from './access.service';
 import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
+import { MailService } from 'src/shared/mail/mail.service';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { Roleconfiguration } from 'src/roles/entities/roleconfiguration.entity';
     JwtAuthGuard,
     RefreshGuard,
     AccessService,
+    MailService,
   ],
   controllers: [AuthController],
   exports: [AuthService],
