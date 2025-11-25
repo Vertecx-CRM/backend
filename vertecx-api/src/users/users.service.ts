@@ -217,6 +217,7 @@ export class UsersService {
     const newUser = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
+      mustchangepassword: true,
       createat: new Date(),
       updateat: null,
       typeid: documentType.typeofdocumentid,
@@ -403,6 +404,7 @@ export class UsersService {
       newPlainPassword = generateRandomPassword(10);
       const hashed = await bcrypt.hash(newPlainPassword, 10);
       updateUserDto.password = hashed;
+      updateUserDto.mustchangepassword = true;
     }
 
     const updatedUser = this.usersRepository.merge(user, {
@@ -647,6 +649,31 @@ export class UsersService {
 
     await this.usersRepository.remove(user);
     return { success: true, message: `Usuario con ID ${id} eliminado.` };
+  }
+
+  async changePassword(
+    userid: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.usersRepository.findOne({ where: { userid } });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new BadRequestException('La contrase�a actual es incorrecta.');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.password = hashed;
+    user.mustchangepassword = false;
+    user.updateat = new Date();
+
+    await this.usersRepository.save(user);
+
+    return { success: true, message: 'Contrase�a actualizada correctamente.' };
   }
 }
 

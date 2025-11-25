@@ -34,6 +34,7 @@ export class AuthService {
       roleid: user.roleid,
       rolename: user.roles?.name,
       isactive: user.stateid === 1,
+      mustchangepassword: user.mustchangepassword,
       permissions: Array.from(permissions),
     };
   }
@@ -89,6 +90,7 @@ export class AuthService {
       typeid: data.typeid,
       stateid: data.stateid,
       roleid: data.roleid,
+      mustchangepassword: true,
     });
 
     user.password = await bcrypt.hash(data.password, 12);
@@ -105,5 +107,26 @@ export class AuthService {
     };
 
     return this.login(payload);
+  }
+
+  async changePassword(
+    userid: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.users.findOne({ where: { userid } });
+    if (!user) throw new BadRequestException('Usuario no encontrado');
+
+    const ok = await bcrypt.compare(currentPassword, user.password);
+    if (!ok)
+      throw new BadRequestException('La contrase�a actual es incorrecta.');
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.mustchangepassword = false;
+    user.updateat = new Date();
+
+    await this.users.save(user);
+
+    return { success: true, message: 'Contrase�a actualizada correctamente.' };
   }
 }
