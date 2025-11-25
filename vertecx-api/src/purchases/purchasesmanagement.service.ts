@@ -42,7 +42,6 @@ export class PurchasesmanagementService {
       );
     }
 
-
     //  Validación 3: Validar proveedor
     const supplier = await this.suppliersRepo.findOne({
       where: { supplierid: dto.supplierid },
@@ -229,12 +228,27 @@ export class PurchasesmanagementService {
   }
 
   async cancel(id: number) {
-    const purchase = await this.findOne(id);
-    if (purchase.stateid === 8) {
-      throw new BadRequestException('La compra ya está cancelada.');
+    const purchase = await this.purchasesRepo.findOne({
+      where: { purchaseorderid: id },
+    });
+
+    if (!purchase) {
+      throw new NotFoundException('Compra no encontrada');
     }
+
+    if (purchase.stateid === 8) {
+      throw new BadRequestException('La compra ya está anulada.');
+    }
+
+    if (purchase.stateid !== 3) {
+      throw new BadRequestException('Solo se pueden anular compras aprobadas.');
+    }
+
     purchase.stateid = 8;
-    return await this.purchasesRepo.save(purchase);
+    purchase.updatedat = new Date();
+
+    const saved = await this.purchasesRepo.save(purchase);
+    return saved;
   }
 
   async remove(id: number) {
