@@ -10,7 +10,6 @@ import { Purchasesmanagement } from 'src/purchases/entities/purchasesmanagement.
 
 @Entity('purchase_products')
 export class PurchaseProduct {
-
   @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
   purchaseProductId: number;
 
@@ -26,7 +25,13 @@ export class PurchaseProduct {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   unitprice: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    insert: false,
+    update: false,
+  })
   subtotal: number;
 
   @ManyToOne(

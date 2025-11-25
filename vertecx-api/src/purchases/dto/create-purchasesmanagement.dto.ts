@@ -8,14 +8,15 @@ import {
   ValidateNested,
   IsArray,
   Min,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // DTO para los productos de la compra
 export class PurchaseProductItemDto {
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsInt()
-  productid: number;
+  productid?: number;
 
   @ApiProperty()
   @IsInt()
@@ -26,6 +27,16 @@ export class PurchaseProductItemDto {
   @IsNumber()
   @Min(0)
   unitprice: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  productname?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  productpriceofsupplier?: number;
 }
 
 export class CreatePurchasesmanagementDto {
