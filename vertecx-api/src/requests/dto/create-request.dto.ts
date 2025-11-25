@@ -12,6 +12,12 @@ export class CreateRequestDto {
   @MaxLength(255)
   serviceType: string;
 
+  @ApiProperty({ example: 'cr 44 # 20-50' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  direccion: string;
+
   @ApiProperty({ example: 'Equipo no enciende; posible daño en fuente' })
   @IsString()
   @IsNotEmpty()
