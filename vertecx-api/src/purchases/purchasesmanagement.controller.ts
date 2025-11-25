@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
@@ -53,7 +54,7 @@ export class PurchasesmanagementController {
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancelar un registro de compras' })
   @ApiResponse({ status: 200, type: Purchasesmanagement })
-  cancel(@Param('id') id: number) {
+  cancel(@Param('id', ParseIntPipe) id: number) {
     return this.service.cancel(id);
   }
 }
