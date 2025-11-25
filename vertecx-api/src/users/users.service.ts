@@ -51,6 +51,14 @@ export class UsersService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private normalizeRoleName(name: string): string {
+    return (name ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
   private async getRoleById(roleId: number): Promise<Roles> {
     const role = await this.rolesRepo.findOne({ where: { roleid: roleId } });
     if (!role) {
@@ -61,7 +69,7 @@ export class UsersService {
 
   private async getRoleNameByRoleId(roleId: number): Promise<string> {
     const role = await this.getRoleById(roleId);
-    return role.name.trim().toLowerCase();
+    return this.normalizeRoleName(role.name);
   }
 
   async getRoleIdByName(name: string): Promise<number> {
@@ -70,11 +78,19 @@ export class UsersService {
       .where('LOWER(r.name) = LOWER(:name)', { name })
       .getOne();
 
-    if (!role) {
-      throw new BadRequestException('No se encontró el rol "' + name + '".');
+    if (role) {
+      return role.roleid;
     }
 
-    return role.roleid;
+    const target = this.normalizeRoleName(name);
+    const allRoles = await this.rolesRepo.find();
+    const fallback = allRoles.find(
+      (r) => this.normalizeRoleName(r.name) === target,
+    );
+
+    if (fallback) return fallback.roleid;
+
+    throw new BadRequestException('No se encontró el rol "' + name + '".');
   }
   private buildPlaceholders(values: number[]) {
     return values.map((_, idx) => `$${idx + 1}`).join(', ');
@@ -227,7 +243,7 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(newUser);
 
-    const roleName = role.name.trim().toLowerCase();
+    const roleName = this.normalizeRoleName(role.name);
 
     if (roleName === 'tecnico') {
       const technician = this.technicianRepo.create({
