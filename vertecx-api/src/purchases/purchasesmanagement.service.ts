@@ -93,15 +93,34 @@ export class PurchasesmanagementService {
       let totalAmount = 0;
 
       for (const item of dto.products) {
-        // Validar existencia del producto
-        const product = await manager.findOne(Products, {
-          where: { productid: item.productid },
-        });
+        let product = null;
 
+        // Si viene productid → buscar
+        if (item.productid) {
+          product = await manager.findOne(Products, {
+            where: { productid: item.productid },
+          });
+        }
+
+        // Si NO existe → CREARLO
         if (!product) {
-          throw new NotFoundException(
-            `Producto con ID ${item.productid} no encontrado.`,
-          );
+          if (!item.productname || !item.productpriceofsupplier) {
+            throw new BadRequestException(
+              'Para crear un producto nuevo debes enviar productname y productpriceofsupplier',
+            );
+          }
+
+          product = manager.create(Products, {
+            productname: item.productname,
+            productpriceofsupplier: item.productpriceofsupplier,
+            productpriceofsale: item.productpriceofsupplier * 1.3,
+            productstock: 0,
+            isactive: 'true',
+            categoryid: 1,
+            createddate: new Date().toISOString(),
+          });
+
+          product = await manager.save(Products, product);
         }
 
         // Validar cantidad y precio
@@ -120,10 +139,9 @@ export class PurchasesmanagementService {
         totalAmount += subtotal;
 
         const purchaseProduct = manager.create(PurchaseProduct, {
-          productid: item.productid,
+          productid: product.productid,
           quantity: item.quantity,
           unitprice: item.unitprice,
-          subtotal,
         });
 
         purchaseProducts.push(purchaseProduct);
