@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, DeepPartial } from 'typeorm';
+import { Repository, DataSource, DeepPartial, Not, In } from 'typeorm';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
 import { CreatePurchasesmanagementDto } from './dto/create-purchasesmanagement.dto';
 import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
@@ -35,24 +35,15 @@ export class PurchasesmanagementService {
   ) {}
 
   async create(dto: CreatePurchasesmanagementDto) {
-    // ✅ Validación 1: Productos obligatorios
+    //  Validación 1: Productos obligatorios
     if (!dto.products || dto.products.length === 0) {
       throw new BadRequestException(
         'Debe incluir al menos un producto en la compra.',
       );
     }
 
-    // ✅ Validación 2: Número de orden único
-    const existingOrder = await this.purchasesRepo.findOne({
-      where: { numberoforder: dto.numberoforder },
-    });
-    if (existingOrder) {
-      throw new BadRequestException(
-        `El número de orden '${dto.numberoforder}' ya existe.`,
-      );
-    }
 
-    // ✅ Validación 3: Validar proveedor
+    //  Validación 3: Validar proveedor
     const supplier = await this.suppliersRepo.findOne({
       where: { supplierid: dto.supplierid },
     });
@@ -62,7 +53,7 @@ export class PurchasesmanagementService {
       );
     }
 
-    // ✅ Validación 4: Validar estado
+    // Validación 4: Validar estado
     const state = await this.statesRepo.findOne({
       where: { stateid: dto.stateid },
     });
@@ -72,7 +63,7 @@ export class PurchasesmanagementService {
       );
     }
 
-    // ✅ Validación 5: Duplicados en los productos
+    // Validación 5: Duplicados en los productos
     const uniqueProducts = new Set(dto.products.map((p) => p.productid));
     if (uniqueProducts.size !== dto.products.length) {
       throw new BadRequestException(
@@ -80,14 +71,14 @@ export class PurchasesmanagementService {
       );
     }
 
-    // ✅ Validación 6: Fechas coherentes
+    // Validación 6: Fechas coherentes
     if (dto.updatedat && dto.createdat && dto.updatedat < dto.createdat) {
       throw new BadRequestException(
         'La fecha de actualización no puede ser anterior a la fecha de creación.',
       );
     }
 
-    // ✅ Transacción principal
+    // Transacción principal
     return await this.dataSource.transaction(async (manager) => {
       const purchaseProducts: PurchaseProduct[] = [];
       let totalAmount = 0;
@@ -147,9 +138,19 @@ export class PurchasesmanagementService {
         purchaseProducts.push(purchaseProduct);
       }
 
+      const year = new Date().getFullYear();
+
+      const result = await manager.query(
+        "SELECT nextval('purchase_order_seq')",
+      );
+
+      const nextNumber = result[0].nextval;
+
+      const numberoforder = `ORD-${year}-${String(nextNumber).padStart(3, '0')}`;
+
       // Crear la compra
       const purchase = manager.create(Purchasesmanagement, {
-        numberoforder: dto.numberoforder,
+        numberoforder,
         reference: dto.reference,
         supplierid: dto.supplierid,
         stateid: dto.stateid,
@@ -181,6 +182,9 @@ export class PurchasesmanagementService {
 
   async findAll() {
     return await this.purchasesRepo.find({
+      where: {
+        stateid: Not(In([1, 2, 4, 5, 6, 7])),
+      },
       relations: [
         'state',
         'supplier',
