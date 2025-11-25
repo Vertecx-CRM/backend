@@ -34,16 +34,27 @@ export class RequestsService {
 
   async create(dto: CreateRequestDto) {
     await this.ensureStateExists(dto.stateId);
-    const scheduledAt = dto.scheduledAt ? localMidnight(dto.scheduledAt) ?? new Date(dto.scheduledAt) : new Date();
+
+    const direccion = String(dto?.direccion ?? '').trim();
+    if (!direccion) throw new BadRequestException('direccion should not be empty');
+    if (direccion.length > 255) throw new BadRequestException('direccion must be shorter than or equal to 255 characters');
+
+    const scheduledAt = dto.scheduledAt
+      ? localMidnight(dto.scheduledAt) ?? new Date(dto.scheduledAt)
+      : new Date();
+
     const entity = this.repo.create({
       scheduledAt,
       serviceType: dto.serviceType,
+      direccion: direccion.slice(0, 255),
       description: dto.description,
       stateId: dto.stateId,
       serviceId: dto.serviceId,
       clientId: dto.clientId,
     });
+
     const saved = await this.repo.save(entity);
+
     return this.repo.findOne({
       where: { serviceRequestId: saved.serviceRequestId },
       relations: ['state', 'service', 'customer', 'customer.users'],
@@ -77,36 +88,33 @@ export class RequestsService {
         ? localMidnight(dto.scheduledAt) ?? new Date(dto.scheduledAt)
         : null;
 
+    let direccion = existing.direccion;
+    if ((dto as any).direccion !== undefined) {
+      const dir = String((dto as any).direccion ?? '').trim();
+      if (!dir) throw new BadRequestException('direccion should not be empty');
+      if (dir.length > 255) throw new BadRequestException('direccion must be shorter than or equal to 255 characters');
+      direccion = dir.slice(0, 255);
+    }
+
     const patch: Partial<ServiceRequest> = {
       scheduledAt,
       serviceType: dto.serviceType ?? existing.serviceType,
+      direccion,
       description: dto.description ?? existing.description,
       serviceId: dto.serviceId ?? existing.serviceId,
       clientId: dto.clientId ?? existing.clientId,
     };
 
-    if (dto.stateId !== undefined) {
-      patch.stateId = dto.stateId;
-    }
+    if (dto.stateId !== undefined) patch.stateId = dto.stateId;
 
-    await this.repo
-      .createQueryBuilder()
-      .update(ServiceRequest)
-      .set(patch)
-      .where('serviceRequestId = :id', { id })
-      .execute();
+    await this.repo.update({ serviceRequestId: id }, patch);
 
     return this.findOne(id);
   }
 
   async remove(id: number) {
     await this.ensureStateExists(4);
-    await this.repo
-      .createQueryBuilder()
-      .update(ServiceRequest)
-      .set({ stateId: 4 })
-      .where('serviceRequestId = :id', { id })
-      .execute();
+    await this.repo.update({ serviceRequestId: id }, { stateId: 4 });
     return this.findOne(id);
   }
 }
