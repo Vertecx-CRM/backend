@@ -136,4 +136,51 @@ export class MailService {
         }
     }
 
+    async sendPasswordReset(email: string, name: string, link: string) {
+  try {
+    const mailOptions = {
+      from: `"Soporte SistemaPC" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: 'Restablecer contraseña - SistemaPC',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; border-radius: 10px; overflow: hidden; border: 1px solid #ddd;">
+          <div style="background-color: #0078d4; color: white; padding: 20px; text-align: center;">
+            <h2 style="margin: 0;">Restablecer contraseña</h2>
+          </div>
+          <div style="padding: 25px; color: #333;">
+            <p>Hola <b>${name}</b>,</p>
+            <p>Recibimos una solicitud para restablecer tu contraseña en <b>SistemaPC</b>.</p>
+            <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${link}" style="display: inline-block; background: #0078d4; color: white; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;">
+                Restablecer contraseña
+              </a>
+            </div>
+
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">
+              Si el botón no funciona, copia y pega este enlace en tu navegador:
+              <br/>
+              <a href="${link}" style="color: #0078d4; text-decoration: none;">${link}</a>
+            </p>
+
+            <p style="margin-top: 18px;">
+              Si tú no solicitaste este cambio, puedes ignorar este correo.
+            </p>
+          </div>
+          <div style="background: #0078d4; color: white; text-align: center; padding: 15px;">
+            <p style="margin: 0;">© ${new Date().getFullYear()} SistemaPC | Soporte técnico</p>
+          </div>
+        </div>
+      `,
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Error enviando correo de recuperación:', error);
+    throw new InternalServerErrorException(
+      'No se pudo enviar el correo de recuperación.',
+    );
+  }
+}
 }

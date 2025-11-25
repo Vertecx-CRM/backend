@@ -5,13 +5,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from 'src/users/entities/users.entity';
 import * as bcrypt from 'bcrypt';
 import { AccessService } from './access.service';
+import { MailService } from 'src/shared/mail/mail.service';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private jwt: JwtService,
-    private access: AccessService,
-    @InjectRepository(Users) private users: Repository<Users>,
+    private readonly jwt: JwtService,
+    private readonly access: AccessService,
+    @InjectRepository(Users) private readonly users: Repository<Users>,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -50,6 +52,22 @@ export class AuthService {
     return this.jwt.sign(payload, {
       secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: Number(process.env.JWT_REFRESH_TTL),
+    });
+  }
+
+  private signResetToken(user: Users) {
+    const payload = {
+      sub: user.userid,
+      email: user.email,
+      type: 'reset',
+    };
+
+    const secret = process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
+    const ttl = Number(process.env.JWT_RESET_TTL || 900);
+
+    return this.jwt.sign(payload, {
+      secret,
+      expiresIn: ttl,
     });
   }
 
@@ -107,6 +125,57 @@ export class AuthService {
     };
 
     return this.login(payload);
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.users.findOne({ where: { email } });
+
+    if (!user || user.stateid !== 1) {
+      return;
+    }
+
+    const token = this.signResetToken(user);
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(
+      token,
+    )}`;
+
+    await this.mailService.sendPasswordReset(user.email, user.name, resetLink);
+  }
+
+  // === NUEVO: aplicar nueva contraseña ===
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    try {
+      const secret =
+        process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
+
+      const decoded = this.jwt.verify<{
+        sub: number;
+        email: string;
+        type?: string;
+      }>(token, { secret });
+
+      if (decoded.type !== 'reset') {
+        throw new BadRequestException('Token inválido');
+      }
+
+      const user = await this.users.findOne({
+        where: { userid: decoded.sub },
+      });
+
+      if (!user || user.stateid !== 1) {
+        throw new BadRequestException('Usuario no válido');
+      }
+
+      user.password = await bcrypt.hash(newPassword, 12);
+      user.updateat = new Date();
+
+      await this.users.save(user);
+    } catch (error) {
+      throw new BadRequestException(
+        'El enlace para restablecer la contraseña no es válido o ha expirado',
+      );
+    }
   }
 
   async changePassword(

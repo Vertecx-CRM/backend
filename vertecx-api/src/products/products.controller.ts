@@ -10,6 +10,7 @@ import {
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('products')
 export class ProductsController {
@@ -21,6 +22,7 @@ export class ProductsController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'Listar todos los productos' })
   findAll() {
     return this.productsService.findAll();
   }
