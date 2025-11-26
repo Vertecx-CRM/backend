@@ -11,6 +11,9 @@ import { Purchasesmanagement } from 'src/purchases/entities/purchasesmanagement.
 @Entity('purchase_products')
 export class PurchaseProduct {
   @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
+  purchase_productid: number;
+
+  @PrimaryGeneratedColumn({ name: 'purchase_product_id' })
   purchaseProductId: number;
 
   @Column({ name: 'purchaseorderid', nullable: false })

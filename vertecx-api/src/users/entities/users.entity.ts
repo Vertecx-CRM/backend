@@ -36,6 +36,9 @@ export class Users {
   @Column({ nullable: false })
   password: string;
 
+  @Column({ name: 'mustchangepassword', type: 'boolean', default: true })
+  mustchangepassword: boolean;
+
   @Column({ nullable: true })
   image: string;
 
