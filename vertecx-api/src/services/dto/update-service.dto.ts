@@ -3,11 +3,6 @@ import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateServiceDto {
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  price?: number;
-
-  @IsOptional()
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   name?: string;

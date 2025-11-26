@@ -57,16 +57,15 @@ export class ServicesService {
     await this.ensureTypeExistsAndActive(dto.typeofserviceid);
 
     const entity = this.servicesRepo.create({
-      price: dto.price,
       name: dto.name,
-      description: dto.description,
+      description: (dto.description ?? '').trim(),
       image: dto.image.trim(),
       typeofserviceid: dto.typeofserviceid,
       stateid: dto.stateid ?? 1,
     });
 
-    const saved = await this.servicesRepo.save(entity);
 
+    const saved = await this.servicesRepo.save(entity);
     return this.findOne(saved.serviceid);
   }
 
@@ -101,7 +100,6 @@ export class ServicesService {
     return {
       data: data.map((s) => ({
         serviceid: s.serviceid,
-        price: s.price,
         name: s.name,
         description: s.description,
         image: s.image,
@@ -129,7 +127,6 @@ export class ServicesService {
 
     return {
       serviceid: s.serviceid,
-      price: s.price,
       name: s.name,
       description: s.description,
       image: s.image,
@@ -155,7 +152,6 @@ export class ServicesService {
     }
 
     const next = this.servicesRepo.merge(existing, {
-      ...(dto.price !== undefined ? { price: dto.price } : {}),
       ...(dto.name !== undefined ? { name: String(dto.name).trim() } : {}),
       ...(dto.description !== undefined ? { description: String(dto.description).trim() } : {}),
       ...(dto.image !== undefined ? { image: String(dto.image).trim() } : {}),
@@ -167,24 +163,23 @@ export class ServicesService {
     return this.findOne(id);
   }
 
+  async remove(id: number) {
+    const existing = await this.servicesRepo.findOne({ where: { serviceid: id } });
+    if (!existing) throw new NotFoundException('Servicio no encontrado.');
 
-async remove(id: number) {
-  const existing = await this.servicesRepo.findOne({ where: { serviceid: id } });
-  if (!existing) throw new NotFoundException('Servicio no encontrado.');
-
-  try {
-    await this.servicesRepo.delete({ serviceid: id });
-    return { message: 'Servicio eliminado correctamente.' };
-  } catch (e) {
-    if (e instanceof QueryFailedError) {
-      const err: any = e;
-      if (err?.driverError?.code === '23503') {
-        throw new ConflictException(
-          'No se puede eliminar el servicio porque está asociado a una solicitud de servicio.',
-        );
+    try {
+      await this.servicesRepo.delete({ serviceid: id });
+      return { message: 'Servicio eliminado correctamente.' };
+    } catch (e) {
+      if (e instanceof QueryFailedError) {
+        const err: any = e;
+        if (err?.driverError?.code === '23503') {
+          throw new ConflictException(
+            'No se puede eliminar el servicio porque está asociado a una solicitud de servicio.',
+          );
+        }
       }
+      throw e;
     }
-    throw e;
   }
-}
 }

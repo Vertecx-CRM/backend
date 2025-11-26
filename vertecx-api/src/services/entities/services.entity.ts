@@ -13,9 +13,6 @@ export class Services {
   @PrimaryGeneratedColumn({ name: 'serviceid' })
   serviceid: number;
 
-  @Column({ name: 'price', type: 'int', nullable: false })
-  price: number;
-
   @Column({ name: 'name', type: 'varchar', nullable: false })
   name: string;
 

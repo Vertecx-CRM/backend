@@ -2,19 +2,15 @@ import { Transform } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateServiceDto {
-  @IsInt()
-  @Min(0)
-  price: number;
-
   @IsString()
   @IsNotEmpty()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   name: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  description: string;
+  description?: string;
 
   @IsString()
   @IsNotEmpty()
