@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from "@nestjs/common";
+import { Controller, Get, Param, Query } from "@nestjs/common";
 import { DashboardService } from "./dashboard.service";
 
 @Controller('dashboard')
@@ -6,73 +6,87 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) { }
 
   @Get('sales/year')
-  getSalesYear() {
-    return this.service.getSalesByMonth();
+  getSalesYear(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getSalesByMonth(parsedYear);
   }
 
   @Get('sales/total')
-  getSalesTotal() {
-    return this.service.getTotalSales();
+  getSalesTotal(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getTotalSales(parsedYear);
   }
 
   @Get('sales/month/:month')
-  getDailySales(@Param('month') month: string) {
-    return this.service.getDailySalesByMonth(Number(month));
+  getDailySales(@Param('month') month: string, @Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getDailySalesByMonth(Number(month), parsedYear);
   }
   
 
   @Get('purchases/year')
-  getPurchasesYear() {
-    return this.service.getPurchasesByMonth();
+  getPurchasesYear(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getPurchasesByMonth(parsedYear);
   }
 
   @Get('purchases/total')
-  getPurchasesTotal() {
-    return this.service.getTotalPurchases();
+  getPurchasesTotal(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getTotalPurchases(parsedYear);
   }
 
   @Get('purchases/month/:month')
-  getDailyPurchases(@Param('month') month: string) {
-    return this.service.getDailyPurchasesByMonth(Number(month));
+  getDailyPurchases(@Param('month') month: string, @Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getDailyPurchasesByMonth(Number(month), parsedYear);
   }
 
   @Get('categories/products')
-  getCategoryProducts() {
-    return this.service.getCategoryProducts();
+  getCategoryProducts(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getCategoryProducts(parsedYear);
   }
 
   @Get('orders/state')
-  getOrdersState() {
-    return this.service.getOrdersByState();
+  getOrdersState(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getOrdersByState(parsedYear);
   }
 
   @Get('orders/total')
-  getOrdersTotal() {
-    return this.service.getTotalOrders();
+  getOrdersTotal(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getTotalOrders(parsedYear);
   }
 
   @Get('clients/year')
-  getClientsYear() {
-    return this.service.getClientsByMonth();
+  getClientsYear(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getClientsByMonth(parsedYear);
   }
 
   @Get('clients/total')
-  getClientsTotal() {
-    return this.service.getTotalClients();
+  getClientsTotal(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getTotalClients(parsedYear);
   }
 
   @Get('clients/month/:month')
-  getDailyClients(@Param('month') month: string) {
-    return this.service.getDailyClientsByMonth(Number(month));
+  getDailyClients(@Param('month') month: string, @Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getDailyClientsByMonth(Number(month), parsedYear);
   }
 
   @Get('service-requests/state')
-  getServiceRequestsState() {
-    return this.service.getServiceRequestsByState();
+  getServiceRequestsState(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getServiceRequestsByState(parsedYear);
   }
 
   @Get('service-requests/total')
-  getServiceRequestsTotal() {
-    return this.service.getTotalServiceRequests();
+  getServiceRequestsTotal(@Query('year') year?: string) {
+    const parsedYear = year ? Number(year) : undefined;
+    return this.service.getTotalServiceRequests(parsedYear);
   }
 }
