@@ -104,6 +104,7 @@ export class PurchasesmanagementService {
             productname: item.productname,
             productpriceofsupplier: item.productpriceofsupplier,
             productpriceofsale: item.productpriceofsupplier * 1.3,
+            productdescription: item.description,
             productstock: 0,
             isactive: 'true',
             categoryid: 1,
@@ -128,11 +129,17 @@ export class PurchasesmanagementService {
         const subtotal = item.quantity * item.unitprice;
         totalAmount += subtotal;
 
-        const purchaseProduct = manager.create(PurchaseProduct, {
+        const payload: any = {
           productid: product.productid,
           quantity: item.quantity,
           unitprice: item.unitprice,
-        });
+        };
+
+        if (item.description) {
+          payload.description = item.description;
+        }
+
+        const purchaseProduct = manager.create(PurchaseProduct, payload);
 
         purchaseProducts.push(purchaseProduct);
       }

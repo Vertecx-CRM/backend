@@ -31,6 +31,11 @@ export class PurchaseProductItemDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  description?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   productname?: string;
 
   @ApiProperty({ required: false })
