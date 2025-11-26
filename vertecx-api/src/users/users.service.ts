@@ -51,6 +51,14 @@ export class UsersService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private normalizeRoleName(name: string): string {
+    return (name ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
   private async getRoleById(roleId: number): Promise<Roles> {
     const role = await this.rolesRepo.findOne({ where: { roleid: roleId } });
     if (!role) {
@@ -61,7 +69,7 @@ export class UsersService {
 
   private async getRoleNameByRoleId(roleId: number): Promise<string> {
     const role = await this.getRoleById(roleId);
-    return role.name.trim().toLowerCase();
+    return this.normalizeRoleName(role.name);
   }
 
   async getRoleIdByName(name: string): Promise<number> {
@@ -70,11 +78,19 @@ export class UsersService {
       .where('LOWER(r.name) = LOWER(:name)', { name })
       .getOne();
 
-    if (!role) {
-      throw new BadRequestException('No se encontró el rol "' + name + '".');
+    if (role) {
+      return role.roleid;
     }
 
-    return role.roleid;
+    const target = this.normalizeRoleName(name);
+    const allRoles = await this.rolesRepo.find();
+    const fallback = allRoles.find(
+      (r) => this.normalizeRoleName(r.name) === target,
+    );
+
+    if (fallback) return fallback.roleid;
+
+    throw new BadRequestException('No se encontró el rol "' + name + '".');
   }
   private buildPlaceholders(values: number[]) {
     return values.map((_, idx) => `$${idx + 1}`).join(', ');
@@ -217,6 +233,7 @@ export class UsersService {
     const newUser = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
+      mustchangepassword: true,
       createat: new Date(),
       updateat: null,
       typeid: documentType.typeofdocumentid,
@@ -226,7 +243,7 @@ export class UsersService {
 
     const saved = await this.usersRepository.save(newUser);
 
-    const roleName = role.name.trim().toLowerCase();
+    const roleName = this.normalizeRoleName(role.name);
 
     if (roleName === 'tecnico') {
       const technician = this.technicianRepo.create({
@@ -403,6 +420,7 @@ export class UsersService {
       newPlainPassword = generateRandomPassword(10);
       const hashed = await bcrypt.hash(newPlainPassword, 10);
       updateUserDto.password = hashed;
+      updateUserDto.mustchangepassword = true;
     }
 
     const updatedUser = this.usersRepository.merge(user, {
@@ -464,11 +482,21 @@ export class UsersService {
 
     const formattedHtml = translatedChanges.join('<br/>');
 
-    await this.mailService.sendUpdateNotification(
-      saved.email,
-      saved.name,
-      formattedHtml,
-    );
+    const onlyStateChange =
+      Object.keys(updateUserDto).length === 1 &&
+      Object.prototype.hasOwnProperty.call(updateUserDto, 'stateid');
+
+    if (!onlyStateChange) {
+      // Enviar correo en segundo plano para no bloquear la respuesta del endpoint
+      this.mailService
+        .sendUpdateNotification(saved.email, saved.name, formattedHtml)
+        .catch((err) =>
+          console.warn(
+            'No se pudo enviar correo de actualizacion (no bloquea la respuesta):',
+            err?.message ?? err,
+          ),
+        );
+    }
 
     const usedRoleId = resolvedRoleId;
     const roleName = await this.getRoleNameByRoleId(usedRoleId);
@@ -637,6 +665,31 @@ export class UsersService {
 
     await this.usersRepository.remove(user);
     return { success: true, message: `Usuario con ID ${id} eliminado.` };
+  }
+
+  async changePassword(
+    userid: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.usersRepository.findOne({ where: { userid } });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new BadRequestException('La contrase�a actual es incorrecta.');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.password = hashed;
+    user.mustchangepassword = false;
+    user.updateat = new Date();
+
+    await this.usersRepository.save(user);
+
+    return { success: true, message: 'Contrase�a actualizada correctamente.' };
   }
 }
 
