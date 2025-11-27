@@ -22,166 +22,183 @@ export class DashboardService {
   ) { }
 
   // VENTAS POR MES
-  async getSalesByMonth() {
+  async getSalesByMonth(year?: number) {
     return this.salesRepo.query(`
-    SELECT 
-      TO_CHAR(saledate, 'Mon') AS month,
-      SUM(totalamount) AS total
-    FROM sales
-    GROUP BY month
-    ORDER BY MIN(saledate);
-  `);
+      SELECT 
+        TO_CHAR(saledate, 'Mon') AS month,
+        SUM(totalamount) AS total
+      FROM sales
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM saledate) = $1)
+      GROUP BY month
+      ORDER BY MIN(saledate);
+    `, [year ?? null]);
   }
 
-
   // TOTAL DE VENTAS
-  async getTotalSales() {
-    const result = await this.salesRepo
-      .createQueryBuilder('s')
-      .select('SUM(s.totalamount)', 'total')
-      .getRawOne();
+  async getTotalSales(year?: number) {
+    const result = await this.salesRepo.query(`
+      SELECT SUM(totalamount) AS total
+      FROM sales
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM saledate) = $1);
+    `, [year ?? null]);
 
-    return { total: Number(result.total) || 0 };
+    return { total: Number(result[0].total) || 0 };
   }
 
   // VENTAS DIARIAS POR MES
-  async getDailySalesByMonth(month: number) {
+  async getDailySalesByMonth(month: number, year?: number) {
     return this.salesRepo.query(`
-    SELECT
-      EXTRACT(DAY FROM saledate) AS day,
-      SUM(totalamount) AS total
-    FROM sales
-    WHERE EXTRACT(MONTH FROM saledate) = $1
-    GROUP BY day
-    ORDER BY day;
-  `, [month]);
+      SELECT
+        EXTRACT(DAY FROM saledate) AS day,
+        SUM(totalamount) AS total
+      FROM sales
+      WHERE EXTRACT(MONTH FROM saledate) = $1
+        AND ($2::int IS NULL OR EXTRACT(YEAR FROM saledate) = $2)
+      GROUP BY day
+      ORDER BY day;
+    `, [month, year ?? null]);
   }
-
 
   // COMPRAS POR MES
-  async getPurchasesByMonth() {
+  async getPurchasesByMonth(year?: number) {
     return this.purchasesRepo.query(`
-    SELECT 
-      TO_CHAR(createdat, 'Mon') AS month,
-      SUM(amount) AS total
-    FROM purchasesmanagement
-    GROUP BY month
-    ORDER BY MIN(createdat);
-  `);
+      SELECT 
+        TO_CHAR(createdat, 'Mon') AS month,
+        SUM(amount) AS total
+      FROM purchasesmanagement
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1)
+      GROUP BY month
+      ORDER BY MIN(createdat);
+    `, [year ?? null]);
   }
 
-
   // TOTAL DE COMPRAS
-  async getTotalPurchases() {
-    const result = await this.purchasesRepo
-      .createQueryBuilder('p')
-      .select('SUM(p.amount)', 'total')
-      .getRawOne();
+  async getTotalPurchases(year?: number) {
+    const result = await this.purchasesRepo.query(`
+      SELECT SUM(amount) AS total
+      FROM purchasesmanagement
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
+    `, [year ?? null]);
 
-    return { total: Number(result.total) || 0 };
+    return { total: Number(result[0].total) || 0 };
   }
 
   // COMPRAS DIARIAS POR MES
-  async getDailyPurchasesByMonth(month: number) {
+  async getDailyPurchasesByMonth(month: number, year?: number) {
     return this.purchasesRepo.query(`
-    SELECT
-      EXTRACT(DAY FROM createdat) AS day,
-      SUM(amount) AS total
-    FROM purchasesmanagement
-    WHERE EXTRACT(MONTH FROM createdat) = $1
-    GROUP BY day
-    ORDER BY day;
-  `, [month]);
+      SELECT
+        EXTRACT(DAY FROM createdat) AS day,
+        SUM(amount) AS total
+      FROM purchasesmanagement
+      WHERE EXTRACT(MONTH FROM createdat) = $1
+        AND ($2::int IS NULL OR EXTRACT(YEAR FROM createdat) = $2)
+      GROUP BY day
+      ORDER BY day;
+    `, [month, year ?? null]);
   }
 
-
   // PRODUCTOS POR CATEGORÍA
-  async getCategoryProducts() {
+  async getCategoryProducts(year?: number) {
     return this.categoryRepo.query(`
     SELECT 
       c.categoryname AS category,
       COUNT(p.productid) AS value
     FROM categories c
     LEFT JOIN products p ON p.categoryid = c.categoryid
+    WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM p.createddate) = $1)
     GROUP BY c.categoryname;
-  `);
+  `, [year ?? null]);
   }
 
 
   // ÓRDENES POR ESTADO
-  async getOrdersByState() {
+  async getOrdersByState(year?: number) {
     return this.orderRepo.query(`
-    SELECT 
-      st.name AS state,
-      COUNT(o.ordersservicesid) AS value
-    FROM ordersservices o
-    JOIN states st ON st.stateid = o.stateid
-    GROUP BY st.name
-    ORDER BY st.name;
-  `);
+      SELECT 
+        st.name AS state,
+        COUNT(o.ordersservicesid) AS value
+      FROM ordersservices o
+      JOIN states st ON st.stateid = o.stateid
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM o.createdat) = $1)
+      GROUP BY st.name
+      ORDER BY st.name;
+    `, [year ?? null]);
   }
 
-
   // TOTAL ÓRDENES
-  async getTotalOrders() {
-    const result = await this.orderRepo.count();
-    return { total: result };
+  async getTotalOrders(year?: number) {
+    const result = await this.orderRepo.query(`
+      SELECT COUNT(*) AS total
+      FROM ordersservices
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
+    `, [year ?? null]);
+
+    return { total: Number(result[0].total) || 0 };
   }
 
   // CLIENTES POR MES
-  async getClientsByMonth() {
+  async getClientsByMonth(year?: number) {
     return this.customerRepo.query(`
-    SELECT
-      TO_CHAR(u.createat, 'Mon') AS month,
-      COUNT(*) AS total
-    FROM customers c
-    JOIN users u ON u.userid = c.userid
-    GROUP BY month
-    ORDER BY MIN(u.createat);
-  `);
+      SELECT
+        TO_CHAR(u.createat, 'Mon') AS month,
+        COUNT(*) AS total
+      FROM customers c
+      JOIN users u ON u.userid = c.userid
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $1)
+      GROUP BY month
+      ORDER BY MIN(u.createat);
+    `, [year ?? null]);
   }
 
   // TOTAL CLIENTES
-  async getTotalClients() {
-    const result = await this.customerRepo.count();
-    return { total: result };
+  async getTotalClients(year?: number) {
+    const result = await this.customerRepo.query(`
+      SELECT COUNT(*) AS total
+      FROM customers c
+      JOIN users u ON u.userid = c.userid
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $1);
+    `, [year ?? null]);
+
+    return { total: Number(result[0].total) || 0 };
   }
 
   // CLIENTES REGISTRADOS POR DÍA
-  async getDailyClientsByMonth(month: number) {
+  async getDailyClientsByMonth(month: number, year?: number) {
     return this.customerRepo.query(`
-    SELECT
-      EXTRACT(DAY FROM u.createat) AS day,
-      COUNT(*) AS total
-    FROM customers c
-    JOIN users u ON u.userid = c.userid
-    WHERE EXTRACT(MONTH FROM u.createat) = $1
-    GROUP BY day
-    ORDER BY day;
-  `, [month]);
+      SELECT
+        EXTRACT(DAY FROM u.createat) AS day,
+        COUNT(*) AS total
+      FROM customers c
+      JOIN users u ON u.userid = c.userid
+      WHERE EXTRACT(MONTH FROM u.createat) = $1
+      AND ($2::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $2)
+      GROUP BY day
+      ORDER BY day;
+    `, [month, year ?? null]);
   }
-
 
   // SOLICITUDES DE SERVICIO POR ESTADO
-  async getServiceRequestsByState() {
+  async getServiceRequestsByState(year?: number) {
     return this.serviceRequestsRepo.query(`
-    SELECT 
-      st.name AS state,
-      COUNT(sr.servicerequestid) AS value
-    FROM servicerequests sr
-    JOIN states st ON st.stateid = sr.stateid
-    GROUP BY st.name
-    ORDER BY st.name;
-  `);
+      SELECT 
+        st.name AS state,
+        COUNT(sr.servicerequestid) AS value
+      FROM servicerequests sr
+      JOIN states st ON st.stateid = sr.stateid
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM sr.createdat) = $1)
+      GROUP BY st.name
+      ORDER BY st.name;
+    `, [year ?? null]);
   }
-
 
   // TOTAL SOLICITUDES
-  async getTotalServiceRequests() {
-    const result = await this.customerRepo
-      .query(`SELECT COUNT(*) AS total FROM servicerequests;`);
-    return { total: Number(result[0].total) };
+  async getTotalServiceRequests(year?: number) {
+    const result = await this.serviceRequestsRepo.query(`
+      SELECT COUNT(*) AS total
+      FROM servicerequests
+      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
+    `, [year ?? null]);
+
+    return { total: Number(result[0].total) || 0 };
   }
-
-
 }

@@ -6,6 +6,7 @@ import {
   Matches,
   IsNumber,
   IsArray,
+  IsBoolean,
 } from 'class-validator';
 import { Match } from '../decorators/match.decorator';
 
@@ -81,4 +82,8 @@ export class UpdateUserDto {
 
   @IsOptional()
   isNit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  mustchangepassword?: boolean;
 }
