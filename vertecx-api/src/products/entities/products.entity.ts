@@ -5,54 +5,81 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { Productcategories } from './productcategories.entity';
+
 import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
-import { OrdersServices } from 'src/order-services/entities/orders-services.entity';
+import { Ordersproducts } from './ordersproducts.entity';
+import { Categories } from './categories.entity';
+
+const numericTransformer = {
+  to: (value: number | null) => value,
+  from: (value: string | null) => (value === null ? null : Number(value)),
+};
 
 @Entity('products')
 export class Products {
-
   @PrimaryGeneratedColumn()
   productid: number;
 
-  @Column({ nullable: true })
-  createddate: string;
+  @CreateDateColumn({ name: 'createddate', type: 'timestamp' })
+  createddate: Date;
 
-  @Column({ nullable: true })
+  @UpdateDateColumn({ name: 'updatedat', type: 'timestamp' })
+  updatedat: Date;
+
+  @Column({ name: 'categoryid', type: 'int', nullable: false })
   categoryid: number;
 
-  @Column({ nullable: true })
-  isactive: string;
+  @ManyToOne(() => Categories, { eager: false })
+  @JoinColumn({ name: 'categoryid' })
+  category: Categories;
 
-  @Column({ nullable: true })
-  productpriceofsale: number;
+  @Column({ name: 'isactive', type: 'boolean', default: true })
+  isactive: boolean;
 
-  @Column({ nullable: false })
+  @Column({
+    name: 'productpriceofsale',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  productpriceofsale: number | null;
+
+  @Column({
+    name: 'productpriceofsupplier',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: false,
+    transformer: numericTransformer,
+  })
   productpriceofsupplier: number;
 
-  @Column({ nullable: true })
+  @Column({ name: 'productstock', type: 'int', default: 0 })
   productstock: number;
 
-  @Column({ nullable: false })
+  @Column({ name: 'productname', type: 'varchar', length: 100, nullable: false })
   productname: string;
 
-  @Column({ nullable: true })
-  productdescription: string;
+  @Column({ name: 'productdescription', type: 'text', nullable: true })
+  productdescription: string | null;
 
-  @Column({ nullable: true })
-  productcode: string;
+  @Column({ name: 'productcode', type: 'varchar', length: 20, nullable: true })
+  productcode: string | null;
 
-  @ManyToOne(() => Productcategories)
-  @JoinColumn({ name: 'categoryid' })
-  productcategories: Productcategories;
+  @Column({ name: 'purchaseorderid', type: 'int', nullable: true })
+  purchaseorderid: number | null;
 
-  @OneToMany(
-    () => PurchaseProduct,
-    (purchaseProduct) => purchaseProduct.product,
-  )
+  @Column({ name: 'suppliercategory', type: 'varchar', length: 100, nullable: true })
+  suppliercategory: string | null;
+
+  @OneToMany(() => PurchaseProduct, (pp) => pp.product)
   purchaseProducts: PurchaseProduct[];
 
-  @OneToMany(() => OrdersServices, (order) => order.products)
-  orders: OrdersServices[];
+  @OneToMany(() => Ordersproducts, (op) => op.products)
+  ordersProducts: Ordersproducts[];
 }
