@@ -106,7 +106,7 @@ export class PurchasesmanagementService {
             productpriceofsale: item.productpriceofsupplier * 1.3,
             productdescription: item.description,
             productstock: 0,
-            isactive: 'true',
+            isactive: true,
             categoryid: 1,
             createddate: new Date().toISOString(),
           });
