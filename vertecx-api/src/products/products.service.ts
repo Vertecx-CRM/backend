@@ -119,37 +119,47 @@ export class ProductsService {
   }
 
   private async isReferenced(productid: number) {
-    const [purchasesCount, ordersCount] = await Promise.all([
-      this.purchaseProductsRepo.count({ where: { productid } as any }),
-      this.ordersProductsRepo.count({ where: { productid } as any }),
-    ]);
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+        EXISTS (SELECT 1 FROM public.purchase_products pp WHERE pp.productid = $1) AS "hasPurchases",
+        EXISTS (SELECT 1 FROM public.ordersproducts op WHERE op.productid = $1) AS "hasOrdersProducts",
+        EXISTS (SELECT 1 FROM public.ordersservicesproducts osp WHERE osp.productid = $1) AS "hasOrdersServicesProducts",
+        EXISTS (SELECT 1 FROM public.salesdetail sd WHERE sd.productid = $1) AS "hasSales"
+      `,
+      [productid],
+    );
+
+    const r = rows?.[0] ?? {};
+    const hasPurchases = !!r.hasPurchases;
+    const hasOrdersProducts = !!r.hasOrdersProducts;
+    const hasOrdersServicesProducts = !!r.hasOrdersServicesProducts;
+    const hasSales = !!r.hasSales;
 
     return {
-      purchasesCount,
-      ordersCount,
-      hasAny: purchasesCount > 0 || ordersCount > 0,
+      hasPurchases,
+      hasOrdersProducts,
+      hasOrdersServicesProducts,
+      hasSales,
+      hasAny: hasPurchases || hasOrdersProducts || hasOrdersServicesProducts || hasSales,
     };
   }
 
-  private buildReferenceReason(rel: { purchasesCount: number; ordersCount: number }) {
+  private buildReferenceReason(rel: {
+    hasPurchases: boolean;
+    hasOrdersProducts: boolean;
+    hasOrdersServicesProducts: boolean;
+    hasSales: boolean;
+  }) {
     const parts: string[] = [];
-    if (rel.purchasesCount > 0) parts.push(`compras (${rel.purchasesCount})`);
-    if (rel.ordersCount > 0) parts.push(`órdenes (${rel.ordersCount})`);
-    if (parts.length === 0) return 'Está asociado a otros registros del sistema.';
-    return `Está asociado a ${parts.join(' y ')}.`;
-  }
+    if (rel.hasPurchases) parts.push('compras');
+    if (rel.hasOrdersProducts) parts.push('órdenes (productos)');
+    if (rel.hasOrdersServicesProducts) parts.push('órdenes (servicios)');
+    if (rel.hasSales) parts.push('ventas');
 
-  private fkReason(e: any) {
-    const code = String(e?.code ?? '');
-    if (code === '23503' || code === '1451') {
-      const detail = String(e?.detail ?? e?.message ?? '');
-      const tableMatch = detail.match(/table "([^"]+)"/i);
-      const table = tableMatch?.[1];
-      return table
-        ? `Está asociado a registros en "${table}".`
-        : 'Está asociado a compras/órdenes/ventas u otros registros.';
-    }
-    return 'No se pudo verificar la eliminación por una restricción del sistema.';
+    if (parts.length === 0) return 'Está asociado a otros registros del sistema.';
+    if (parts.length === 1) return `Está asociado a ${parts[0]}.`;
+    return `Está asociado a ${parts.join(' y ')}.`;
   }
 
   async getDeletionInfo(id: number) {
@@ -157,24 +167,16 @@ export class ProductsService {
     if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
 
     const rel = await this.isReferenced(id);
+
     if (rel.hasAny) {
-      return { canDelete: false, reason: this.buildReferenceReason(rel) };
+      return {
+        canDelete: false,
+        reason: this.buildReferenceReason(rel),
+        canDeactivate: !!product.isactive,
+      };
     }
 
-    const qr = this.dataSource.createQueryRunner();
-    await qr.connect();
-    await qr.startTransaction();
-
-    try {
-      await qr.manager.delete(Products, { productid: id } as any);
-      await qr.rollbackTransaction();
-      return { canDelete: true };
-    } catch (e: any) {
-      await qr.rollbackTransaction();
-      return { canDelete: false, reason: this.fkReason(e) };
-    } finally {
-      await qr.release();
-    }
+    return { canDelete: true, canDeactivate: false };
   }
 
   async remove(id: number) {
@@ -202,3 +204,4 @@ export class ProductsService {
     }
   }
 }
+
