@@ -10,14 +10,14 @@ export class ProductCategory {
   name: string;
 
   @Column({ name: 'categorydescription', type: 'text', nullable: true })
-  description?: string;
+  description?: string | null;
 
   @Column({ name: 'isactive', default: true })
   status: boolean;
 
-  @Column({ nullable: true })
-  icon?: string;
+  @Column({ name: 'icon', nullable: true })
+  icon?: string | null;
 
-  @OneToMany(() => Products, (p) => p.categoryid)
+  @OneToMany(() => Products, (p) => p.category)
   products: Products[];
 }
