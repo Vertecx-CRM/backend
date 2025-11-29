@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateProductDto {
   @ApiProperty({ example: 'Xiaomi Redmi 15C (8GB)' })
@@ -18,11 +28,18 @@ export class CreateProductDto {
   @Min(1)
   categoryid: number;
 
-  @ApiPropertyOptional({ example: 'Celulares', description: 'Texto libre (categoría del proveedor)' })
-  @IsOptional()
+  @ApiProperty({ example: 'Celulares', description: 'Texto libre (categoría del proveedor)' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(100)
-  suppliercategory?: string | null;
+  suppliercategory: string;
+
+  @ApiProperty({ example: 'https://res.cloudinary.com/.../products/imagen.png' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2048)
+  @IsUrl()
+  image: string;
 
   @ApiPropertyOptional({ example: '6932554444808' })
   @IsOptional()
