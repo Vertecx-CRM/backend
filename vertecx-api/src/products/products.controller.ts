@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Post, Body, Patch, Param, Delete, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body, Patch, Param, Delete, BadRequestException, ParseIntPipe } from '@nestjs/common';
 import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -32,6 +32,11 @@ export class ProductsController {
   })
   findAll(@Query('status') status?: string) {
     return this.productsService.findAll(normalizeStatus(status));
+  }
+
+  @Get(':id/deletion-info')
+  getDeletionInfo(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.getDeletionInfo(id);
   }
 
   @Get(':id')

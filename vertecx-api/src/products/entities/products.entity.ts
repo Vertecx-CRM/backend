@@ -11,7 +11,7 @@ import {
 
 import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
 import { Ordersproducts } from './ordersproducts.entity';
-import { Categories } from './categories.entity';
+import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
 
 const numericTransformer = {
   to: (value: number | null) => value,
@@ -32,9 +32,9 @@ export class Products {
   @Column({ name: 'categoryid', type: 'int', nullable: false })
   categoryid: number;
 
-  @ManyToOne(() => Categories, { eager: false })
-  @JoinColumn({ name: 'categoryid' })
-  category: Categories;
+  @ManyToOne(() => ProductCategory, { eager: false })
+  @JoinColumn({ name: 'categoryid', referencedColumnName: 'id' })
+  category: ProductCategory;
 
   @Column({ name: 'isactive', type: 'boolean', default: true })
   isactive: boolean;
@@ -74,8 +74,11 @@ export class Products {
   @Column({ name: 'purchaseorderid', type: 'int', nullable: true })
   purchaseorderid: number | null;
 
-  @Column({ name: 'suppliercategory', type: 'varchar', length: 100, nullable: true })
-  suppliercategory: string | null;
+  @Column({ name: 'suppliercategory', type: 'varchar', length: 100, nullable: false })
+  suppliercategory: string;
+
+  @Column({ name: 'image', type: 'text', nullable: false })
+  image: string;
 
   @OneToMany(() => PurchaseProduct, (pp) => pp.product)
   purchaseProducts: PurchaseProduct[];
