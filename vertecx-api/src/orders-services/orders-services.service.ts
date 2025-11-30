@@ -35,6 +35,17 @@ const ACTION_LABELS: Record<OrdersServicesHistoryAction, string> = {
   REPROGRAM: 'Orden reprogramada',
 };
 
+const ORDER_RELATIONS = [
+  'products',
+  'products.product',
+  'technicians',
+  'technicians.users',
+  'client',
+  'client.users',
+  'state',
+  'history',
+] as const;
+
 @Injectable()
 export class OrdersServicesService {
   constructor(
@@ -49,14 +60,18 @@ export class OrdersServicesService {
 
   private async validateOrder(id: number) {
     const order = await this.ordersRepo.findOne({
-      where: { ordersservicesid: id },
-      relations: ['products', 'products.product', 'technicians', 'client', 'state'],
+      where: { ordersservicesid: id } as any,
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
     });
+
     if (!order) throw new NotFoundException('Orden no encontrada');
+
     order.files = Array.isArray(order.files) ? order.files : [];
     order.products = order.products ?? [];
     order.technicians = order.technicians ?? [];
     order.total = order.total ?? 0;
+
     return order;
   }
 
@@ -111,15 +126,16 @@ export class OrdersServicesService {
     const clientsRepo = em.getRepository(Customers);
     const statesRepo = em.getRepository(States);
 
-    const client = await clientsRepo.findOne({ where: { customerid: dto.clientid } });
+    const client = await clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
     if (!client) throw new BadRequestException('Cliente no existe');
 
-    const state = await statesRepo.findOne({ where: { stateid: dto.stateid } });
+    const state = await statesRepo.findOne({ where: { stateid: dto.stateid } as any });
     if (!state) throw new BadRequestException('Estado no existe');
 
     const techIds = dto.technicians ?? [];
     if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
-    const technicians = await techRepo.find({ where: { technicianid: In(techIds) } });
+
+    const technicians = await techRepo.find({ where: { technicianid: In(techIds) } as any });
     if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
 
     const items = dto.products ?? [];
@@ -147,30 +163,31 @@ export class OrdersServicesService {
       if (seen.has(item.productid)) throw new BadRequestException('Hay productos repetidos en la orden');
       seen.add(item.productid);
 
-      const product = await productsRepo.findOne({ where: { productid: item.productid } });
+      const product = await productsRepo.findOne({ where: { productid: item.productid } as any });
       if (!product) throw new BadRequestException('Producto no existe');
 
       const subtotal = product.productpriceofsale * item.cantidad;
       total += subtotal;
 
-      await ospRepo.save(ospRepo.create({ order, product, cantidad: item.cantidad, subtotal }));
+      await ospRepo.save(
+        ospRepo.create({
+          order: { ordersservicesid: order.ordersservicesid } as any,
+          product,
+          cantidad: item.cantidad,
+          subtotal,
+        }),
+      );
     }
 
     await ordersRepo.update({ ordersservicesid: order.ordersservicesid } as any, { total } as any);
 
     const hydrated = await ordersRepo.findOne({
       where: { ordersservicesid: order.ordersservicesid } as any,
-      relations: ['products', 'products.product', 'technicians', 'client', 'state'],
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
     });
 
-    await this.log(
-      historyRepo,
-      hydrated as any,
-      'CREATE',
-      { created: this.snapshot(hydrated as any) },
-      actoruserid,
-      'Orden creada',
-    );
+    await this.log(historyRepo, hydrated as any, 'CREATE', { created: this.snapshot(hydrated as any) }, actoruserid, 'Orden creada');
 
     return order.ordersservicesid;
   }
@@ -182,7 +199,8 @@ export class OrdersServicesService {
 
   findAll() {
     return this.ordersRepo.find({
-      relations: ['products', 'products.product', 'technicians', 'client', 'state'],
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
     });
   }
 
@@ -193,8 +211,8 @@ export class OrdersServicesService {
   async history(orderId: number) {
     await this.validateOrder(orderId);
     return this.historyRepo.find({
-      where: { order: { ordersservicesid: orderId } as any },
-      order: { createdat: 'DESC' },
+      where: { order: { ordersservicesid: orderId } as any } as any,
+      order: { createdat: 'DESC' } as any,
     });
   }
 
@@ -205,13 +223,13 @@ export class OrdersServicesService {
     if (dto.description !== undefined) order.description = dto.description;
 
     if (dto.clientid !== undefined) {
-      const client = await this.clientsRepo.findOne({ where: { customerid: dto.clientid } });
+      const client = await this.clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
       if (!client) throw new BadRequestException('Cliente no existe');
       order.client = client;
     }
 
     if (dto.stateid !== undefined) {
-      const state = await this.statesRepo.findOne({ where: { stateid: dto.stateid } });
+      const state = await this.statesRepo.findOne({ where: { stateid: dto.stateid } as any });
       if (!state) throw new BadRequestException('Estado no existe');
       order.state = state;
     }
@@ -224,13 +242,15 @@ export class OrdersServicesService {
     if (dto.technicians !== undefined) {
       const techIds = dto.technicians ?? [];
       if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
-      const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } });
+
+      const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
       if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+
       order.technicians = technicians;
     }
 
-    if (dto.files !== undefined) {
-      const next = dto.files ?? [];
+    if ((dto as any).files !== undefined) {
+      const next = (dto as any).files ?? [];
       if (!Array.isArray(next)) throw new BadRequestException('files debe ser un arreglo de links');
       order.files = next;
     }
@@ -257,7 +277,7 @@ export class OrdersServicesService {
     const existing = (order.products ?? []).find((p) => (p.product as any).productid === dto.productid);
     if (existing) throw new BadRequestException('El producto ya está agregado');
 
-    const product = await this.productsRepo.findOne({ where: { productid: dto.productid } });
+    const product = await this.productsRepo.findOne({ where: { productid: dto.productid } as any });
     if (!product) throw new BadRequestException('Producto no existe');
 
     const subtotal = product.productpriceofsale * dto.cantidad;
@@ -276,14 +296,7 @@ export class OrdersServicesService {
 
     const hydrated = await this.validateOrder(orderId);
 
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'ADD_PRODUCT',
-      { productid: dto.productid, cantidad: dto.cantidad, subtotal, total: newTotal },
-      actoruserid,
-      'Producto agregado',
-    );
+    await this.log(this.historyRepo, hydrated, 'ADD_PRODUCT', { productid: dto.productid, cantidad: dto.cantidad, subtotal, total: newTotal }, actoruserid, 'Producto agregado');
 
     return hydrated;
   }
@@ -297,8 +310,8 @@ export class OrdersServicesService {
     await this.ospRepo.remove(osp);
 
     const updatedProducts = await this.ospRepo.find({
-      where: { order: { ordersservicesid: orderId } as any },
-      relations: ['product', 'order'],
+      where: { order: { ordersservicesid: orderId } as any } as any,
+      relations: ['product', 'order'] as any,
     });
 
     const updatedTotal = updatedProducts.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
@@ -306,14 +319,7 @@ export class OrdersServicesService {
 
     const hydrated = await this.validateOrder(orderId);
 
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'REMOVE_PRODUCT',
-      { productid: productId, removedSubtotal: osp.subtotal, total: updatedTotal },
-      actoruserid,
-      'Producto eliminado',
-    );
+    await this.log(this.historyRepo, hydrated, 'REMOVE_PRODUCT', { productid: productId, removedSubtotal: osp.subtotal, total: updatedTotal }, actoruserid, 'Producto eliminado');
 
     return hydrated;
   }
@@ -324,7 +330,7 @@ export class OrdersServicesService {
     const techIds = dto.technicians ?? [];
     if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
 
-    const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } });
+    const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
     if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
 
     order.technicians = technicians;
@@ -332,14 +338,7 @@ export class OrdersServicesService {
 
     const hydrated = await this.validateOrder(orderId);
 
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'ASSIGN_TECHNICIANS',
-      { technicians: techIds },
-      actoruserid,
-      'Técnicos asignados',
-    );
+    await this.log(this.historyRepo, hydrated, 'ASSIGN_TECHNICIANS', { technicians: techIds }, actoruserid, 'Técnicos asignados');
 
     return hydrated;
   }
@@ -353,7 +352,7 @@ export class OrdersServicesService {
     order.horafin = dto.horafin;
     order.fechafin = dto.fechafin as any;
 
-    const finishedState = await this.statesRepo.findOne({ where: { name: 'Finished' } });
+    const finishedState = await this.statesRepo.findOne({ where: { name: 'Finished' } as any });
     if (finishedState) order.state = finishedState;
 
     await this.ordersRepo.save(order);
@@ -364,11 +363,7 @@ export class OrdersServicesService {
       this.historyRepo,
       hydrated,
       'FINISH',
-      {
-        fechafin: dto.fechafin,
-        horafin: dto.horafin,
-        stateid: finishedState ? (finishedState as any).stateid : null,
-      },
+      { fechafin: dto.fechafin, horafin: dto.horafin, stateid: finishedState ? (finishedState as any).stateid : null },
       actoruserid,
       'Orden finalizada',
     );
@@ -456,14 +451,7 @@ export class OrdersServicesService {
 
     const hydrated = await this.validateOrder(orderId);
 
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'REMOVE_FILE',
-      { url: removed, index, count: hydrated.files.length },
-      actoruserid,
-      'Archivo eliminado',
-    );
+    await this.log(this.historyRepo, hydrated, 'REMOVE_FILE', { url: removed, index, count: hydrated.files.length }, actoruserid, 'Archivo eliminado');
 
     return hydrated;
   }
@@ -483,48 +471,48 @@ export class OrdersServicesService {
 
     const hydrated = await this.validateOrder(orderId);
 
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'REMOVE_FILE',
-      { url, index: idx, count: hydrated.files.length },
-      actoruserid,
-      'Archivo eliminado',
-    );
+    await this.log(this.historyRepo, hydrated, 'REMOVE_FILE', { url, index: idx, count: hydrated.files.length }, actoruserid, 'Archivo eliminado');
 
     return hydrated;
+  }
+
+  findByClient(clientId: number) {
+    return this.ordersRepo.find({
+      where: { client: { customerid: clientId } as any } as any,
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
+    });
+  }
+
+  findByState(stateId: number) {
+    return this.ordersRepo.find({
+      where: { state: { stateid: stateId } as any } as any,
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
+    });
+  }
+
+  findByDateRange(from: string, to: string) {
+    return this.ordersRepo.find({
+      where: { fechainicio: Between(from as any, to as any) } as any,
+      relations: [...ORDER_RELATIONS] as any,
+      order: { history: { createdat: 'DESC' } } as any,
+    });
   }
 
   findByTechnician(technicianId: number) {
     return this.ordersRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.technicians', 't')
+      .leftJoinAndSelect('t.user', 'tuser')
       .leftJoinAndSelect('o.client', 'client')
+      .leftJoinAndSelect('client.user', 'cuser')
       .leftJoinAndSelect('o.state', 'state')
       .leftJoinAndSelect('o.products', 'p')
       .leftJoinAndSelect('p.product', 'product')
+      .leftJoinAndSelect('o.history', 'h')
       .where('t.technicianid = :id', { id: technicianId })
+      .orderBy('h.createdat', 'DESC')
       .getMany();
-  }
-
-  findByClient(clientId: number) {
-    return this.ordersRepo.find({
-      where: { client: { customerid: clientId } as any },
-      relations: ['technicians', 'products', 'products.product', 'client', 'state'],
-    });
-  }
-
-  findByState(stateId: number) {
-    return this.ordersRepo.find({
-      where: { state: { stateid: stateId } as any },
-      relations: ['technicians', 'products', 'products.product', 'client', 'state'],
-    });
-  }
-
-  findByDateRange(from: string, to: string) {
-    return this.ordersRepo.find({
-      where: { fechainicio: Between(from as any, to as any) },
-      relations: ['technicians', 'products', 'products.product', 'client', 'state'],
-    });
   }
 }
