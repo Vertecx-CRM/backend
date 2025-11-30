@@ -29,7 +29,15 @@ export class OrdersServicesService {
   private async validateOrder(id: number) {
     const order = await this.ordersRepo.findOne({
       where: { ordersservicesid: id },
-      relations: ['products', 'products.product', 'technicians', 'client', 'state'],
+      relations: [
+        'products',
+        'products.product',
+        'technicians',
+        'technicians.users',
+        'client',
+        'client.users',
+        'state',
+      ],
     });
     if (!order) throw new NotFoundException('Orden no encontrada');
     return order;
@@ -87,7 +95,15 @@ export class OrdersServicesService {
 
   findAll() {
     return this.ordersRepo.find({
-      relations: ['products', 'products.product', 'technicians', 'client', 'state'],
+      relations: [
+        'products',
+        'products.product',
+        'technicians',
+        'technicians.users',
+        'client',
+        'client.users',
+        'state',
+      ],
     });
   }
 
