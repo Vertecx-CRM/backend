@@ -1,4 +1,4 @@
-import { OrdersServices } from 'src/order-services/entities/orders-services.entity';
+import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
 import { States } from 'src/shared/entities/states.entity';
 import {
   Entity,

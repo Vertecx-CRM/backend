@@ -3,7 +3,7 @@ import { QuotesService } from './quotes.service';
 import { QuotesController } from './quotes.controller';
 import { Quotes } from './entities/quotes.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { OrdersServices } from 'src/order-services/entities/orders-services.entity';
+import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
 import { States } from 'src/shared/entities/states.entity';
 
 @Module({
