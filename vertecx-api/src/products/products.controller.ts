@@ -1,43 +1,59 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Get, Query, Post, Body, Patch, Param, Delete, BadRequestException, ParseIntPipe } from '@nestjs/common';
+import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { ApiOperation } from '@nestjs/swagger';
+
+export type StatusQuery = 'active' | 'inactive' | 'all';
+
+function normalizeStatus(value?: string): StatusQuery {
+  if (!value) return 'active';
+  const v = value.toLowerCase().trim();
+  if (v === 'active' || v === 'inactive' || v === 'all') return v;
+  throw new BadRequestException(`status inválido. Usa: active | inactive | all`);
+}
 
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
+  create(@Body() dto: CreateProductDto) {
+    return this.productsService.create(dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar todos los productos' })
-  findAll() {
-    return this.productsService.findAll();
+  @ApiOperation({ summary: 'Listar productos (por defecto solo activos)' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['active', 'inactive', 'all'],
+    description: 'Filtro de estado: active (default) | inactive | all',
+  })
+  findAll(@Query('status') status?: string) {
+    return this.productsService.findAll(normalizeStatus(status));
+  }
+
+  @Get(':id/deletion-info')
+  getDeletionInfo(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.getDeletionInfo(id);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Obtener un producto por id (incluye inactivos)' })
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(+id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(+id, updateProductDto);
+  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
+    return this.productsService.update(+id, dto);
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Eliminar producto: hard si no está referenciado, soft (isactive=false) si está referenciado',
+  })
   remove(@Param('id') id: string) {
     return this.productsService.remove(+id);
   }

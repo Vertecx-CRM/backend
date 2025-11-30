@@ -37,7 +37,7 @@ export class Salesdetail {
   @Column({ nullable: true })
   notes: string;
 
-  @ManyToOne(() => Sales)
+  @ManyToOne(() => Sales, (sale) => sale.salesdetail, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'saleid' })
   sales: Sales;
 
