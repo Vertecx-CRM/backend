@@ -9,7 +9,7 @@ import { Sales } from "src/sales/entities/sales.entity";
 import { States } from "src/shared/entities/states.entity";
 import { DashboardController } from "./dashboard.controller";
 import { DashboardService } from "./dashboard.service";
-import { OrdersServices } from "src/order-services/entities/orders-services.entity";
+import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
 
 

@@ -1,24 +1,29 @@
-import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateRequestDto {
-  @ApiPropertyOptional({ example: '2025-11-12' })
+  @ApiPropertyOptional({ example: "2025-11-12T10:00:00.000Z" })
   @IsOptional()
   @IsDateString()
   scheduledAt?: string;
 
-  @ApiProperty({ example: 'MANTENIMIENTO' })
+  @ApiPropertyOptional({ example: "2025-11-12T11:00:00.000Z" })
+  @IsOptional()
+  @IsDateString()
+  scheduledEndAt?: string;
+
+  @ApiProperty({ example: "MANTENIMIENTO" })
   @IsString()
   @MaxLength(255)
   serviceType: string;
 
-  @ApiProperty({ example: 'cr 44 # 20-50' })
+  @ApiProperty({ example: "cr 44 # 20-50" })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   direccion: string;
 
-  @ApiProperty({ example: 'Equipo no enciende; posible daño en fuente' })
+  @ApiProperty({ example: "Equipo no enciende; posible daño en fuente" })
   @IsString()
   @IsNotEmpty()
   description: string;

@@ -13,6 +13,9 @@ export class ServiceRequest {
   @Column({ name: 'scheduledat', type: 'timestamptz', nullable: true })
   scheduledAt: Date | null;
 
+  @Column({ name: 'scheduledendat', type: 'timestamptz', nullable: true })
+scheduledEndAt: Date | null;
+
   @Column({ name: 'servicetype', type: 'varchar', length: 255 })
   serviceType: string;
 

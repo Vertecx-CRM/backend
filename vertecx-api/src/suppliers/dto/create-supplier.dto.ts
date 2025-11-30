@@ -1,5 +1,15 @@
-import { Transform } from 'class-transformer';
-import { IsEmail, IsInt, IsNotEmpty, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { Transform, Type } from "class-transformer";
+import {
+  IsEmail,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  IsNumber,
+} from "class-validator";
 
 export class CreateSupplierDto {
   @IsString()
@@ -15,7 +25,7 @@ export class CreateSupplierDto {
   nit: string;
 
   @IsString()
-  @Transform(({ value }) => String(value).replace(/[^\d+]/g, ''))
+  @Transform(({ value }) => String(value).replace(/[^\d+]/g, ""))
   @IsNotEmpty()
   @MaxLength(20)
   @Matches(/^\+?\d{7,15}$/)
@@ -49,7 +59,8 @@ export class CreateSupplierDto {
   @MaxLength(255)
   image: string;
 
-  @IsInt()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 1 })
   @Min(0)
   @Max(5)
   rating: number;
