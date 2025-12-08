@@ -96,60 +96,71 @@ export class UsersService {
     return values.map((_, idx) => `$${idx + 1}`).join(', ');
   }
 
-  private async countQuotesByOrders(field: string, ids: number[]): Promise<number> {
-    if (ids.length === 0) return 0;
-    const placeholders = this.buildPlaceholders(ids);
-    const [result] = await this.dataSource.query(
-      `SELECT COUNT(*)::int AS count
-       FROM quotes q
-       JOIN ordersservices os ON os.ordersservicesid = q.ordersservicesid
-       WHERE os.${field} IN (${placeholders})`,
-      ids,
-    );
-    return Number(result?.count ?? 0);
-  }
-
-  private async countByIds(
+  private async existsByIds(
     table: string,
     column: string,
     ids: number[],
-  ): Promise<number> {
-    if (ids.length === 0) return 0;
+  ): Promise<boolean> {
+    if (ids.length === 0) return false;
     const placeholders = this.buildPlaceholders(ids);
     const [result] = await this.dataSource.query(
-      `SELECT COUNT(*)::int AS count FROM ${table} WHERE ${column} IN (${placeholders})`,
+      `SELECT EXISTS(
+         SELECT 1
+         FROM ${table}
+         WHERE ${column} IN (${placeholders})
+       ) AS exists_flag`,
       ids,
     );
-    return Number(result?.count ?? 0);
+    return Boolean(result?.exists_flag);
+  }
+
+  private async existsQuotesByOrders(field: string, ids: number[]): Promise<boolean> {
+    if (ids.length === 0) return false;
+    const placeholders = this.buildPlaceholders(ids);
+    const [result] = await this.dataSource.query(
+      `SELECT EXISTS(
+         SELECT 1
+         FROM quotes q
+         JOIN ordersservices os ON os.ordersservicesid = q.ordersservicesid
+         WHERE os.${field} IN (${placeholders})
+       ) AS exists_flag`,
+      ids,
+    );
+    return Boolean(result?.exists_flag);
   }
 
   private async hasUserLinkedRecords(
     customerIds: number[],
     technicianIds: number[],
   ): Promise<boolean> {
-    const checks: Promise<number>[] = [];
-
     if (customerIds.length > 0) {
-      checks.push(this.countByIds('sales', 'customerid', customerIds));
-      checks.push(this.countByIds('servicerequests', 'clientid', customerIds));
-      checks.push(this.countByIds('ordersservices', 'clientid', customerIds));
-      checks.push(this.countQuotesByOrders('clientid', customerIds));
+      if (await this.existsByIds('sales', 'customerid', customerIds)) {
+        return true;
+      }
+      if (await this.existsByIds('servicerequests', 'clientid', customerIds)) {
+        return true;
+      }
+      if (await this.existsByIds('ordersservices', 'clientid', customerIds)) {
+        return true;
+      }
+      if (await this.existsQuotesByOrders('clientid', customerIds)) {
+        return true;
+      }
     }
 
     if (technicianIds.length > 0) {
       const techColumn = await this.getOrdersTechnicianColumn();
       if (techColumn) {
-        checks.push(
-          this.countByIds('ordersservices', techColumn, technicianIds),
-        );
-        checks.push(this.countQuotesByOrders(techColumn, technicianIds));
+        if (await this.existsByIds('ordersservices', techColumn, technicianIds)) {
+          return true;
+        }
+        if (await this.existsQuotesByOrders(techColumn, technicianIds)) {
+          return true;
+        }
       }
     }
 
-    if (checks.length === 0) return false;
-
-    const totals = await Promise.all(checks);
-    return totals.some((count) => count > 0);
+    return false;
   }
 
   private ordersTechnicianColumn: string | null | undefined;
@@ -303,21 +314,38 @@ export class UsersService {
   }
 
   // Listar todos
-  async findAll() {
-    const users = await this.usersRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.states', 'state')
-      .leftJoinAndSelect('user.typeofdocuments', 'docType')
-      .leftJoinAndSelect('user.roles', 'role')
-      .leftJoinAndSelect('user.technicians', 'tech')
-      .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
-      .leftJoinAndSelect('typeMap.techniciantype', 'techType')
-      .leftJoinAndSelect('user.customers', 'cust')
-      .orderBy('user.userid', 'ASC')
-      .getMany();
+    async findAll() {
+      const users = await this.usersRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.states', 'state')
+        .leftJoinAndSelect('user.typeofdocuments', 'docType')
+        .leftJoinAndSelect('user.roles', 'role')
+        .leftJoinAndSelect('user.technicians', 'tech')
+        .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
+        .leftJoinAndSelect('typeMap.techniciantype', 'techType')
+        .leftJoinAndSelect('user.customers', 'cust')
+        .orderBy('user.userid', 'ASC')
+        .getMany();
 
-    return { success: true, data: users };
-  }
+      const usersWithFlags = await Promise.all(
+        users.map(async (user) => {
+          const customerIds =
+            user.customers?.map((customer) => customer.customerid) ?? [];
+          const technicianIds =
+            user.technicians?.map((technician) => technician.technicianid) ?? [];
+          const hasAssociations = await this.hasUserLinkedRecords(
+            customerIds,
+            technicianIds,
+          );
+          return {
+            ...user,
+            hasAssociations,
+          };
+        }),
+      );
+
+      return { success: true, data: usersWithFlags };
+    }
 
   // Buscar por ID
   async findOne(id: number) {
@@ -692,8 +720,6 @@ export class UsersService {
     return { success: true, message: 'Contrase�a actualizada correctamente.' };
   }
 }
-
-
 
 
 

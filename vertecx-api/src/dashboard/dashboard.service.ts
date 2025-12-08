@@ -5,7 +5,7 @@ import { ProductCategory } from "src/products-categories/entities/product-catego
 import { Products } from "src/products/entities/products.entity";
 import { Purchasesmanagement } from "src/purchases/entities/purchasesmanagement.entity";
 import { Sales } from "src/sales/entities/sales.entity";
-import { OrdersServices } from "src/order-services/entities/orders-services.entity";
+import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
 import { Repository } from "typeorm";
 

@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 
 import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
-import { Ordersproducts } from './ordersproducts.entity';
+import { OrdersServicesProducts } from 'src/orders-services/entities/orders-services-products.entity';
 import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
 
 const numericTransformer = {
@@ -83,6 +83,6 @@ export class Products {
   @OneToMany(() => PurchaseProduct, (pp) => pp.product)
   purchaseProducts: PurchaseProduct[];
 
-  @OneToMany(() => Ordersproducts, (op) => op.products)
-  ordersProducts: Ordersproducts[];
+  @OneToMany(() => OrdersServicesProducts, (op) => op.product)
+  ordersProducts: OrdersServicesProducts[];
 }
