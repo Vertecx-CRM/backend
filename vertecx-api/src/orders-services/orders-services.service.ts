@@ -504,7 +504,7 @@ export class OrdersServicesService {
     return this.ordersRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.technicians', 't')
-      .leftJoinAndSelect('t.user', 'tuser')
+      .leftJoinAndSelect('t.users', 'tuser')
       .leftJoinAndSelect('o.client', 'client')
       .leftJoinAndSelect('client.user', 'cuser')
       .leftJoinAndSelect('o.state', 'state')
