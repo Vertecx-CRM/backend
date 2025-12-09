@@ -73,20 +73,30 @@ export class MailService {
                 to: email,
                 subject: 'Actualización de tu cuenta en SistemaPC',
                 html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; border-radius: 10px; border: 1px solid #ddd; overflow: hidden;">
-          <div style="background-color: #0078d4; color: white; padding: 20px; text-align: center;">
-            <h2 style="margin: 0;">Actualización de cuenta</h2>
-          </div>
-          <div style="padding: 25px; color: #333;">
-            <p>Hola <b>${name}</b>,</p>
-            <p>Se han realizado los siguientes cambios en tu cuenta:</p>
-            <ul style="margin-top: 10px; padding-left: 20px;">${formattedChanges}</ul>
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; border-radius: 10px; border: 1px solid #ddd; overflow: hidden;">
+  <div style="background-color: #0078d4; color: white; padding: 20px; text-align: center;">
+    <h2 style="margin: 0;">Actualización de cuenta</h2>
+  </div>
 
-            <p style="margin-top: 20px;">Si no realizaste estos cambios, contacta inmediatamente al <b>equipo de soporte técnico</b>.</p>
-          </div>
-          <div style="background: #0078d4; color: white; text-align: center; padding: 15px;">
-            <p style="margin: 0;">© ${new Date().getFullYear()} SistemaPC | Soporte técnico</p>
-          </div>
+  <div style="padding: 25px; color: #333;">
+    <p>Hola <b>${name}</b>,</p>
+
+    <p>
+      Queremos informarte que <b>los datos de tu cuenta han sido actualizados correctamente</b>.  
+      Por favor, <b>revisa tu cuenta para confirmar que toda la información sea correcta</b>.
+    </p>
+
+    <p style="margin-top: 20px;">
+      Si no realizaste estos cambios, por favor contacta de inmediato al 
+      <b>equipo de soporte técnico</b>.
+    </p>
+  </div>
+
+  <div style="background: #0078d4; color: white; text-align: center; padding: 15px;">
+    <p style="margin: 0;">© ${new Date().getFullYear()} SistemaPC | Soporte técnico</p>
+  </div>
+</div>
+
         </div>
         `,
             };
