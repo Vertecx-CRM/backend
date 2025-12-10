@@ -18,9 +18,6 @@ export class Quotes {
   @PrimaryGeneratedColumn()
   quotesid: number;
 
-  // -----------------------------
-  // FK → ORDEN DE SERVICIO (opcional cuando aún no se crea la orden)
-  // -----------------------------
   @Column({ nullable: true })
   ordersservicesid: number;
 
@@ -28,9 +25,6 @@ export class Quotes {
   @JoinColumn({ name: 'ordersservicesid' })
   ordersservices: OrdersServices;
 
-  // -----------------------------
-  // FK → SOLICITUD (OBLIGATORIO)
-  // -----------------------------
   @Column({ name: 'servicerequestid', nullable: false })
   serviceRequestId: number;
 
@@ -38,9 +32,6 @@ export class Quotes {
   @JoinColumn({ name: 'servicerequestid' })
   serviceRequest: ServiceRequest;
 
-  // -----------------------------
-  // ESTADO DE LA COTIZACIÓN
-  // -----------------------------
   @Column({ name: 'statesid', nullable: false })
   statesid: number;
 
@@ -48,15 +39,26 @@ export class Quotes {
   @JoinColumn({ name: 'statesid' })
   state: States;
 
-  // -----------------------------
-  // OBSERVACIONES
-  // -----------------------------
   @Column({ nullable: true })
   observation: string;
 
-  // JSON con totales, tipo servicio, cliente, etc.
-  @Column({ type: 'jsonb', nullable: true })
-  quotedata: any;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  servicetype: string;
+
+  @Column({ type: 'int', nullable: true })
+  customerid: number;
+
+  @Column({ type: 'int', nullable: true })
+  technicianid: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  subtotal: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  tax: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  total: number;
 
   @CreateDateColumn()
   createdat: Date;
@@ -64,9 +66,6 @@ export class Quotes {
   @UpdateDateColumn()
   updatedat: Date;
 
-  // -----------------------------
-  // DETALLES DE LA COTIZACIÓN
-  // -----------------------------
   @OneToMany(() => QuoteDetail, (qd) => qd.quote, { cascade: true })
   details: QuoteDetail[];
 }
