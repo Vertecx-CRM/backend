@@ -7,8 +7,16 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { Purchasesmanagement } from './entities/purchasesmanagement.entity';
 import { PurchasesmanagementService } from './purchasesmanagement.service';
 import { UpdatePurchasesmanagementDto } from './dto/update-purchasesmanagement.dto';
@@ -129,9 +137,44 @@ Las validaciones incluyen:
   }
 
   @Post(':id/cancel')
-  @ApiOperation({ summary: 'Cancelar un registro de compras' })
-  @ApiResponse({ status: 200, type: Purchasesmanagement })
-  cancel(@Param('id', ParseIntPipe) id: number) {
-    return this.service.cancel(id);
+  @ApiOperation({
+    summary: 'Cancelar una compra existente',
+    description:
+      'Anula una compra solo si su estado actual es "Aprobado" (stateid = 3). ' +
+      'Si ya está anulada (stateid = 8) o si se encuentra en otro estado, la operación será rechazada. ' +
+      'Opcionalmente puede enviarse una observación explicando el motivo de la anulación.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID de la compra que se desea cancelar',
+    example: 12,
+  })
+  @ApiQuery({
+    name: 'observation',
+    required: false,
+    type: String,
+    description: 'Observación opcional indicando el motivo de la anulación',
+    example: 'El proveedor notificó inconsistencias en la factura',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Compra anulada exitosamente',
+    type: Purchasesmanagement,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Compra no encontrada',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'La compra ya está anulada o no puede ser anulada debido a su estado actual',
+  })
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('observation') observation?: string,
+  ) {
+    return this.service.cancel(id, observation);
   }
 }

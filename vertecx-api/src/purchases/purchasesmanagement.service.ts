@@ -218,7 +218,11 @@ export class PurchasesmanagementService {
       for (let i = 0; i < purchaseProducts.length; i++) {
         const pp = purchaseProducts[i];
         const dtoProduct = dto.products[i];
-        const prodId = dtoProduct.productid || [...productMap.values()].find((p) => p.productname === dtoProduct.productname)?.productid;
+        const prodId =
+          dtoProduct.productid ||
+          [...productMap.values()].find(
+            (p) => p.productname === dtoProduct.productname,
+          )?.productid;
         pp.purchaseorderid = savedPurchase.purchaseorderid;
         pp.productid = prodId ?? [...productMap.values()][0].productid;
       }
@@ -245,8 +249,9 @@ export class PurchasesmanagementService {
       .leftJoinAndSelect('p.supplier', 'supplier')
       .leftJoinAndSelect('p.purchaseProducts', 'pp')
       .leftJoinAndSelect('pp.product', 'product')
+      .where('p.stateid IN (:...states)', { states: [3, 8] })
       .orderBy('p.purchaseorderid', 'DESC')
-      .cache('purchases_list', 60000) // Cache con key específica, 1 minuto
+      .cache('purchases_list_filtered', 60000)
       .getMany();
   }
 
@@ -308,9 +313,9 @@ export class PurchasesmanagementService {
     return await this.purchasesRepo.save(purchase);
   }
 
-  async cancel(id: number) {
-    const purchase = await this.purchasesRepo.findOne({
-      where: { purchaseorderid: id },
+  async cancel(id: number, observation?: string) {
+    const purchase = await this.purchasesRepo.findOneBy({
+      purchaseorderid: id,
     });
 
     if (!purchase) {
@@ -325,11 +330,20 @@ export class PurchasesmanagementService {
       throw new BadRequestException('Solo se pueden anular compras aprobadas.');
     }
 
-    purchase.stateid = 8;
-    purchase.updatedat = new Date();
+    // Armar payload de actualización (solo columnas necesarias)
+    const updateData: Partial<Purchasesmanagement> = {
+      stateid: 8,
+      updatedat: new Date(),
+    };
 
-    const saved = await this.purchasesRepo.save(purchase);
-    return saved;
+    if (observation) {
+      updateData.observation = observation; // opcional
+    }
+
+    await this.purchasesRepo.update({ purchaseorderid: id }, updateData);
+
+    // Retornar compra actualizada (rápido, sin relaciones)
+    return await this.purchasesRepo.findOneBy({ purchaseorderid: id });
   }
 
   async remove(id: number) {
