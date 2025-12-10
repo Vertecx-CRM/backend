@@ -22,6 +22,9 @@ export class Purchasesmanagement {
   @Column({ nullable: false, length: 50 })
   reference: string;
 
+  @Column({ nullable: true, length: 200 })
+  observation: string;
+
   @Column({ nullable: true })
   supplierid: number;
 

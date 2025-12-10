@@ -35,14 +35,14 @@ export class PurchasesmanagementService {
   ) {}
 
   async create(dto: CreatePurchasesmanagementDto) {
-    //  Validación 1: Productos obligatorios
+    // Validación: productos obligatorios
     if (!dto.products || dto.products.length === 0) {
       throw new BadRequestException(
         'Debe incluir al menos un producto en la compra.',
       );
     }
 
-    //  Validación 3: Validar proveedor
+    // Validar proveedor
     const supplier = await this.suppliersRepo.findOne({
       where: { supplierid: dto.supplierid },
     });
@@ -52,7 +52,7 @@ export class PurchasesmanagementService {
       );
     }
 
-    // Validación 4: Validar estado
+    // Validar estado
     const state = await this.statesRepo.findOne({
       where: { stateid: dto.stateid },
     });
@@ -62,18 +62,31 @@ export class PurchasesmanagementService {
       );
     }
 
-    // Validación 5: Duplicados en los productos
-    const uniqueProducts = new Set(dto.products.map((p) => p.productid));
-    if (uniqueProducts.size !== dto.products.length) {
-      throw new BadRequestException(
-        'No se permiten productos duplicados en la compra.',
-      );
-    }
-
-    // Validación 6: Fechas coherentes
+    // Validación: fechas coherentes
     if (dto.updatedat && dto.createdat && dto.updatedat < dto.createdat) {
       throw new BadRequestException(
         'La fecha de actualización no puede ser anterior a la fecha de creación.',
+      );
+    }
+
+    // Validación de duplicados solo para productid existentes
+    const ids = dto.products.filter((p) => p.productid).map((p) => p.productid);
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      throw new BadRequestException(
+        'No se permiten productos duplicados con el mismo productid.',
+      );
+    }
+
+    // Validación de duplicados para productos nuevos (por nombre)
+    const newNames = dto.products
+      .filter((p) => !p.productid && p.productname)
+      .map((p) => p.productname.toLowerCase().trim());
+
+    const uniqueNames = new Set(newNames);
+    if (uniqueNames.size !== newNames.length) {
+      throw new BadRequestException(
+        'No se permiten productos nuevos con el mismo nombre.',
       );
     }
 
@@ -85,14 +98,20 @@ export class PurchasesmanagementService {
       for (const item of dto.products) {
         let product = null;
 
-        // Si viene productid → buscar
+        // Buscar producto existente si viene productid
         if (item.productid) {
           product = await manager.findOne(Products, {
             where: { productid: item.productid },
           });
+
+          if (!product) {
+            throw new BadRequestException(
+              `El producto con ID ${item.productid} no existe.`,
+            );
+          }
         }
 
-        // Si NO existe → CREARLO
+        // Si NO existe → Crear producto nuevo
         if (!product) {
           if (!item.productname || !item.productpriceofsupplier) {
             throw new BadRequestException(
@@ -103,77 +122,106 @@ export class PurchasesmanagementService {
           product = manager.create(Products, {
             productname: item.productname,
             productpriceofsupplier: item.productpriceofsupplier,
-            productpriceofsale: item.productpriceofsupplier * 1.3,
-            productdescription: item.description,
+            productpriceofsale:
+              item.saleprice ?? item.productpriceofsupplier * 1.3,
+            productdescription: item.description ?? null,
             productstock: 0,
             isactive: true,
             categoryid: 1,
-            createddate: new Date().toISOString(),
+            createddate: new Date(),
           });
 
           product = await manager.save(Products, product);
         }
 
-        // Validar cantidad y precio
+        // Validar cantidad
         if (item.quantity <= 0) {
           throw new BadRequestException(
             `La cantidad del producto ${product.productname} debe ser mayor que 0.`,
           );
         }
+
+        // Validar unitprice
         if (item.unitprice <= 0) {
           throw new BadRequestException(
             `El precio unitario del producto ${product.productname} debe ser mayor que 0.`,
           );
         }
 
+        // Validar saleprice coherente
+        if (item.saleprice) {
+          if (item.unitprice > item.saleprice) {
+            throw new BadRequestException(
+              `El precio unitario del producto ${product.productname} no puede ser mayor que su precio de venta.`,
+            );
+          }
+
+          product.productpriceofsale = item.saleprice;
+        }
+
+        // Validar precio final no sea cero
+        if (product.productpriceofsale === 0) {
+          throw new BadRequestException(
+            `El producto ${product.productname} tiene un precio de venta igual a cero. Actualiza su precio antes de continuar.`,
+          );
+        }
+
+        // Actualizar stock
+        product.productstock += item.quantity;
+
+        if (product.productstock < 0) {
+          throw new BadRequestException(
+            `El stock del producto ${product.productname} no puede ser negativo.`,
+          );
+        }
+
+        await manager.save(Products, product);
+
+        // Subtotal y total
         const subtotal = item.quantity * item.unitprice;
         totalAmount += subtotal;
 
+        // Crear entrada en purchase_products
         const payload: any = {
           productid: product.productid,
           quantity: item.quantity,
           unitprice: item.unitprice,
         };
 
-        if (item.description) {
-          payload.description = item.description;
-        }
+        if (item.description) payload.description = item.description;
 
         const purchaseProduct = manager.create(PurchaseProduct, payload);
-
         purchaseProducts.push(purchaseProduct);
       }
 
+      // Generar número de orden
       const year = new Date().getFullYear();
-
       const result = await manager.query(
-        "SELECT nextval('purchase_order_seq')",
+        `SELECT nextval('purchase_order_seq')`,
       );
-
       const nextNumber = result[0].nextval;
-
       const numberoforder = `ORD-${year}-${String(nextNumber).padStart(3, '0')}`;
 
-      // Crear la compra
+      // Crear compra
       const purchase = manager.create(Purchasesmanagement, {
         numberoforder,
         reference: dto.reference,
+        observation: dto.observation,
         supplierid: dto.supplierid,
         stateid: dto.stateid,
         createdat: dto.createdat,
         updatedat: dto.updatedat,
         amount: totalAmount,
-      } as DeepPartial<Purchasesmanagement>);
+      });
 
       const savedPurchase = await manager.save(purchase);
 
-      // Asociar los productos
+      // Asociar productos comprados
       for (const p of purchaseProducts) {
         p.purchaseorderid = savedPurchase.purchaseorderid;
         await manager.save(PurchaseProduct, p);
       }
 
-      // Retornar la compra con sus relaciones
       return await manager.findOne(Purchasesmanagement, {
         where: { purchaseorderid: savedPurchase.purchaseorderid },
         relations: [
