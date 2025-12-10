@@ -48,4 +48,5 @@ scheduledEndAt: Date | null;
   @ManyToOne(() => Customers, { eager: false })
   @JoinColumn({ name: 'clientid' })
   customer: Customers;
+
 }
