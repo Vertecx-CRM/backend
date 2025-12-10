@@ -35,32 +35,26 @@ export class PurchasesmanagementService {
   ) {}
 
   async create(dto: CreatePurchasesmanagementDto) {
-    // Validación: productos obligatorios
     if (!dto.products || dto.products.length === 0) {
       throw new BadRequestException(
         'Debe incluir al menos un producto en la compra.',
       );
     }
 
-    // Validar proveedor
-    const supplier = await this.suppliersRepo.findOne({
-      where: { supplierid: dto.supplierid },
-    });
-    if (!supplier) {
+    // Cargar proveedor y estado EN PARALELO (más rápido)
+    const [supplier, state] = await Promise.all([
+      this.suppliersRepo.findOne({ where: { supplierid: dto.supplierid } }),
+      this.statesRepo.findOne({ where: { stateid: dto.stateid } }),
+    ]);
+
+    if (!supplier)
       throw new NotFoundException(
         `Proveedor con ID ${dto.supplierid} no encontrado.`,
       );
-    }
-
-    // Validar estado
-    const state = await this.statesRepo.findOne({
-      where: { stateid: dto.stateid },
-    });
-    if (!state) {
+    if (!state)
       throw new NotFoundException(
         `Estado con ID ${dto.stateid} no encontrado.`,
       );
-    }
 
     // Validación: fechas coherentes
     if (dto.updatedat && dto.createdat && dto.updatedat < dto.createdat) {
@@ -69,41 +63,48 @@ export class PurchasesmanagementService {
       );
     }
 
-    // Validación de duplicados solo para productid existentes
+    // --- VALIDACIONES DE DUPLICADOS ---
     const ids = dto.products.filter((p) => p.productid).map((p) => p.productid);
-    const uniqueIds = new Set(ids);
-    if (uniqueIds.size !== ids.length) {
+    if (new Set(ids).size !== ids.length) {
       throw new BadRequestException(
         'No se permiten productos duplicados con el mismo productid.',
       );
     }
 
-    // Validación de duplicados para productos nuevos (por nombre)
     const newNames = dto.products
       .filter((p) => !p.productid && p.productname)
       .map((p) => p.productname.toLowerCase().trim());
 
-    const uniqueNames = new Set(newNames);
-    if (uniqueNames.size !== newNames.length) {
+    if (new Set(newNames).size !== newNames.length) {
       throw new BadRequestException(
         'No se permiten productos nuevos con el mismo nombre.',
       );
     }
 
-    // Transacción principal
+    //  TRANSACCIÓN OPTIMIZADA
     return await this.dataSource.transaction(async (manager) => {
       const purchaseProducts: PurchaseProduct[] = [];
+
+      const existingIds = ids.length > 0 ? ids : [-1];
+
+      // Cargar TODOS los productos existentes en UNA sola consulta
+      const existingProducts = await manager.find(Products, {
+        where: { productid: In(existingIds) },
+      });
+
+      // Mapa en memoria → acceso O(1)
+      const productMap = new Map(existingProducts.map((p) => [p.productid, p]));
+
       let totalAmount = 0;
+
+      //  BATCH creada de nuevos productos
+      const newProductsToCreate: Products[] = [];
 
       for (const item of dto.products) {
         let product = null;
 
-        // Buscar producto existente si viene productid
         if (item.productid) {
-          product = await manager.findOne(Products, {
-            where: { productid: item.productid },
-          });
-
+          product = productMap.get(item.productid);
           if (!product) {
             throw new BadRequestException(
               `El producto con ID ${item.productid} no existe.`,
@@ -111,7 +112,6 @@ export class PurchasesmanagementService {
           }
         }
 
-        // Si NO existe → Crear producto nuevo
         if (!product) {
           if (!item.productname || !item.productpriceofsupplier) {
             throw new BadRequestException(
@@ -131,7 +131,7 @@ export class PurchasesmanagementService {
             createddate: new Date(),
           });
 
-          product = await manager.save(Products, product);
+          newProductsToCreate.push(product);
         }
 
         // Validar cantidad
@@ -149,50 +149,48 @@ export class PurchasesmanagementService {
         }
 
         // Validar saleprice coherente
-        if (item.saleprice) {
-          if (item.unitprice > item.saleprice) {
-            throw new BadRequestException(
-              `El precio unitario del producto ${product.productname} no puede ser mayor que su precio de venta.`,
-            );
-          }
+        if (item.saleprice && item.unitprice > item.saleprice) {
+          throw new BadRequestException(
+            `El precio unitario del producto ${product.productname} no puede ser mayor que su precio de venta.`,
+          );
+        }
 
+        if (item.saleprice) {
           product.productpriceofsale = item.saleprice;
         }
 
-        // Validar precio final no sea cero
         if (product.productpriceofsale === 0) {
           throw new BadRequestException(
-            `El producto ${product.productname} tiene un precio de venta igual a cero. Actualiza su precio antes de continuar.`,
+            `El producto ${product.productname} tiene un precio de venta igual a cero.`,
           );
         }
 
-        // Actualizar stock
+        // Stock sumado internamente, sin guardar aún
         product.productstock += item.quantity;
 
-        if (product.productstock < 0) {
-          throw new BadRequestException(
-            `El stock del producto ${product.productname} no puede ser negativo.`,
-          );
-        }
+        totalAmount += item.quantity * item.unitprice;
 
-        await manager.save(Products, product);
-
-        // Subtotal y total
-        const subtotal = item.quantity * item.unitprice;
-        totalAmount += subtotal;
-
-        // Crear entrada en purchase_products
         const payload: any = {
-          productid: product.productid,
+          productid: undefined, // se rellena luego
           quantity: item.quantity,
           unitprice: item.unitprice,
+          description: item.description ?? null,
         };
-
-        if (item.description) payload.description = item.description;
 
         const purchaseProduct = manager.create(PurchaseProduct, payload);
         purchaseProducts.push(purchaseProduct);
       }
+
+      // INSERTAR TODOS LOS PRODUCTOS NUEVOS EN BATCH
+      if (newProductsToCreate.length > 0) {
+        const savedNew = await manager.save(Products, newProductsToCreate);
+        for (const p of savedNew) {
+          productMap.set(p.productid, p);
+        }
+      }
+
+      // GUARDAR ACTUALIZACIONES DE STOCK EN BATCH
+      await manager.save(Products, Array.from(productMap.values()));
 
       // Generar número de orden
       const year = new Date().getFullYear();
@@ -216,11 +214,17 @@ export class PurchasesmanagementService {
 
       const savedPurchase = await manager.save(purchase);
 
-      // Asociar productos comprados
-      for (const p of purchaseProducts) {
-        p.purchaseorderid = savedPurchase.purchaseorderid;
-        await manager.save(PurchaseProduct, p);
+      // Asignar purchaseorderid a todos los purchase_products
+      for (let i = 0; i < purchaseProducts.length; i++) {
+        const pp = purchaseProducts[i];
+        const dtoProduct = dto.products[i];
+        const prodId = dtoProduct.productid || [...productMap.values()].find((p) => p.productname === dtoProduct.productname)?.productid;
+        pp.purchaseorderid = savedPurchase.purchaseorderid;
+        pp.productid = prodId ?? [...productMap.values()][0].productid;
       }
+
+      // BATCH insert de purchase_products
+      await manager.save(PurchaseProduct, purchaseProducts);
 
       return await manager.findOne(Purchasesmanagement, {
         where: { purchaseorderid: savedPurchase.purchaseorderid },
@@ -235,7 +239,7 @@ export class PurchasesmanagementService {
   }
 
   async findAll() {
-    return await this.purchasesRepository
+    return await this.purchasesRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.state', 'state')
       .leftJoinAndSelect('p.supplier', 'supplier')
