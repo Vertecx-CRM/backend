@@ -315,36 +315,17 @@ export class UsersService {
 
   // Listar todos
     async findAll() {
-      const users = await this.usersRepository
-        .createQueryBuilder('user')
-        .leftJoinAndSelect('user.states', 'state')
-        .leftJoinAndSelect('user.typeofdocuments', 'docType')
-        .leftJoinAndSelect('user.roles', 'role')
-        .leftJoinAndSelect('user.technicians', 'tech')
-        .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
-        .leftJoinAndSelect('typeMap.techniciantype', 'techType')
-        .leftJoinAndSelect('user.customers', 'cust')
-        .orderBy('user.userid', 'ASC')
-        .getMany();
-
-      const usersWithFlags = await Promise.all(
-        users.map(async (user) => {
-          const customerIds =
-            user.customers?.map((customer) => customer.customerid) ?? [];
-          const technicianIds =
-            user.technicians?.map((technician) => technician.technicianid) ?? [];
-          const hasAssociations = await this.hasUserLinkedRecords(
-            customerIds,
-            technicianIds,
-          );
-          return {
-            ...user,
-            hasAssociations,
-          };
-        }),
-      );
-
-      return { success: true, data: usersWithFlags };
+    return await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.states', 'state')
+      .leftJoinAndSelect('user.typeofdocuments', 'docType')
+      .leftJoinAndSelect('user.roles', 'role')
+      .leftJoinAndSelect('user.technicians', 'tech')
+      .leftJoinAndSelect('tech.technicianTypeMaps', 'typeMap')
+      .leftJoinAndSelect('typeMap.techniciantype', 'techType')
+      .leftJoinAndSelect('user.customers', 'cust')
+      .orderBy('user.userid', 'ASC')
+      .getMany();
     }
 
   // Buscar por ID
@@ -720,6 +701,5 @@ export class UsersService {
     return { success: true, message: 'Contrase�a actualizada correctamente.' };
   }
 }
-
 
 

@@ -235,7 +235,7 @@ export class PurchasesmanagementService {
   }
 
   async findAll() {
-    return await this.purchasesRepository
+    return await this.purchasesRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.state', 'state')
       .leftJoinAndSelect('p.supplier', 'supplier')
