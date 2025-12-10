@@ -25,14 +25,20 @@ import {
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
-  // 📘 POST /sales
+  //  POST /sales
   @Post()
   @ApiOperation({
     summary: 'Crear una nueva venta',
     description:
-      'Crea una nueva venta con sus detalles (productos, cantidades, descuentos, etc.).',
+      'Crea una nueva venta con sus detalles (productos, cantidades, precios, descuentos, etc.). ' +
+      'Los campos obligatorios son: customerid, saledate, salecode, subtotal, totalamount y al menos un detalle.',
   })
-  @ApiBody({ type: CreateSaleDto })
+  @ApiBody({
+    type: CreateSaleDto,
+    description:
+      'Objeto que representa la venta y su detalle. Algunos campos son opcionales y pueden omitirse, ' +
+      'en cuyo caso el backend puede aplicar valores por defecto (por ejemplo, impuestos o estado inicial).',
+  })
   @ApiResponse({
     status: 201,
     description: 'Venta creada exitosamente.',
@@ -40,13 +46,13 @@ export class SalesController {
   @ApiResponse({
     status: 400,
     description:
-      'Error en la solicitud (por ejemplo, productos vacíos o datos inválidos).',
+      'Error en la solicitud (por ejemplo, lista de productos vacía, IDs inválidos, o datos inconsistentes).',
   })
   create(@Body() createSaleDto: CreateSaleDto) {
     return this.salesService.create(createSaleDto);
   }
 
-  // 📘 GET /sales
+  // GET /sales
   @Get()
   @ApiOperation({
     summary: 'Obtener todas las ventas',
@@ -60,7 +66,7 @@ export class SalesController {
     return this.salesService.findAll();
   }
 
-  // 📘 GET /sales/:id
+  // GET /sales/:id
   @Get(':id')
   @ApiOperation({
     summary: 'Obtener una venta por ID',
@@ -85,7 +91,7 @@ export class SalesController {
     return this.salesService.findOne(+id);
   }
 
-  // 📘 PATCH /sales/:id
+  // PATCH /sales/:id
   @Patch(':id')
   @ApiOperation({
     summary: 'Actualizar una venta',
@@ -111,7 +117,7 @@ export class SalesController {
     return this.salesService.update(+id, updateSaleDto);
   }
 
-  // 📘 DELETE /sales/:id
+  // DELETE /sales/:id
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
