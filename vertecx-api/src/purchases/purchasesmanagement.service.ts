@@ -235,17 +235,39 @@ export class PurchasesmanagementService {
   }
 
   async findAll() {
-    return await this.purchasesRepo.find({
-      where: {
-        stateid: Not(In([1, 2, 4, 5, 6, 7])),
+    return await this.purchasesRepository
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.state', 'state')
+      .leftJoinAndSelect('p.supplier', 'supplier')
+      .leftJoinAndSelect('p.purchaseProducts', 'pp')
+      .leftJoinAndSelect('pp.product', 'product')
+      .orderBy('p.purchaseorderid', 'DESC')
+      .cache('purchases_list', 60000) // Cache con key específica, 1 minuto
+      .getMany();
+  }
+
+  async findAllPaginated(page: number = 1, limit: number = 20) {
+    const [data, total] = await this.purchasesRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.state', 'state')
+      .leftJoinAndSelect('p.supplier', 'supplier')
+      .leftJoinAndSelect('p.purchaseProducts', 'pp')
+      .leftJoinAndSelect('pp.product', 'product')
+      .orderBy('p.purchaseorderid', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .cache(`purchases_page_${page}_${limit}`, 60000)
+      .getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-      relations: [
-        'state',
-        'supplier',
-        'purchaseProducts',
-        'purchaseProducts.product',
-      ],
-    });
+    };
   }
 
   async findOne(id: number) {
