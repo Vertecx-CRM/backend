@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Patch,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -16,6 +7,7 @@ import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -39,9 +31,17 @@ export class AuthController {
     return this.auth.login(req.user);
   }
 
+  @HttpCode(200)
+  @ApiBody({ type: RefreshTokenDto })
+  @Post('refresh')
+  refreshPost(@Body() dto: RefreshTokenDto) {
+    return this.auth.refreshByToken(dto.refresh_token);
+  }
+
+  @HttpCode(200)
   @UseGuards(RefreshGuard)
   @Get('refresh')
-  refresh(@Req() req: any) {
+  refreshGet(@Req() req: any) {
     return this.auth.refresh(req.user);
   }
 
@@ -49,7 +49,6 @@ export class AuthController {
   async register(@Body() dto: any) {
     return this.auth.register(dto);
   }
-
 
   @Post('forgot-password')
   @HttpCode(200)
@@ -61,14 +60,11 @@ export class AuthController {
     };
   }
 
-
   @Post('reset-password')
   @HttpCode(200)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.auth.resetPassword(dto.token, dto.password);
-    return {
-      message: 'Contraseña actualizada correctamente',
-    };
+    return { message: 'Contraseña actualizada correctamente' };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -82,10 +78,6 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @Patch('change-password')
   changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
-    return this.auth.changePassword(
-      req.user.userid,
-      dto.currentPassword,
-      dto.newPassword,
-    );
+    return this.auth.changePassword(req.user.userid, dto.currentPassword, dto.newPassword);
   }
 }

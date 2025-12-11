@@ -1,4 +1,4 @@
-import { IsDateString, IsString, Matches } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
 
 export class FinishOrderDto {
   @IsDateString()
@@ -7,4 +7,9 @@ export class FinishOrderDto {
   @IsString()
   @Matches(/^\d{2}:\d{2}(:\d{2})?$/)
   horafin: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  stateid?: number;
 }
