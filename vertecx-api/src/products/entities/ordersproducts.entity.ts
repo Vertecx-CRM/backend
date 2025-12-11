@@ -6,7 +6,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Products } from './products.entity';
-import { Ordersservices } from 'src/services/entities/ordersservices.entity';
+import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
 
 @Entity('ordersproducts')
 export class Ordersproducts {
@@ -23,7 +23,7 @@ export class Ordersproducts {
   @JoinColumn({ name: 'productid' })
   products: Products;
 
-  @ManyToOne(() => Ordersservices)
+  @ManyToOne(() => OrdersServices)
   @JoinColumn({ name: 'ordersid' })
-  ordersservices: Ordersservices;
+  ordersservices: OrdersServices;
 }

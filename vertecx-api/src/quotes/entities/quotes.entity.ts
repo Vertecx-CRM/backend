@@ -1,4 +1,5 @@
-import { Ordersservices } from 'src/services/entities/ordersservices.entity';
+import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
+import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
 import { States } from 'src/shared/entities/states.entity';
 import {
   Entity,
@@ -6,30 +7,65 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+import { QuoteDetail } from './quotedetail.entity';
 
 @Entity('quotes')
 export class Quotes {
   @PrimaryGeneratedColumn()
   quotesid: number;
 
-  @Column({ nullable: false })
+  @Column({ nullable: true })
   ordersservicesid: number;
 
-  @Column({ nullable: false })
+  @ManyToOne(() => OrdersServices, { nullable: true })
+  @JoinColumn({ name: 'ordersservicesid' })
+  ordersservices: OrdersServices;
+
+  @Column({ name: 'servicerequestid', nullable: false })
+  serviceRequestId: number;
+
+  @ManyToOne(() => ServiceRequest, { nullable: false })
+  @JoinColumn({ name: 'servicerequestid' })
+  serviceRequest: ServiceRequest;
+
+  @Column({ name: 'statesid', nullable: false })
   statesid: number;
 
-  @Column({ nullable: true })
-  quotedata: string;
+  @ManyToOne(() => States, { nullable: false })
+  @JoinColumn({ name: 'statesid' })
+  state: States;
 
   @Column({ nullable: true })
   observation: string;
 
-  @ManyToOne(() => Ordersservices)
-  @JoinColumn({ name: 'ordersservicesid' })
-  ordersservices: Ordersservices;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  servicetype: string;
 
-  @ManyToOne(() => States)
-  @JoinColumn({ name: 'quotesid' })
-  states: States;
+  @Column({ type: 'int', nullable: true })
+  customerid: number;
+
+  @Column({ type: 'int', nullable: true })
+  technicianid: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  subtotal: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  tax: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  total: number;
+
+  @CreateDateColumn()
+  createdat: Date;
+
+  @UpdateDateColumn()
+  updatedat: Date;
+
+  @OneToMany(() => QuoteDetail, (qd) => qd.quote, { cascade: true })
+  details: QuoteDetail[];
 }

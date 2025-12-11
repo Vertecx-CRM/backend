@@ -1,3 +1,4 @@
+import { Sales } from 'src/sales/entities/sales.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Users } from 'src/users/entities/users.entity';
 import {
@@ -6,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('customers')
@@ -15,12 +17,6 @@ export class Customers {
 
   @Column({ nullable: false })
   userid: number;
-
-  @Column({ nullable: false })
-  stateid: number;
-
-  @Column({ nullable: true })
-  customeraddress: string;
 
   @Column({ nullable: true })
   customercity: string;
@@ -32,7 +28,6 @@ export class Customers {
   @JoinColumn({ name: 'userid' })
   users: Users;
 
-  @ManyToOne(() => States)
-  @JoinColumn({ name: 'stateid' })
-  states: States;
+  @OneToMany(() => Sales, (sale) => sale.customer)
+  sales: Sales[];
 }

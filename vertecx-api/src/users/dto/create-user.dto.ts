@@ -1,1 +1,66 @@
-export class CreateUserDto {}
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsNumber,
+  Length,
+  Matches,
+  IsArray,
+} from 'class-validator';
+
+export class CreateUserDto {
+  @IsString({ message: 'El nombre debe ser un texto.' })
+  @Length(3, 50, { message: 'El nombre debe tener entre 3 y 50 caracteres.' })
+  @Matches(/^[A-Za-zÁÉÍÓÚáéíóúñÑüÜ'\s]+$/, {
+    message: 'El nombre no puede contener números ni caracteres especiales.',
+  })
+  name: string;
+
+  @IsOptional()
+  lastname?: string;
+
+  @IsEmail({}, { message: 'El formato del correo electrónico es inválido.' })
+  email: string;
+
+  @IsString({ message: 'El teléfono debe ser texto numérico.' })
+  @Matches(/^[0-9]{7,15}$/, {
+    message: 'El teléfono debe tener entre 7 y 15 dígitos numéricos.',
+  })
+  phone: string;
+
+  @IsNumber({}, { message: 'El tipo de documento debe ser un número válido.' })
+  typeid: number;
+
+  @IsString({ message: 'El número de documento debe ser texto.' })
+  @IsOptional()
+  documentnumber?: string;
+
+  @IsOptional()
+  @IsString({ message: 'La imagen debe ser una cadena de texto (URL o base64).' })
+  image?: string;
+
+  @IsNumber({}, { message: 'El estado debe ser un número válido.' })
+  stateid: number;
+
+  @IsNumber({}, { message: 'El rol debe ser un número válido.' })
+  roleid: number;
+
+  @IsOptional()
+  @IsArray()
+  techniciantypeids?: number[];
+
+  @IsOptional()
+  @IsString()
+  CV?: string;
+
+  @IsOptional()
+  @IsString()
+  customercity?: string;
+
+  @IsOptional()
+  @IsString()
+  customerzipcode?: string;
+
+  @IsOptional()
+  isNit?: boolean;
+}

@@ -1,15 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
-import { UpdateRequestDto } from './dto/update-request.dto';
+import { UpdateServiceRequestDto } from './dto/update-request.dto';
 
-@Controller('requests')
+@Controller('service-requests')
 export class RequestsController {
   constructor(private readonly requestsService: RequestsService) {}
 
   @Post()
-  create(@Body() createRequestDto: CreateRequestDto) {
-    return this.requestsService.create(createRequestDto);
+  create(@Body() dto: CreateRequestDto) {
+    return this.requestsService.create(dto);
   }
 
   @Get()
@@ -18,17 +18,22 @@ export class RequestsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.requestsService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.requestsService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateRequestDto: UpdateRequestDto) {
-    return this.requestsService.update(+id, updateRequestDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateServiceRequestDto) {
+    return this.requestsService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.requestsService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.requestsService.remove(id);
+  }
+
+  @Get('states/all')
+  findAllStates() {
+    return this.requestsService.findAllStates();
   }
 }

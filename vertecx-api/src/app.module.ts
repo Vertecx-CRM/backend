@@ -16,9 +16,21 @@ import { QuotesModule } from './quotes/quotes.module';
 import { RequestsModule } from './requests/requests.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesmanagementModule } from './purchases/purchasesmanagement.module';
+import { TypeofdocumentsModule } from './typeofdocuments/typeofdocuments.module';
+import { MailModule } from './shared/mail/mail.module';
+import { ConfigModule } from '@nestjs/config';
+import { TechniciantypesModule } from './technicians/techniciantypes/techniciantypes.module';
+import { AuthModule } from './auth/auth.module';
+import { OrdersServicesModule } from './orders-services/orders-services.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { SystemStatus } from './security/panic/system-status.entity';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([SystemStatus]),
+    AuthModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     SalesModule,
     UsersModule,
@@ -33,9 +45,16 @@ import { PurchasesmanagementModule } from './purchases/purchasesmanagement.modul
     ServicesModule,
     QuotesModule,
     RequestsModule,
+    OrdersServicesModule,
     SuppliersModule,
+    TypeofdocumentsModule,
+    MailModule,
+    TechniciantypesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService
+  ],
 })
 export class AppModule {}

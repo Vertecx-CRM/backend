@@ -1,4 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { Roleconfiguration } from './roleconfiguration.entity';
+import { Users } from 'src/users/entities/users.entity';
 
 @Entity('roles')
 export class Roles {
@@ -10,4 +12,10 @@ export class Roles {
 
   @Column({ nullable: false })
   name: string;
+
+  @OneToMany(() => Roleconfiguration, (roleConfig) => roleConfig.roles)
+  roleconfigurations: Roleconfiguration[];
+
+  @OneToMany(() => Users, (user) => user.roles)
+  users: Users[];
 }

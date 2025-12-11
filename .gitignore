@@ -144,4 +144,11 @@ node_modules/
 scripts/
 scripts/generate-entities.ts
 dist/
-
+node_modules/
+/node_modules
+dist/
+node_modules/
+.env
+security/
+security/panic
+/security
