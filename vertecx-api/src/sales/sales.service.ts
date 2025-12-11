@@ -146,12 +146,72 @@ export class SalesService {
     return await this.salesRepo.save(sale);
   }
 
-  //  Eliminar venta (con detalles)
-  async remove(id: number) {
-    const sale = await this.salesRepo.findOne({ where: { saleid: id } });
-    if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
+  /* ============================================================
+     CANCELAR VENTA (revierte stock + valida estado)
+  ============================================================ */
+  async cancel(id: number, observation?: string) {
+    const sale = await this.salesRepo.findOne({
+      where: { saleid: id },
+      relations: ['salesdetail'],
+    });
 
-    await this.detailsRepo.delete({ saleid: id });
-    return await this.salesRepo.delete(id);
+    if (!sale) throw new NotFoundException('Venta no encontrada.');
+
+    if (sale.salestatus === 'Cancelled') {
+      throw new BadRequestException('La venta ya está anulada.');
+    }
+
+    if (sale.salestatus !== 'Pending' && sale.salestatus !== 'Completed') {
+      throw new BadRequestException(
+        'Solo se pueden anular ventas en estado Pending o Completed.',
+      );
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      // Reintegrar stock
+      for (const detail of sale.salesdetail) {
+        await manager.increment(
+          Products,
+          { productid: detail.productid },
+          'productstock',
+          detail.quantity,
+        );
+      }
+
+      // Actualizar estado
+      await manager.update(
+        Sales,
+        { saleid: id },
+        {
+          salestatus: 'Cancelled',
+          notes: observation ?? sale.notes,
+        },
+      );
+
+      return manager.findOne(Sales, { where: { saleid: id } });
+    });
+  }
+
+  /* ============================================================
+     ELIMINAR VENTA (solo si está cancelada)
+  ============================================================ */
+  async remove(id: number) {
+    const sale = await this.salesRepo.findOne({
+      where: { saleid: id },
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada.');
+    }
+
+    if (sale.salestatus !== 'Cancelled') {
+      throw new BadRequestException(
+        'Solo se pueden eliminar ventas que ya estén anuladas.',
+      );
+    }
+
+    await this.salesRepo.remove(sale);
+
+    return { message: `Venta ${id} eliminada correctamente.` };
   }
 }
