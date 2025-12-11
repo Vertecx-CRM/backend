@@ -8,6 +8,7 @@ export class RefreshJwtStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req) => req?.cookies?.refresh_token,
+        (req) => req?.body?.refresh_token || req?.body?.refreshToken,
         ExtractJwt.fromAuthHeaderAsBearerToken(),
       ]),
       secretOrKey: process.env.JWT_REFRESH_SECRET,

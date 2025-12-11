@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -71,18 +71,62 @@ export class AuthService {
     });
   }
 
-  async login(userPayload: any) {
+  private issueTokensFromPayload(userPayload: any) {
     const { exp, iat, ...clean } = userPayload;
     const access_token = this.signAccess(clean);
     const refresh_token = this.signRefresh(clean);
     return { access_token, refresh_token };
   }
 
+  async login(userPayload: any) {
+    return this.issueTokensFromPayload(userPayload);
+  }
+
   async refresh(userPayload: any) {
-    const { exp, iat, ...clean } = userPayload;
-    const access_token = this.signAccess(clean);
-    const refresh_token = this.signRefresh(clean);
-    return { access_token, refresh_token };
+    const userid = userPayload?.userid;
+    if (!userid) throw new BadRequestException('Token inválido');
+
+    const user = await this.users.findOne({
+      where: { userid },
+      relations: ['roles'],
+    });
+
+    if (!user || user.stateid !== 1) {
+      throw new BadRequestException('Usuario no válido');
+    }
+
+    const permissions = await this.access.getAccessKeys(user.roleid);
+
+    const clean = {
+      userid: user.userid,
+      email: user.email,
+      name: user.name,
+      roleid: user.roleid,
+      rolename: user.roles?.name,
+      isactive: user.stateid === 1,
+      mustchangepassword: user.mustchangepassword,
+      permissions: Array.from(permissions),
+    };
+
+    return this.issueTokensFromPayload(clean);
+  }
+
+  async refreshByToken(refreshToken: string) {
+    if (!refreshToken) throw new UnauthorizedException('Refresh token requerido');
+
+    let decoded: any;
+    try {
+      decoded = this.jwt.verify(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+    } catch {
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
+
+    const userid = decoded?.userid ?? decoded?.sub;
+    if (!userid) throw new UnauthorizedException('Refresh token inválido');
+
+    return this.refresh({ userid });
   }
 
   async register(data: {
@@ -136,18 +180,14 @@ export class AuthService {
 
     const token = this.signResetToken(user);
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(
-      token,
-    )}`;
+    const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
 
     await this.mailService.sendPasswordReset(user.email, user.name, resetLink);
   }
 
-  // === NUEVO: aplicar nueva contraseña ===
   async resetPassword(token: string, newPassword: string): Promise<void> {
     try {
-      const secret =
-        process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
+      const secret = process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
 
       const decoded = this.jwt.verify<{
         sub: number;
@@ -171,24 +211,19 @@ export class AuthService {
       user.updateat = new Date();
 
       await this.users.save(user);
-    } catch (error) {
+    } catch {
       throw new BadRequestException(
         'El enlace para restablecer la contraseña no es válido o ha expirado',
       );
     }
   }
 
-  async changePassword(
-    userid: number,
-    currentPassword: string,
-    newPassword: string,
-  ) {
+  async changePassword(userid: number, currentPassword: string, newPassword: string) {
     const user = await this.users.findOne({ where: { userid } });
     if (!user) throw new BadRequestException('Usuario no encontrado');
 
     const ok = await bcrypt.compare(currentPassword, user.password);
-    if (!ok)
-      throw new BadRequestException('La contrase�a actual es incorrecta.');
+    if (!ok) throw new BadRequestException('La contraseña actual es incorrecta.');
 
     user.password = await bcrypt.hash(newPassword, 10);
     user.mustchangepassword = false;
@@ -196,6 +231,6 @@ export class AuthService {
 
     await this.users.save(user);
 
-    return { success: true, message: 'Contrase�a actualizada correctamente.' };
+    return { success: true, message: 'Contraseña actualizada correctamente.' };
   }
 }
