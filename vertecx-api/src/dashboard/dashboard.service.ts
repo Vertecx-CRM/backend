@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Customers } from "src/customers/entities/customers.entity";
 import { ProductCategory } from "src/products-categories/entities/product-category.entity";
@@ -21,184 +21,236 @@ export class DashboardService {
     @InjectRepository(ServiceRequest) private serviceRequestsRepo: Repository<ServiceRequest>
   ) { }
 
-  // VENTAS POR MES
+
+  //  VALIDACION DE AÑO
+  private validateYear(year?: number): number | null {
+    if (year === undefined || year === null || year === 0) return null;
+
+    if (typeof year !== "number" || year < 2000 || year > 2100) {
+      throw new BadRequestException("El año es inválido.");
+    }
+
+    return year;
+  }
+
+
+  //  VENTAS POR MES
+
   async getSalesByMonth(year?: number) {
-    return this.salesRepo.query(`
-      SELECT 
-        TO_CHAR(saledate, 'Mon') AS month,
-        SUM(totalamount) AS total
-      FROM sales
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM saledate) = $1)
-      GROUP BY month
-      ORDER BY MIN(saledate);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.salesRepo
+      .createQueryBuilder("s")
+      .select("TO_CHAR(s.saledate, 'Mon')", "month")
+      .addSelect("SUM(s.totalamount)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM s.saledate) = :year", { year: y })
+      .groupBy("month")
+      .orderBy("MIN(s.saledate)")
+      .getRawMany();
   }
 
-  // TOTAL DE VENTAS
+
+  //  TOTAL VENTAS
+
   async getTotalSales(year?: number) {
-    const result = await this.salesRepo.query(`
-      SELECT SUM(totalamount) AS total
-      FROM sales
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM saledate) = $1);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
 
-    return { total: Number(result[0].total) || 0 };
+    const result = await this.salesRepo
+      .createQueryBuilder("s")
+      .select("SUM(s.totalamount)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM s.saledate) = :year", { year: y })
+      .getRawOne();
+
+    return { total: Number(result.total) || 0 };
   }
 
-  // VENTAS DIARIAS POR MES
+
+  //  VENTAS DIARIAS POR MES
+
   async getDailySalesByMonth(month: number, year?: number) {
-    return this.salesRepo.query(`
-      SELECT
-        EXTRACT(DAY FROM saledate) AS day,
-        SUM(totalamount) AS total
-      FROM sales
-      WHERE EXTRACT(MONTH FROM saledate) = $1
-        AND ($2::int IS NULL OR EXTRACT(YEAR FROM saledate) = $2)
-      GROUP BY day
-      ORDER BY day;
-    `, [month, year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.salesRepo
+      .createQueryBuilder("s")
+      .select("EXTRACT(DAY FROM s.saledate)", "day")
+      .addSelect("SUM(s.totalamount)", "total")
+      .where("EXTRACT(MONTH FROM s.saledate) = :month", { month })
+      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM s.saledate) = :year", { year: y })
+      .groupBy("day")
+      .orderBy("day")
+      .getRawMany();
   }
+
 
   // COMPRAS POR MES
   async getPurchasesByMonth(year?: number) {
-    return this.purchasesRepo.query(`
-      SELECT 
-        TO_CHAR(createdat, 'Mon') AS month,
-        SUM(amount) AS total
-      FROM purchasesmanagement
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1)
-      GROUP BY month
-      ORDER BY MIN(createdat);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.purchasesRepo
+      .createQueryBuilder("p")
+      .select("TO_CHAR(p.createdat, 'Mon')", "month")
+      .addSelect("SUM(p.amount)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createdat) = :year", { year: y })
+      .groupBy("month")
+      .orderBy("MIN(p.createdat)")
+      .getRawMany();
   }
 
-  // TOTAL DE COMPRAS
+
+  //  TOTAL COMPRAS
   async getTotalPurchases(year?: number) {
-    const result = await this.purchasesRepo.query(`
-      SELECT SUM(amount) AS total
-      FROM purchasesmanagement
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
 
-    return { total: Number(result[0].total) || 0 };
+    const result = await this.purchasesRepo
+      .createQueryBuilder("p")
+      .select("SUM(p.amount)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createdat) = :year", { year: y })
+      .getRawOne();
+
+    return { total: Number(result.total) || 0 };
   }
 
-  // COMPRAS DIARIAS POR MES
+  //  COMPRAS DIARIAS POR MES
+
   async getDailyPurchasesByMonth(month: number, year?: number) {
-    return this.purchasesRepo.query(`
-      SELECT
-        EXTRACT(DAY FROM createdat) AS day,
-        SUM(amount) AS total
-      FROM purchasesmanagement
-      WHERE EXTRACT(MONTH FROM createdat) = $1
-        AND ($2::int IS NULL OR EXTRACT(YEAR FROM createdat) = $2)
-      GROUP BY day
-      ORDER BY day;
-    `, [month, year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.purchasesRepo
+      .createQueryBuilder("p")
+      .select("EXTRACT(DAY FROM p.createdat)", "day")
+      .addSelect("SUM(p.amount)", "total")
+      .where("EXTRACT(MONTH FROM p.createdat) = :month", { month })
+      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createdat) = :year", { year: y })
+      .groupBy("day")
+      .orderBy("day")
+      .getRawMany();
   }
 
-  // PRODUCTOS POR CATEGORÍA
+ 
+  // PRODUCTOS POR CATEGORIA
   async getCategoryProducts(year?: number) {
-    return this.categoryRepo.query(`
-    SELECT 
-      c.categoryname AS category,
-      COUNT(p.productid) AS value
-    FROM categories c
-    LEFT JOIN products p ON p.categoryid = c.categoryid
-    WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM p.createddate) = $1)
-    GROUP BY c.categoryname;
-  `, [year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.categoryRepo
+      .createQueryBuilder("c")
+      .select("c.categoryname", "category")
+      .addSelect("COUNT(p.productid)", "value")
+      .leftJoin(Products, "p", "p.categoryid = c.categoryid")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createddate) = :year", { year: y })
+      .groupBy("c.categoryname")
+      .getRawMany();
   }
 
 
-  // ÓRDENES POR ESTADO
+  //  ÓRDENES POR ESTADO
+
   async getOrdersByState(year?: number) {
-    return this.orderRepo.query(`
-      SELECT 
-        st.name AS state,
-        COUNT(o.ordersservicesid) AS value
-      FROM ordersservices o
-      JOIN states st ON st.stateid = o.stateid
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM o.createdat) = $1)
-      GROUP BY st.name
-      ORDER BY st.name;
-    `, [year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.orderRepo
+      .createQueryBuilder("o")
+      .innerJoin("states", "st", "st.stateid = o.stateid")
+      .select("st.name", "state")
+      .addSelect("COUNT(o.ordersservicesid)", "value")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM o.createdat) = :year", { year: y })
+      .groupBy("st.name")
+      .orderBy("st.name")
+      .getRawMany();
   }
+
+
 
   // TOTAL ÓRDENES
   async getTotalOrders(year?: number) {
-    const result = await this.orderRepo.query(`
-      SELECT COUNT(*) AS total
-      FROM ordersservices
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
 
-    return { total: Number(result[0].total) || 0 };
+    const result = await this.orderRepo
+      .createQueryBuilder("o")
+      .select("COUNT(o.ordersservicesid)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM o.createdat) = :year", { year: y })
+      .getRawOne();
+
+    return { total: Number(result.total) || 0 };
   }
+
 
   // CLIENTES POR MES
   async getClientsByMonth(year?: number) {
-    return this.customerRepo.query(`
-      SELECT
-        TO_CHAR(u.createat, 'Mon') AS month,
-        COUNT(*) AS total
-      FROM customers c
-      JOIN users u ON u.userid = c.userid
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $1)
-      GROUP BY month
-      ORDER BY MIN(u.createat);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.customerRepo
+      .createQueryBuilder("c")
+      .innerJoin("users", "u", "u.userid = c.userid")
+      .select("TO_CHAR(u.createat, 'Mon')", "month")
+      .addSelect("COUNT(*)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM u.createat) = :year", { year: y })
+      .groupBy("month")
+      .orderBy("MIN(u.createat)")
+      .getRawMany();
   }
 
-  // TOTAL CLIENTES
+
+
+  //  TOTAL CLIENTES
   async getTotalClients(year?: number) {
-    const result = await this.customerRepo.query(`
-      SELECT COUNT(*) AS total
-      FROM customers c
-      JOIN users u ON u.userid = c.userid
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $1);
-    `, [year ?? null]);
+    const y = this.validateYear(year);
 
-    return { total: Number(result[0].total) || 0 };
+    const result = await this.customerRepo
+      .createQueryBuilder("c")
+      .innerJoin("users", "u", "u.userid = c.userid")
+      .select("COUNT(*)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM u.createat) = :year", { year: y })
+      .getRawOne();
+
+    return { total: Number(result.total) || 0 };
   }
 
-  // CLIENTES REGISTRADOS POR DÍA
+
+
+  //  CLIENTES DIARIOS POR MES
   async getDailyClientsByMonth(month: number, year?: number) {
-    return this.customerRepo.query(`
-      SELECT
-        EXTRACT(DAY FROM u.createat) AS day,
-        COUNT(*) AS total
-      FROM customers c
-      JOIN users u ON u.userid = c.userid
-      WHERE EXTRACT(MONTH FROM u.createat) = $1
-      AND ($2::int IS NULL OR EXTRACT(YEAR FROM u.createat) = $2)
-      GROUP BY day
-      ORDER BY day;
-    `, [month, year ?? null]);
+    const y = this.validateYear(year);
+
+    return this.customerRepo
+      .createQueryBuilder("c")
+      .innerJoin("users", "u", "u.userid = c.userid")
+      .select("EXTRACT(DAY FROM u.createat)", "day")
+      .addSelect("COUNT(*)", "total")
+      .where("EXTRACT(MONTH FROM u.createat) = :month", { month })
+      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM u.createat) = :year", { year: y })
+      .groupBy("day")
+      .orderBy("day")
+      .getRawMany();
   }
 
-  // SOLICITUDES DE SERVICIO POR ESTADO
+
+  //  SOLICITUDES POR ESTADO
   async getServiceRequestsByState(year?: number) {
-    return this.serviceRequestsRepo.query(`
-      SELECT 
-        st.name AS state,
-        COUNT(sr.servicerequestid) AS value
-      FROM servicerequests sr
-      JOIN states st ON st.stateid = sr.stateid
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM sr.createdat) = $1)
-      GROUP BY st.name
-      ORDER BY st.name;
-    `, [year ?? null]);
+    const y = year ?? null;
+
+    return this.serviceRequestsRepo
+      .createQueryBuilder("sr")
+      .innerJoin("states", "st", "st.stateid = sr.stateid")
+      .select("st.name", "state")
+      .addSelect("COUNT(sr.servicerequestid)", "value")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM sr.createdat) = :year", { year: y })
+      .groupBy("st.name")
+      .orderBy("st.name")
+      .getRawMany();
   }
 
-  // TOTAL SOLICITUDES
-  async getTotalServiceRequests(year?: number) {
-    const result = await this.serviceRequestsRepo.query(`
-      SELECT COUNT(*) AS total
-      FROM servicerequests
-      WHERE ($1::int IS NULL OR EXTRACT(YEAR FROM createdat) = $1);
-    `, [year ?? null]);
 
-    return { total: Number(result[0].total) || 0 };
+
+  //  TOTAL SOLICITUDES
+  async getTotalServiceRequests(year?: number) {
+    const y = this.validateYear(year);
+
+    const result = await this.serviceRequestsRepo
+      .createQueryBuilder("sr")
+      .select("COUNT(sr.servicerequestid)", "total")
+      .where("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM sr.createdat) = :year", { year: y })
+      .getRawOne();
+
+    return { total: Number(result.total) || 0 };
   }
 }
