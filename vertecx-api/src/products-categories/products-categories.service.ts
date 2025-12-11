@@ -1,119 +1,188 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+﻿import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { CreateProductsCategoryDto } from './dto/create-products-category.dto';
 import { UpdateProductsCategoryDto } from './dto/update-products-category.dto';
 import { ProductCategory } from './entities/product-category.entity';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class ProductsCategoriesService {
   constructor(
     @InjectRepository(ProductCategory)
     private readonly categoryRepo: Repository<ProductCategory>,
-  ) {}
+    private readonly dataSource: DataSource,
+  ) { }
 
-  // Crear categoría
+  // Crear categoría optimizada
   async create(createDto: CreateProductsCategoryDto) {
-    // Verificar si ya existe una categoría con el mismo nombre
-    const existing = await this.categoryRepo.findOne({
-      where: { name: createDto.name },
-    });
+    const result = await this.categoryRepo
+      .createQueryBuilder()
+      .insert()
+      .values({
+        name: createDto.name,
+        description: createDto.description ?? null,
+        status: createDto.status,
+        icon: createDto.icon ?? null,
+      })
+      .orIgnore() 
+      .returning("*")
+      .execute();
 
-    if (existing) {
+    // Si no se insertó nada, es porque ya existía (conflict)
+    if (result.identifiers.length === 0) {
       throw new BadRequestException({
         success: false,
-        message: 'Ya existe una categoría con el mismo nombre.',
+        message: "Ya existe una categoría con el mismo nombre.",
+        data: null,
       });
     }
 
-    // Crear instancia del nuevo registro
-    const newCategory = this.categoryRepo.create({
-      name: createDto.name,
-      description: createDto.description ?? null,
-      status: createDto.status,
-      icon: createDto.icon ?? null,
-    });
+    // Categoría creada con éxito
+    const created = result.raw[0];
 
-    // Guardar en la base de datos
-    const saved = await this.categoryRepo.save(newCategory);
     return {
       success: true,
-      message: 'Categoría creada correctamente.',
-      data: saved,
+      message: "Categoría creada correctamente.",
+      data: created,
     };
   }
 
-  // Listar todas las categorías
+
+  // Listar todas las categorias
   async findAll() {
-    const categories = await this.categoryRepo.find({
-      order: { id: 'ASC' },
-    });
-    return { success: true, data: categories };
+    return await this.categoryRepo
+      .createQueryBuilder('category')
+      .orderBy('category.id', 'ASC')
+      .cache('product_categories_list', 60000)
+      .getMany();
   }
 
-  //  Buscar una categoría por ID
+  // Buscar una categoria por ID
   async findOne(id: number) {
     const category = await this.categoryRepo.findOne({ where: { id } });
     if (!category) {
       throw new NotFoundException({
         success: false,
-        message: `Categoría con ID ${id} no encontrada.`,
+        message: `Categoria con ID ${id} no encontrada.`,
       });
     }
     return { success: true, data: category };
   }
 
-  // Actualizar categoría
+  // Actualizar categoria
   async update(id: number, updateDto: UpdateProductsCategoryDto) {
+    // Verificar que la categoría exista
     const category = await this.categoryRepo.findOne({ where: { id } });
     if (!category) {
       throw new NotFoundException({
         success: false,
-        message: `Categoría con ID ${id} no encontrada.`,
+        message: `Categoria con ID ${id} no encontrada.`,
+        data: null,
       });
     }
 
-    // Verificar duplicado si el nombre viene en el DTO
+    // Validar duplicado en un solo query
     if (updateDto.name) {
-      const existing = await this.categoryRepo.findOne({
-        where: { name: updateDto.name },
+      const duplicate = await this.categoryRepo.findOne({
+        where: { name: updateDto.name, id: Not(id) },
       });
 
-      if (existing && existing.id !== id) {
+      if (duplicate) {
         throw new BadRequestException({
           success: false,
-          message: 'Ya existe una categoría con ese nombre.',
+          message: 'Ya existe una categoria con ese nombre.',
+          data: null,
         });
       }
     }
 
-    //  Actualizar la entidad
-    const updatedCategory = this.categoryRepo.merge(category, {
-      ...updateDto,
-    });
+    // Actualización optimizada — sin cargar la entidad completa otra vez
+    const result = await this.categoryRepo
+      .createQueryBuilder()
+      .update()
+      .set({
+        ...updateDto,
+      })
+      .where('id = :id', { id })
+      .returning('*')
+      .execute();
 
-    const saved = await this.categoryRepo.save(updatedCategory);
+    const updated = result.raw[0];
+
+    // Invalidar caché de findAll()
+    this.categoryRepo.manager.connection.queryResultCache?.remove([
+      'product_categories_list',
+    ]);
+
+    // Respuesta uniforme
     return {
       success: true,
-      message: 'Categoría actualizada correctamente.',
-      data: saved,
+      message: 'Categoria actualizada correctamente.',
+      data: updated,
     };
   }
 
-  // Eliminar categoría
+
+  // Eliminar categoria
   async remove(id: number) {
-    const category = await this.categoryRepo.findOne({ where: { id } });
-    if (!category) {
-      throw new NotFoundException({
-        success: false,
-        message: `Categoría con ID ${id} no encontrada.`,
-      });
-    }
+    return await this.dataSource.transaction(async (manager) => {
+      // Validar que la categoría exista
+      const category = await manager
+        .createQueryBuilder()
+        .select("*")
+        .from("categories", "c")
+        .where("c.id = :id", { id })
+        .getRawOne();
 
-    await this.categoryRepo.remove(category);
-    return {
-      success: true,
-      message: 'Categoría eliminada correctamente.',
-    };
+      if (!category) {
+        throw new NotFoundException({
+          success: false,
+          message: `Categoria con ID ${id} no encontrada.`,
+          data: null,
+        });
+      }
+
+      // Verificar si existen productos asociados
+      const productsCount = await manager
+        .createQueryBuilder()
+        .from("products", "p")
+        .where("p.categoryId = :id", { id })
+        .getCount();
+
+      if (productsCount > 0) {
+        throw new BadRequestException({
+          success: false,
+          message:
+            "No se puede eliminar la categoría porque existen productos asociados. " +
+            "Debe reasignar esos productos antes de eliminarla.",
+          relatedProducts: productsCount,
+        });
+      }
+
+      // Eliminar usando delete() + returning('*')
+      const deleteResult = await manager
+        .createQueryBuilder()
+        .delete()
+        .from("categories")
+        .where("id = :id", { id })
+        .returning("*")
+        .execute();
+
+      const deleted = deleteResult.raw[0];
+
+      // Invalidar caché
+      manager.connection.queryResultCache?.remove([
+        "product_categories_list",
+      ]);
+
+      // Respuesta uniforme
+      return {
+        success: true,
+        message: "Categoria eliminada correctamente.",
+        data: deleted,
+      };
+    });
   }
+
 }
