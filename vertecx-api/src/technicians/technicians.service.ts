@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 
 import { Technicians } from './entities/technicians.entity';
 import { TechnicianTypeMap } from 'src/shared/entities/technician-type-map.entity';
@@ -24,7 +24,7 @@ export class TechniciansService {
 
   async create(dto: CreateTechnicianDto) {
     const TECH_ROLE_ID =
-      dto.roleid ?? (await this.usersService.getRoleIdByName('tecnico'));
+      dto.roleid ?? (await this.usersService.getRoleIdByName('Técnico'));
     const ACTIVE_STATE_ID = 1;
 
     const userDto: CreateUserDto = {
@@ -64,7 +64,7 @@ export class TechniciansService {
       relations: [
         'users',
         'users.typeofdocuments',
-        'users.states',                // (ya estaba aquí)
+        'users.states',
         'users.roles',
         'technicianTypeMaps',
         'technicianTypeMaps.techniciantype',
@@ -129,8 +129,19 @@ export class TechniciansService {
 
     await this.typeMapRepo.delete({ technicianid: technicianId });
 
-    await this.usersService.remove(technician.userid);
-
-    return { message: 'Técnico eliminado correctamente' };
+    try {
+      await this.usersService.remove(technician.userid);
+      return { message: 'Técnico eliminado correctamente' };
+    } catch (e) {
+      if (e instanceof QueryFailedError) {
+        const err: any = e;
+        if (err?.driverError?.code === '23503') {
+          throw new ConflictException(
+            'No se puede eliminar el técnico porque está asociado a una orden de servicio u otro registro.',
+          );
+        }
+      }
+      throw e;
+    }
   }
 }
