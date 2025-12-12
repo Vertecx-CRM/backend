@@ -14,7 +14,7 @@ import {
 import { OrdersServicesProducts } from './orders-services-products.entity';
 import { OrdersServicesHistory } from './orders-services-history.entity';
 
-import { Customers } from 'src/customers/entities/customers.entity';
+import { Customers } from '../../customers/entities/customers.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 
