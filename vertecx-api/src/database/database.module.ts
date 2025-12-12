@@ -18,6 +18,14 @@ import * as fs from 'fs';
         synchronize: config.get<string>('DB_SYNC') === 'true',
         autoLoadEntities: true,
 
+        // POOL DE CONEXIONES (OBLIGATORIO PARA NO SATURAR AIVEN)
+        extra: {
+          max: 10, // Máximo recomendado para planes gratuitos
+          min: 1,
+          idleTimeoutMillis: 30000, // Libera conexiones inactivas
+          connectionTimeoutMillis: 5000, // Evita bloqueos largos
+        },
+
         ssl: {
           rejectUnauthorized: true,
           ca: fs.readFileSync('src/certs/ca.pem').toString(),
