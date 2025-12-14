@@ -38,5 +38,5 @@ export class QuoteDetail {
 
   // DISPO / NO_DISPO
   @Column({ type: 'varchar', default: 'DISPONIBLE' })
-  availability: 'DISPONIBLE' | 'NO_DISPONIBLE';
+  availability: 'DISPONIBLE' | 'NO_DISPONIBLE' | 'SOLICITAR';
 }

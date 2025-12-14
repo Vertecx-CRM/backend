@@ -47,6 +47,6 @@ export class CreateQuoteDetailDto {
     enum: ['DISPONIBLE', 'NO_DISPONIBLE'],
   })
   @IsOptional()
-  @IsIn(['DISPONIBLE', 'NO_DISPONIBLE'])
-  availability?: 'DISPONIBLE' | 'NO_DISPONIBLE';
+  @IsIn(['DISPONIBLE', 'NO_DISPONIBLE', 'SOLICITAR'])
+  availability?: 'DISPONIBLE' | 'NO_DISPONIBLE' | 'SOLICITAR';
 }
