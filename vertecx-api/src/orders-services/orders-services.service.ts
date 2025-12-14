@@ -1,66 +1,88 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, EntityManager, In, ILike, Repository } from 'typeorm';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Between, EntityManager, In, ILike, Repository } from "typeorm";
 
-import { OrdersServices } from './entities/orders-services.entity';
-import { OrdersServicesProducts } from './entities/orders-services-products.entity';
-import { OrdersServicesServices } from './entities/orders-services-services.entity';
-import { OrdersServicesHistory, OrdersServicesHistoryType } from './entities/orders-services-history.entity';
-import { OrdersServicesWarranty } from './entities/orders-services-warranty.entity';
+import { OrdersServices } from "./entities/orders-services.entity";
+import { OrdersServicesProducts } from "./entities/orders-services-products.entity";
+import { OrdersServicesServices } from "./entities/orders-services-services.entity";
+import {
+  OrdersServicesHistory,
+  OrdersServicesHistoryType,
+} from "./entities/orders-services-history.entity";
+import { OrdersServicesWarranty } from "./entities/orders-services-warranty.entity";
 
-import { Products } from 'src/products/entities/products.entity';
-import { Services } from 'src/services/entities/services.entity';
-import { Technicians } from 'src/technicians/entities/technicians.entity';
-import { Customers } from 'src/customers/entities/customers.entity';
-import { States } from 'src/shared/entities/states.entity';
-import { Users } from 'src/users/entities/users.entity';
+import { Products } from "src/products/entities/products.entity";
+import { Services } from "src/services/entities/services.entity";
+import { Technicians } from "src/technicians/entities/technicians.entity";
+import { Customers } from "src/customers/entities/customers.entity";
+import { States } from "src/shared/entities/states.entity";
+import { Users } from "src/users/entities/users.entity";
 
-import { CreateOrdersServicesDto } from './dto/create-orders-services.dto';
-import { UpdateOrdersServicesDto } from './dto/update-orders-services.dto';
-import { AddProductDto } from './dto/add-product.dto';
-import { AddServiceDto } from './dto/add-service.dto';
-import { AssignTechniciansDto } from './dto/assign-technicians.dto';
-import { FinishOrderDto } from './dto/finish-order.dto';
-import { AddFileDto } from './dto/add-file.dto';
-import { RemoveFileDto } from './dto/remove-file.dto';
-import { ReprogramOrderDto } from './dto/reprogram-order.dto';
-import { AddWorklogDto } from './dto/add-worklog.dto';
-import { ReportWarrantyDto } from './dto/report-warranty.dto';
+import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
+import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
+import { AddProductDto } from "./dto/add-product.dto";
+import { AddServiceDto } from "./dto/add-service.dto";
+import { AssignTechniciansDto } from "./dto/assign-technicians.dto";
+import { FinishOrderDto } from "./dto/finish-order.dto";
+import { AddFileDto } from "./dto/add-file.dto";
+import { RemoveFileDto } from "./dto/remove-file.dto";
+import { ReprogramOrderDto } from "./dto/reprogram-order.dto";
+import { AddWorklogDto } from "./dto/add-worklog.dto";
+import { ReportWarrantyDto } from "./dto/report-warranty.dto";
+import { UpdateProductLineDto } from "./dto/update-product-line.dto";
+import { UpdateServiceLineDto } from "./dto/update-service-line.dto";
+import { UpsertProductsDto } from "./dto/upsert-products.dto";
+import { UpsertServicesDto } from "./dto/upsert-services.dto";
 
 type ActorUserId = number | null | undefined;
 
 const ORDER_RELATIONS = [
-  'products',
-  'products.product',
-  'services',
-  'services.service',
-  'services.service.typeofservice',
-  'technicians',
-  'technicians.users',
-  'client',
-  'client.users',
-  'state',
-  'history',
-  'history.technician',
-  'history.technician.users',
-  'warrantyRecord',
-  'warrantyRecord.reportedBy',
+  "products",
+  "products.product",
+  "services",
+  "services.service",
+  "services.service.typeofservice",
+  "technicians",
+  "technicians.users",
+  "client",
+  "client.users",
+  "state",
+  "history",
+  "history.technician",
+  "history.technician.users",
+  "warrantyRecord",
+  "warrantyRecord.reportedBy",
 ] as const;
 
 @Injectable()
 export class OrdersServicesService {
   constructor(
-    @InjectRepository(OrdersServices) private readonly ordersRepo: Repository<OrdersServices>,
-    @InjectRepository(OrdersServicesProducts) private readonly ospRepo: Repository<OrdersServicesProducts>,
-    @InjectRepository(OrdersServicesServices) private readonly ossRepo: Repository<OrdersServicesServices>,
-    @InjectRepository(OrdersServicesHistory) private readonly historyRepo: Repository<OrdersServicesHistory>,
-    @InjectRepository(OrdersServicesWarranty) private readonly warrantyRepo: Repository<OrdersServicesWarranty>,
-    @InjectRepository(Products) private readonly productsRepo: Repository<Products>,
-    @InjectRepository(Services) private readonly servicesRepo: Repository<Services>,
-    @InjectRepository(Technicians) private readonly techRepo: Repository<Technicians>,
-    @InjectRepository(Customers) private readonly clientsRepo: Repository<Customers>,
-    @InjectRepository(States) private readonly statesRepo: Repository<States>,
-    @InjectRepository(Users) private readonly usersRepo: Repository<Users>,
+    @InjectRepository(OrdersServices)
+    private readonly ordersRepo: Repository<OrdersServices>,
+    @InjectRepository(OrdersServicesProducts)
+    private readonly ospRepo: Repository<OrdersServicesProducts>,
+    @InjectRepository(OrdersServicesServices)
+    private readonly ossRepo: Repository<OrdersServicesServices>,
+    @InjectRepository(OrdersServicesHistory)
+    private readonly historyRepo: Repository<OrdersServicesHistory>,
+    @InjectRepository(OrdersServicesWarranty)
+    private readonly warrantyRepo: Repository<OrdersServicesWarranty>,
+    @InjectRepository(Products)
+    private readonly productsRepo: Repository<Products>,
+    @InjectRepository(Services)
+    private readonly servicesRepo: Repository<Services>,
+    @InjectRepository(Technicians)
+    private readonly techRepo: Repository<Technicians>,
+    @InjectRepository(Customers)
+    private readonly clientsRepo: Repository<Customers>,
+    @InjectRepository(States)
+    private readonly statesRepo: Repository<States>,
+    @InjectRepository(Users)
+    private readonly usersRepo: Repository<Users>
   ) {}
 
   private asMoneyInt(v: any) {
@@ -70,32 +92,41 @@ export class OrdersServicesService {
   }
 
   private computeTotals(subProducts: number, subServices: number, viaticos: number) {
-    const base = this.asMoneyInt(subProducts) + this.asMoneyInt(subServices) + this.asMoneyInt(viaticos);
+    const base =
+      this.asMoneyInt(subProducts) +
+      this.asMoneyInt(subServices) +
+      this.asMoneyInt(viaticos);
     const iva = this.asMoneyInt((base * 19) / 100);
     const total = base + iva;
     return { base, iva, total };
   }
 
   private isAnulada(stateName?: string | null) {
-    const n = (stateName ?? '').toLowerCase();
-    return n.includes('anul') || n.includes('revoke');
+    const n = (stateName ?? "").toLowerCase();
+    return n.includes("anul") || n.includes("revoke");
   }
 
-  private async getWarrantyState(kind: 'garantia' | 'garantia reportada') {
-    if (kind === 'garantia reportada') {
-      const st = await this.statesRepo.findOne({ where: { name: ILike('%garan%report%') } as any });
-      if (!st) throw new BadRequestException("No existe el estado 'Garantia reportada' en states.");
+  private async getWarrantyState(kind: "garantia" | "garantia reportada") {
+    if (kind === "garantia reportada") {
+      const st = await this.statesRepo.findOne({
+        where: { name: ILike("%garan%report%") } as any,
+      });
+      if (!st)
+        throw new BadRequestException(
+          "No existe el estado 'Garantia reportada' en states."
+        );
       return st;
     }
 
     const st = await this.statesRepo
-      .createQueryBuilder('s')
-      .where("LOWER(COALESCE(s.name,'')) LIKE :q", { q: '%garan%' })
-      .andWhere("LOWER(COALESCE(s.name,'')) NOT LIKE :r", { r: '%report%' })
-      .orderBy('s.stateid', 'ASC')
+      .createQueryBuilder("s")
+      .where("LOWER(COALESCE(s.name,'')) LIKE :q", { q: "%garan%" })
+      .andWhere("LOWER(COALESCE(s.name,'')) NOT LIKE :r", { r: "%report%" })
+      .orderBy("s.stateid", "ASC")
       .getOne();
 
-    if (!st) throw new BadRequestException("No existe el estado 'Garantia' en states.");
+    if (!st)
+      throw new BadRequestException("No existe el estado 'Garantia' en states.");
     return st;
   }
 
@@ -111,12 +142,12 @@ export class OrdersServicesService {
     const wr = (order as any).warrantyRecord as OrdersServicesWarranty | undefined;
     const u = wr?.reportedBy ?? null;
     const reportedBy =
-      u ? [u.name, u.lastname].filter(Boolean).join(' ').trim() || null : null;
+      u ? [u.name, u.lastname].filter(Boolean).join(" ").trim() || null : null;
 
     const warranty = wr
       ? {
-          label: wr.label ?? 'Daño dentro de garantía',
-          details: wr.details ?? '',
+          label: wr.label ?? "Daño dentro de garantía",
+          details: wr.details ?? "",
           notifiedClient: !!wr.notifiedclient,
           reportedBy,
           reportedByUserId: u?.userid ?? null,
@@ -148,10 +179,10 @@ export class OrdersServicesService {
     const order = await this.ordersRepo.findOne({
       where: { ordersservicesid: id } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { ordersservicesid: 'ASC', history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
 
-    if (!order) throw new NotFoundException('Orden no encontrada');
+    if (!order) throw new NotFoundException("Orden no encontrada");
 
     order.files = Array.isArray(order.files) ? order.files : [];
     order.products = order.products ?? [];
@@ -164,17 +195,22 @@ export class OrdersServicesService {
     return order;
   }
 
-  private async logSystem(historyRepo: Repository<OrdersServicesHistory>, orderId: number, message: string, actoruserid: ActorUserId) {
+  private async logSystem(
+    historyRepo: Repository<OrdersServicesHistory>,
+    orderId: number,
+    message: string,
+    actoruserid: ActorUserId
+  ) {
     await historyRepo.save(
       historyRepo.create({
         order: { ordersservicesid: orderId } as any,
-        type: 'SYSTEM',
+        type: "SYSTEM",
         message,
         technician: null,
         actoruserid: actoruserid ?? null,
         progresspercent: null,
         attachments: null,
-      }),
+      })
     );
   }
 
@@ -183,19 +219,21 @@ export class OrdersServicesService {
     const ospRepo = em.getRepository(OrdersServicesProducts);
     const ossRepo = em.getRepository(OrdersServicesServices);
 
-    const order = await ordersRepo.findOne({ where: { ordersservicesid: orderId } as any });
-    if (!order) throw new NotFoundException('Orden no encontrada');
+    const order = await ordersRepo.findOne({
+      where: { ordersservicesid: orderId } as any,
+    });
+    if (!order) throw new NotFoundException("Orden no encontrada");
 
     const prod = await ospRepo
-      .createQueryBuilder('osp')
-      .select('COALESCE(SUM(osp.subtotal),0)', 'sum')
-      .where('osp.ordersservicesid = :orderId', { orderId })
+      .createQueryBuilder("osp")
+      .select("COALESCE(SUM(osp.subtotal),0)", "sum")
+      .where("osp.ordersservicesid = :orderId", { orderId })
       .getRawOne<{ sum: string }>();
 
     const serv = await ossRepo
-      .createQueryBuilder('oss')
-      .select('COALESCE(SUM(oss.subtotal),0)', 'sum')
-      .where('oss.ordersservicesid = :orderId', { orderId })
+      .createQueryBuilder("oss")
+      .select("COALESCE(SUM(oss.subtotal),0)", "sum")
+      .where("oss.ordersservicesid = :orderId", { orderId })
       .getRawOne<{ sum: string }>();
 
     const subProducts = this.asMoneyInt(prod?.sum ?? 0);
@@ -203,11 +241,18 @@ export class OrdersServicesService {
     const viaticos = this.asMoneyInt((order as any).viaticos ?? 0);
 
     const { total } = this.computeTotals(subProducts, subServices, viaticos);
-    await ordersRepo.update({ ordersservicesid: orderId } as any, { total } as any);
+    await ordersRepo.update(
+      { ordersservicesid: orderId } as any,
+      { total } as any
+    );
     return total;
   }
 
-  private async createCore(em: EntityManager, dto: CreateOrdersServicesDto, actoruserid?: ActorUserId): Promise<number> {
+  private async createCore(
+    em: EntityManager,
+    dto: CreateOrdersServicesDto,
+    actoruserid?: ActorUserId
+  ): Promise<number> {
     const ordersRepo = em.getRepository(OrdersServices);
     const ospRepo = em.getRepository(OrdersServicesProducts);
     const ossRepo = em.getRepository(OrdersServicesServices);
@@ -218,20 +263,29 @@ export class OrdersServicesService {
     const clientsRepo = em.getRepository(Customers);
     const statesRepo = em.getRepository(States);
 
-    const client = await clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
-    if (!client) throw new BadRequestException('Cliente no existe');
+    const client = await clientsRepo.findOne({
+      where: { customerid: dto.clientid } as any,
+    });
+    if (!client) throw new BadRequestException("Cliente no existe");
 
-    const state = await statesRepo.findOne({ where: { stateid: dto.stateid } as any });
-    if (!state) throw new BadRequestException('Estado no existe');
+    const state = await statesRepo.findOne({
+      where: { stateid: dto.stateid } as any,
+    });
+    if (!state) throw new BadRequestException("Estado no existe");
 
     const techIds = dto.technicians ?? [];
-    if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
+    if (techIds.length === 0)
+      throw new BadRequestException("Debe asignar al menos un técnico");
 
-    const technicians = await techRepo.find({ where: { technicianid: In(techIds) } as any });
-    if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+    const technicians = await techRepo.find({
+      where: { technicianid: In(techIds) } as any,
+    });
+    if (technicians.length !== techIds.length)
+      throw new BadRequestException("Uno o más técnicos no existen");
 
     const items = dto.products ?? [];
-    if (items.length === 0) throw new BadRequestException('Debe agregar al menos un producto');
+    if (items.length === 0)
+      throw new BadRequestException("Debe agregar al menos un producto");
 
     const viaticos = this.asMoneyInt(dto.viaticos ?? 0);
 
@@ -255,14 +309,18 @@ export class OrdersServicesService {
     let subProducts = 0;
 
     for (const item of items) {
-      if (seenProducts.has(item.productid)) throw new BadRequestException('Hay productos repetidos en la orden');
+      if (seenProducts.has(item.productid))
+        throw new BadRequestException("Hay productos repetidos en la orden");
       seenProducts.add(item.productid);
 
-      const product = await productsRepo.findOne({ where: { productid: item.productid } as any });
-      if (!product) throw new BadRequestException('Producto no existe');
+      const product = await productsRepo.findOne({
+        where: { productid: item.productid } as any,
+      });
+      if (!product) throw new BadRequestException("Producto no existe");
 
       const unit = Number(product.productpriceofsale ?? 0);
-      if (!Number.isFinite(unit) || unit < 0) throw new BadRequestException('Precio de producto inválido');
+      if (!Number.isFinite(unit) || unit < 0)
+        throw new BadRequestException("Precio de producto inválido");
 
       const subtotal = this.asMoneyInt(unit * item.cantidad);
       subProducts += subtotal;
@@ -273,7 +331,7 @@ export class OrdersServicesService {
           product,
           cantidad: item.cantidad,
           subtotal,
-        }),
+        })
       );
     }
 
@@ -282,15 +340,26 @@ export class OrdersServicesService {
     let subServices = 0;
 
     for (const item of serviceItems) {
-      if (seenServices.has(item.serviceid)) throw new BadRequestException('Hay servicios repetidos en la orden');
+      if (seenServices.has(item.serviceid))
+        throw new BadRequestException("Hay servicios repetidos en la orden");
       seenServices.add(item.serviceid);
 
-      const service = await servicesRepo.findOne({ where: { serviceid: item.serviceid } as any });
-      if (!service) throw new BadRequestException('Servicio no existe');
+      const service = await servicesRepo.findOne({
+        where: { serviceid: item.serviceid } as any,
+      });
+      if (!service) throw new BadRequestException("Servicio no existe");
 
-      const unitprice = this.asMoneyInt((item as any).unitprice ?? (item as any).precio);
-      if (unitprice === 0 && ((item as any).unitprice === undefined && (item as any).precio === undefined)) {
-        throw new BadRequestException('unitprice (o precio) es obligatorio para cada servicio');
+      const unitprice = this.asMoneyInt(
+        (item as any).unitprice ?? (item as any).precio
+      );
+      if (
+        unitprice === 0 &&
+        (item as any).unitprice === undefined &&
+        (item as any).precio === undefined
+      ) {
+        throw new BadRequestException(
+          "unitprice (o precio) es obligatorio para cada servicio"
+        );
       }
 
       const subtotal = this.asMoneyInt(unitprice * item.cantidad);
@@ -303,20 +372,30 @@ export class OrdersServicesService {
           cantidad: item.cantidad,
           unitprice,
           subtotal,
-        }),
+        })
       );
     }
 
     const { total } = this.computeTotals(subProducts, subServices, viaticos);
-    await ordersRepo.update({ ordersservicesid: order.ordersservicesid } as any, { total } as any);
+    await ordersRepo.update(
+      { ordersservicesid: order.ordersservicesid } as any,
+      { total } as any
+    );
 
-    await this.logSystem(historyRepo, order.ordersservicesid, 'Orden creada', actoruserid);
+    await this.logSystem(
+      historyRepo,
+      order.ordersservicesid,
+      "Orden creada",
+      actoruserid
+    );
 
     return order.ordersservicesid;
   }
 
   async create(dto: CreateOrdersServicesDto, actoruserid?: ActorUserId) {
-    const id = await this.ordersRepo.manager.transaction((em) => this.createCore(em, dto, actoruserid));
+    const id = await this.ordersRepo.manager.transaction((em) =>
+      this.createCore(em, dto, actoruserid)
+    );
     const order = await this.validateOrder(id);
     return this.present(order);
   }
@@ -324,7 +403,7 @@ export class OrdersServicesService {
   async findAll() {
     const list = await this.ordersRepo.find({
       relations: [...ORDER_RELATIONS] as any,
-      order: { ordersservicesid: 'ASC', history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
     return this.presentMany(list);
   }
@@ -341,46 +420,49 @@ export class OrdersServicesService {
 
     return this.historyRepo.find({
       where,
-      relations: ['technician', 'technician.users'] as any,
-      order: { createdat: 'DESC' } as any,
+      relations: ["technician", "technician.users"] as any,
+      order: { createdat: "DESC" } as any,
     });
   }
 
   async addWorklog(orderId: number, dto: AddWorklogDto, actoruserid?: ActorUserId) {
     const order = await this.ordersRepo.findOne({
       where: { ordersservicesid: orderId } as any,
-      relations: ['technicians'] as any,
+      relations: ["technicians"] as any,
     });
-    if (!order) throw new NotFoundException('Orden no encontrada');
+    if (!order) throw new NotFoundException("Orden no encontrada");
 
     const technician = await this.techRepo.findOne({
       where: { technicianid: dto.technicianid } as any,
-      relations: ['users'] as any,
+      relations: ["users"] as any,
     });
-    if (!technician) throw new BadRequestException('Técnico no existe');
+    if (!technician) throw new BadRequestException("Técnico no existe");
 
-    const assigned = (order.technicians ?? []).some((t: any) => t.technicianid === technician.technicianid);
-    if (!assigned) throw new BadRequestException('El técnico no está asignado a esta orden');
+    const assigned = (order.technicians ?? []).some(
+      (t: any) => t.technicianid === technician.technicianid
+    );
+    if (!assigned)
+      throw new BadRequestException("El técnico no está asignado a esta orden");
 
-    const title = (dto.title ?? '').trim() || 'Avance';
-    const note = (dto.note ?? '').trim();
-    if (!note) throw new BadRequestException('note es obligatorio');
+    const title = (dto.title ?? "").trim() || "Avance";
+    const note = (dto.note ?? "").trim();
+    if (!note) throw new BadRequestException("note es obligatorio");
 
     const created = await this.historyRepo.save(
       this.historyRepo.create({
         order: { ordersservicesid: orderId } as any,
-        type: 'TECH',
+        type: "TECH",
         message: `${title}\n${note}`.trim(),
         technician,
         actoruserid: actoruserid ?? null,
         progresspercent: (dto as any).progresspercent ?? null,
         attachments: (dto as any).attachments ?? null,
-      }),
+      })
     );
 
     return this.historyRepo.findOne({
       where: { ordersserviceshistoryid: created.ordersserviceshistoryid } as any,
-      relations: ['technician', 'technician.users'] as any,
+      relations: ["technician", "technician.users"] as any,
     });
   }
 
@@ -392,14 +474,18 @@ export class OrdersServicesService {
     if (dto.description !== undefined) order.description = dto.description;
 
     if (dto.clientid !== undefined) {
-      const client = await this.clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
-      if (!client) throw new BadRequestException('Cliente no existe');
+      const client = await this.clientsRepo.findOne({
+        where: { customerid: dto.clientid } as any,
+      });
+      if (!client) throw new BadRequestException("Cliente no existe");
       order.client = client;
     }
 
     if (dto.stateid !== undefined) {
-      const state = await this.statesRepo.findOne({ where: { stateid: dto.stateid } as any });
-      if (!state) throw new BadRequestException('Estado no existe');
+      const state = await this.statesRepo.findOne({
+        where: { stateid: dto.stateid } as any,
+      });
+      if (!state) throw new BadRequestException("Estado no existe");
       order.state = state;
     }
 
@@ -417,19 +503,25 @@ export class OrdersServicesService {
 
     if (dto.technicians !== undefined) {
       const techIds = dto.technicians ?? [];
-      if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
-      const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
-      if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+      if (techIds.length === 0)
+        throw new BadRequestException("Debe asignar al menos un técnico");
+      const technicians = await this.techRepo.find({
+        where: { technicianid: In(techIds) } as any,
+      });
+      if (technicians.length !== techIds.length)
+        throw new BadRequestException("Uno o más técnicos no existen");
       order.technicians = technicians;
     }
 
     await this.ordersRepo.save(order);
 
     if (mustRecalc) {
-      await this.ordersRepo.manager.transaction((em) => this.recalcAndPersistTotal(em, id));
+      await this.ordersRepo.manager.transaction((em) =>
+        this.recalcAndPersistTotal(em, id)
+      );
     }
 
-    await this.logSystem(this.historyRepo, id, 'Orden actualizada', actoruserid);
+    await this.logSystem(this.historyRepo, id, "Orden actualizada", actoruserid);
 
     const updated = await this.validateOrder(id);
     return this.present(updated);
@@ -449,30 +541,31 @@ export class OrdersServicesService {
 
       const order = await ordersRepo.findOne({
         where: { ordersservicesid: orderId } as any,
-        relations: ['state', 'client', 'client.users'] as any,
+        relations: ["state", "client", "client.users"] as any,
       });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
-      if (this.isAnulada(order.state?.name)) throw new BadRequestException('No se puede marcar garantía en una orden anulada.');
+      if (this.isAnulada(order.state?.name))
+        throw new BadRequestException("No se puede marcar garantía en una orden anulada.");
 
-      const warrantyState = await this.getWarrantyState('garantia');
+      const warrantyState = await this.getWarrantyState("garantia");
 
       let wr = await warrantyRepo.findOne({
         where: { order: { ordersservicesid: orderId } as any } as any,
-        relations: ['reportedBy'] as any,
+        relations: ["reportedBy"] as any,
       });
 
       if (!wr) {
         wr = warrantyRepo.create({
           order: { ordersservicesid: orderId } as any,
-          label: 'Daño dentro de garantía',
+          label: "Daño dentro de garantía",
           details: null,
           notifiedclient: false,
           reportedBy: null,
           reportedat: null,
         });
       } else {
-        wr.label = wr.label ?? 'Daño dentro de garantía';
+        wr.label = wr.label ?? "Daño dentro de garantía";
       }
 
       await warrantyRepo.save(wr);
@@ -480,7 +573,7 @@ export class OrdersServicesService {
       order.state = warrantyState;
       await ordersRepo.save(order);
 
-      await this.logSystem(historyRepo, orderId, 'Garantía marcada', actoruserid);
+      await this.logSystem(historyRepo, orderId, "Garantía marcada", actoruserid);
     });
 
     const updated = await this.validateOrder(orderId);
@@ -488,8 +581,8 @@ export class OrdersServicesService {
   }
 
   async reportWarranty(orderId: number, dto: ReportWarrantyDto, actoruserid?: ActorUserId) {
-    const details = (dto.details ?? '').trim();
-    if (!details) throw new BadRequestException('details es obligatorio');
+    const details = (dto.details ?? "").trim();
+    if (!details) throw new BadRequestException("details es obligatorio");
 
     await this.ordersRepo.manager.transaction(async (em) => {
       const ordersRepo = em.getRepository(OrdersServices);
@@ -499,29 +592,35 @@ export class OrdersServicesService {
 
       const order = await ordersRepo.findOne({
         where: { ordersservicesid: orderId } as any,
-        relations: ['state', 'client', 'client.users'] as any,
+        relations: ["state", "client", "client.users"] as any,
       });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
-      if (this.isAnulada(order.state?.name)) throw new BadRequestException('No se puede reportar garantía en una orden anulada.');
+      if (this.isAnulada(order.state?.name))
+        throw new BadRequestException("No se puede reportar garantía en una orden anulada.");
 
-      const reportedState = await this.getWarrantyState('garantia reportada');
+      const reportedState = await this.getWarrantyState("garantia reportada");
 
-      let reporterUserId = dto.reportedByUserId ?? (actoruserid ? Number(actoruserid) : undefined);
+      let reporterUserId =
+        dto.reportedByUserId ?? (actoruserid ? Number(actoruserid) : undefined);
 
       if (!reporterUserId) {
-        reporterUserId = (order as any)?.client?.users?.userid ? Number((order as any).client.users.userid) : undefined;
+        reporterUserId = (order as any)?.client?.users?.userid
+          ? Number((order as any).client.users.userid)
+          : undefined;
       }
 
       let reporter: Users | null = null;
       if (reporterUserId) {
-        reporter = await usersRepo.findOne({ where: { userid: reporterUserId } as any });
-        if (!reporter) throw new BadRequestException('reportedByUserId no existe');
+        reporter = await usersRepo.findOne({
+          where: { userid: reporterUserId } as any,
+        });
+        if (!reporter) throw new BadRequestException("reportedByUserId no existe");
       }
 
       let wr = await warrantyRepo.findOne({
         where: { order: { ordersservicesid: orderId } as any } as any,
-        relations: ['reportedBy'] as any,
+        relations: ["reportedBy"] as any,
       });
 
       if (!wr) {
@@ -535,7 +634,9 @@ export class OrdersServicesService {
         });
       }
 
-      const label = (dto.label ?? wr.label ?? 'Daño dentro de garantía').trim() || 'Daño dentro de garantía';
+      const label =
+        (dto.label ?? wr.label ?? "Daño dentro de garantía").trim() ||
+        "Daño dentro de garantía";
 
       wr.label = label;
       wr.details = details;
@@ -561,8 +662,10 @@ export class OrdersServicesService {
       const ospRepo = em.getRepository(OrdersServicesProducts);
       const productsRepo = em.getRepository(Products);
 
-      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
       const exists = await ospRepo.findOne({
         where: {
@@ -570,13 +673,16 @@ export class OrdersServicesService {
           product: { productid: dto.productid } as any,
         } as any,
       });
-      if (exists) throw new BadRequestException('Ese producto ya está agregado');
+      if (exists) throw new BadRequestException("Ese producto ya está agregado");
 
-      const product = await productsRepo.findOne({ where: { productid: dto.productid } as any });
-      if (!product) throw new BadRequestException('Producto no existe');
+      const product = await productsRepo.findOne({
+        where: { productid: dto.productid } as any,
+      });
+      if (!product) throw new BadRequestException("Producto no existe");
 
       const unit = Number(product.productpriceofsale ?? 0);
-      if (!Number.isFinite(unit) || unit < 0) throw new BadRequestException('Precio de producto inválido');
+      if (!Number.isFinite(unit) || unit < 0)
+        throw new BadRequestException("Precio de producto inválido");
 
       const subtotal = this.asMoneyInt(unit * dto.cantidad);
 
@@ -586,9 +692,127 @@ export class OrdersServicesService {
           product,
           cantidad: dto.cantidad,
           subtotal,
-        }),
+        })
       );
 
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async upsertProducts(id: number, dto: UpsertProductsDto) {
+    const replace = dto.replace !== undefined ? !!dto.replace : true;
+    const items = Array.isArray(dto.items) ? dto.items : [];
+
+    const seen = new Set<number>();
+    for (const it of items) {
+      const pid = Number(it.productid);
+      if (!Number.isFinite(pid) || pid <= 0) throw new BadRequestException("productid inválido");
+      if (seen.has(pid)) throw new BadRequestException("Hay productos repetidos en la lista");
+      seen.add(pid);
+
+      const c = Number(it.cantidad);
+      if (!Number.isFinite(c) || c <= 0) throw new BadRequestException("cantidad inválida");
+    }
+
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+      const productsRepo = em.getRepository(Products);
+
+      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const existing = await ospRepo.find({
+        where: { order: { ordersservicesid: id } as any } as any,
+        relations: ["product"] as any,
+      });
+
+      const byProductId = new Map<number, OrdersServicesProducts>();
+      for (const row of existing) {
+        const pid = Number((row as any)?.product?.productid);
+        if (pid) byProductId.set(pid, row);
+      }
+
+      for (const it of items) {
+        const product = await productsRepo.findOne({ where: { productid: it.productid } as any });
+        if (!product) throw new BadRequestException(`Producto no existe: ${it.productid}`);
+
+        const unit = Number(product.productpriceofsale ?? 0);
+        if (!Number.isFinite(unit) || unit < 0) throw new BadRequestException("Precio de producto inválido");
+
+        const cantidad = Number(it.cantidad);
+        const subtotal = this.asMoneyInt(unit * cantidad);
+
+        const current = byProductId.get(it.productid);
+        if (current) {
+          current.cantidad = cantidad;
+          current.subtotal = subtotal;
+          await ospRepo.save(current);
+        } else {
+          await ospRepo.save(
+            ospRepo.create({
+              order: { ordersservicesid: id } as any,
+              product,
+              cantidad,
+              subtotal,
+            })
+          );
+        }
+      }
+
+      if (replace) {
+        const keep = new Set(items.map((x) => x.productid));
+        const toDelete = existing.filter((row) => {
+          const pid = Number((row as any)?.product?.productid);
+          return pid && !keep.has(pid);
+        });
+        if (toDelete.length) await ospRepo.remove(toDelete);
+      }
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async updateProductLine(id: number, productId: number, dto: UpdateProductLineDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+      const productsRepo = em.getRepository(Products);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ospRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          product: { productid: productId } as any,
+        } as any,
+        relations: ["product"] as any,
+      });
+      if (!row) throw new NotFoundException("Producto no está en la orden");
+
+      const product = row.product
+        ? row.product
+        : await productsRepo.findOne({ where: { productid: productId } as any });
+      if (!product) throw new BadRequestException("Producto no existe");
+
+      const unit = Number(product.productpriceofsale ?? 0);
+      if (!Number.isFinite(unit) || unit < 0)
+        throw new BadRequestException("Precio de producto inválido");
+
+      const cantidad = Number(dto.cantidad);
+      row.cantidad = cantidad;
+      row.subtotal = this.asMoneyInt(unit * cantidad);
+
+      await ospRepo.save(row);
       await this.recalcAndPersistTotal(em, id);
     });
 
@@ -601,17 +825,19 @@ export class OrdersServicesService {
       const ordersRepo = em.getRepository(OrdersServices);
       const ospRepo = em.getRepository(OrdersServicesProducts);
 
-      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
       const row = await ospRepo.findOne({
         where: {
           order: { ordersservicesid: id } as any,
           product: { productid: productId } as any,
         } as any,
-        relations: ['product'] as any,
+        relations: ["product"] as any,
       });
-      if (!row) throw new NotFoundException('Producto no está en la orden');
+      if (!row) throw new NotFoundException("Producto no está en la orden");
 
       await ospRepo.remove(row);
       await this.recalcAndPersistTotal(em, id);
@@ -627,8 +853,10 @@ export class OrdersServicesService {
       const ossRepo = em.getRepository(OrdersServicesServices);
       const servicesRepo = em.getRepository(Services);
 
-      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
       const exists = await ossRepo.findOne({
         where: {
@@ -636,14 +864,16 @@ export class OrdersServicesService {
           service: { serviceid: dto.serviceid } as any,
         } as any,
       });
-      if (exists) throw new BadRequestException('Ese servicio ya está agregado');
+      if (exists) throw new BadRequestException("Ese servicio ya está agregado");
 
-      const service = await servicesRepo.findOne({ where: { serviceid: dto.serviceid } as any });
-      if (!service) throw new BadRequestException('Servicio no existe');
+      const service = await servicesRepo.findOne({
+        where: { serviceid: dto.serviceid } as any,
+      });
+      if (!service) throw new BadRequestException("Servicio no existe");
 
       const unitprice = this.asMoneyInt((dto as any).unitprice ?? (dto as any).precio);
       if (unitprice === 0 && ((dto as any).unitprice === undefined && (dto as any).precio === undefined)) {
-        throw new BadRequestException('unitprice (o precio) es obligatorio');
+        throw new BadRequestException("unitprice (o precio) es obligatorio");
       }
 
       const subtotal = this.asMoneyInt(unitprice * dto.cantidad);
@@ -655,9 +885,132 @@ export class OrdersServicesService {
           cantidad: dto.cantidad,
           unitprice,
           subtotal,
-        }),
+        })
       );
 
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async upsertServices(id: number, dto: UpsertServicesDto) {
+    const replace = dto.replace !== undefined ? !!dto.replace : true;
+    const items = Array.isArray(dto.items) ? dto.items : [];
+
+    const seen = new Set<number>();
+    for (const it of items) {
+      const sid = Number(it.serviceid);
+      if (!Number.isFinite(sid) || sid <= 0) throw new BadRequestException("serviceid inválido");
+      if (seen.has(sid)) throw new BadRequestException("Hay servicios repetidos en la lista");
+      seen.add(sid);
+
+      const c = Number(it.cantidad);
+      if (!Number.isFinite(c) || c <= 0) throw new BadRequestException("cantidad inválida");
+
+      const u = Number(it.unitprice);
+      if (!Number.isFinite(u) || u < 0) throw new BadRequestException("unitprice inválido");
+    }
+
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+      const servicesRepo = em.getRepository(Services);
+
+      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const existing = await ossRepo.find({
+        where: { order: { ordersservicesid: id } as any } as any,
+        relations: ["service"] as any,
+      });
+
+      const byServiceId = new Map<number, OrdersServicesServices>();
+      for (const row of existing) {
+        const sid = Number((row as any)?.service?.serviceid);
+        if (sid) byServiceId.set(sid, row);
+      }
+
+      for (const it of items) {
+        const service = await servicesRepo.findOne({ where: { serviceid: it.serviceid } as any });
+        if (!service) throw new BadRequestException(`Servicio no existe: ${it.serviceid}`);
+
+        const cantidad = Number(it.cantidad);
+        const unitprice = this.asMoneyInt(it.unitprice);
+        const subtotal = this.asMoneyInt(unitprice * cantidad);
+
+        const current = byServiceId.get(it.serviceid);
+        if (current) {
+          current.cantidad = cantidad;
+          (current as any).unitprice = unitprice;
+          (current as any).subtotal = subtotal;
+          await ossRepo.save(current);
+        } else {
+          await ossRepo.save(
+            ossRepo.create({
+              order: { ordersservicesid: id } as any,
+              service,
+              cantidad,
+              unitprice,
+              subtotal,
+            })
+          );
+        }
+      }
+
+      if (replace) {
+        const keep = new Set(items.map((x) => x.serviceid));
+        const toDelete = existing.filter((row) => {
+          const sid = Number((row as any)?.service?.serviceid);
+          return sid && !keep.has(sid);
+        });
+        if (toDelete.length) await ossRepo.remove(toDelete);
+      }
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async updateServiceLine(id: number, serviceId: number, dto: UpdateServiceLineDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+      const servicesRepo = em.getRepository(Services);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ossRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          service: { serviceid: serviceId } as any,
+        } as any,
+        relations: ["service"] as any,
+      });
+      if (!row) throw new NotFoundException("Servicio no está en la orden");
+
+      const service = row.service
+        ? row.service
+        : await servicesRepo.findOne({ where: { serviceid: serviceId } as any });
+      if (!service) throw new BadRequestException("Servicio no existe");
+
+      const cantidad = Number(dto.cantidad);
+      const unitprice =
+        dto.unitprice !== undefined && dto.unitprice !== null
+          ? this.asMoneyInt(dto.unitprice)
+          : this.asMoneyInt((row as any).unitprice ?? (service as any).servicepriceofsale ?? 0);
+
+      row.cantidad = cantidad;
+      (row as any).unitprice = unitprice;
+      (row as any).subtotal = this.asMoneyInt(unitprice * cantidad);
+
+      await ossRepo.save(row);
       await this.recalcAndPersistTotal(em, id);
     });
 
@@ -670,17 +1023,19 @@ export class OrdersServicesService {
       const ordersRepo = em.getRepository(OrdersServices);
       const ossRepo = em.getRepository(OrdersServicesServices);
 
-      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
-      if (!order) throw new NotFoundException('Orden no encontrada');
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
       const row = await ossRepo.findOne({
         where: {
           order: { ordersservicesid: id } as any,
           service: { serviceid: serviceId } as any,
         } as any,
-        relations: ['service'] as any,
+        relations: ["service"] as any,
       });
-      if (!row) throw new NotFoundException('Servicio no está en la orden');
+      if (!row) throw new NotFoundException("Servicio no está en la orden");
 
       await ossRepo.remove(row);
       await this.recalcAndPersistTotal(em, id);
@@ -694,10 +1049,14 @@ export class OrdersServicesService {
     const order = await this.validateOrder(id);
 
     const techIds = dto.technicians ?? [];
-    if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
+    if (techIds.length === 0)
+      throw new BadRequestException("Debe asignar al menos un técnico");
 
-    const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
-    if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+    const technicians = await this.techRepo.find({
+      where: { technicianid: In(techIds) } as any,
+    });
+    if (technicians.length !== techIds.length)
+      throw new BadRequestException("Uno o más técnicos no existen");
 
     order.technicians = technicians;
     await this.ordersRepo.save(order);
@@ -709,13 +1068,17 @@ export class OrdersServicesService {
   async finishOrder(id: number, dto: FinishOrderDto) {
     const order = await this.validateOrder(id);
 
-    if ((order.products ?? []).length === 0) throw new BadRequestException('No puede finalizar sin productos');
-    if (!order.technicians || order.technicians.length === 0) throw new BadRequestException('No puede finalizar sin técnicos');
+    if ((order.products ?? []).length === 0)
+      throw new BadRequestException("No puede finalizar sin productos");
+    if (!order.technicians || order.technicians.length === 0)
+      throw new BadRequestException("No puede finalizar sin técnicos");
 
     order.horafin = dto.horafin;
     order.fechafin = dto.fechafin as any;
 
-    const finishedState = await this.statesRepo.findOne({ where: { name: 'Finished' } as any });
+    const finishedState = await this.statesRepo.findOne({
+      where: { name: "Finished" } as any,
+    });
     if (finishedState) order.state = finishedState;
 
     await this.ordersRepo.save(order);
@@ -746,7 +1109,8 @@ export class OrdersServicesService {
   async getFileByIndex(orderId: number, index: number) {
     const order = await this.validateOrder(orderId);
     const files = order.files ?? [];
-    if (index < 0 || index >= files.length) throw new NotFoundException('Archivo no encontrado');
+    if (index < 0 || index >= files.length)
+      throw new NotFoundException("Archivo no encontrado");
     return { url: files[index] };
   }
 
@@ -755,8 +1119,9 @@ export class OrdersServicesService {
     const files = order.files ?? [];
     const url = dto.url?.trim();
 
-    if (!url) throw new BadRequestException('url es obligatorio');
-    if (files.includes(url)) throw new BadRequestException('Ese link ya está agregado');
+    if (!url) throw new BadRequestException("url es obligatorio");
+    if (files.includes(url))
+      throw new BadRequestException("Ese link ya está agregado");
 
     order.files = [...files, url];
     await this.ordersRepo.save(order);
@@ -768,7 +1133,8 @@ export class OrdersServicesService {
   async removeFileByIndex(orderId: number, index: number) {
     const order = await this.validateOrder(orderId);
     const files = order.files ?? [];
-    if (index < 0 || index >= files.length) throw new NotFoundException('Archivo no encontrado');
+    if (index < 0 || index >= files.length)
+      throw new NotFoundException("Archivo no encontrado");
 
     order.files = files.filter((_, i) => i !== index);
     await this.ordersRepo.save(order);
@@ -782,8 +1148,8 @@ export class OrdersServicesService {
     const files = order.files ?? [];
     const url = dto.url?.trim();
 
-    if (!url) throw new BadRequestException('url es obligatorio');
-    if (!files.includes(url)) throw new NotFoundException('Archivo no encontrado');
+    if (!url) throw new BadRequestException("url es obligatorio");
+    if (!files.includes(url)) throw new NotFoundException("Archivo no encontrado");
 
     order.files = files.filter((f) => f !== url);
     await this.ordersRepo.save(order);
@@ -794,25 +1160,25 @@ export class OrdersServicesService {
 
   async findByTechnician(technicianId: number) {
     const list = await this.ordersRepo
-      .createQueryBuilder('o')
-      .leftJoinAndSelect('o.products', 'osp')
-      .leftJoinAndSelect('osp.product', 'p')
-      .leftJoinAndSelect('o.services', 'oss')
-      .leftJoinAndSelect('oss.service', 's')
-      .leftJoinAndSelect('s.typeofservice', 'tos')
-      .leftJoinAndSelect('o.technicians', 't')
-      .leftJoinAndSelect('t.users', 'tu')
-      .leftJoinAndSelect('o.client', 'c')
-      .leftJoinAndSelect('c.users', 'cu')
-      .leftJoinAndSelect('o.state', 'st')
-      .leftJoinAndSelect('o.history', 'h')
-      .leftJoinAndSelect('h.technician', 'ht')
-      .leftJoinAndSelect('ht.users', 'htu')
-      .leftJoinAndSelect('o.warrantyRecord', 'wr')
-      .leftJoinAndSelect('wr.reportedBy', 'wru')
-      .where('t.technicianid = :technicianId', { technicianId })
-      .orderBy('o.ordersservicesid', 'ASC')
-      .addOrderBy('h.createdat', 'DESC')
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.products", "osp")
+      .leftJoinAndSelect("osp.product", "p")
+      .leftJoinAndSelect("o.services", "oss")
+      .leftJoinAndSelect("oss.service", "s")
+      .leftJoinAndSelect("s.typeofservice", "tos")
+      .leftJoinAndSelect("o.technicians", "t")
+      .leftJoinAndSelect("t.users", "tu")
+      .leftJoinAndSelect("o.client", "c")
+      .leftJoinAndSelect("c.users", "cu")
+      .leftJoinAndSelect("o.state", "st")
+      .leftJoinAndSelect("o.history", "h")
+      .leftJoinAndSelect("h.technician", "ht")
+      .leftJoinAndSelect("ht.users", "htu")
+      .leftJoinAndSelect("o.warrantyRecord", "wr")
+      .leftJoinAndSelect("wr.reportedBy", "wru")
+      .where("t.technicianid = :technicianId", { technicianId })
+      .orderBy("o.ordersservicesid", "ASC")
+      .addOrderBy("h.createdat", "DESC")
       .getMany();
 
     return this.presentMany(list);
@@ -822,7 +1188,7 @@ export class OrdersServicesService {
     const list = await this.ordersRepo.find({
       where: { client: { customerid: clientId } as any } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { ordersservicesid: 'ASC', history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
 
     return this.presentMany(list);
@@ -832,7 +1198,7 @@ export class OrdersServicesService {
     const list = await this.ordersRepo.find({
       where: { state: { stateid: stateId } as any } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { ordersservicesid: 'ASC', history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
 
     return this.presentMany(list);
@@ -842,7 +1208,7 @@ export class OrdersServicesService {
     const list = await this.ordersRepo.find({
       where: { fechainicio: Between(from as any, to as any) } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { ordersservicesid: 'ASC', history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
 
     return this.presentMany(list);

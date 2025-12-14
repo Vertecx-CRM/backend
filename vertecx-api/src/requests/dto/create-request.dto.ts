@@ -1,4 +1,14 @@
-import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import {
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ArrayNotEmpty,
+} from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateRequestDto {
@@ -28,10 +38,11 @@ export class CreateRequestDto {
   @IsNotEmpty()
   description: string;
 
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional({ example: 5 })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  stateId: number;
+  stateId?: number;
 
   @ApiProperty({ example: 12 })
   @IsInt()
@@ -42,4 +53,11 @@ export class CreateRequestDto {
   @IsInt()
   @Min(1)
   clientId: number;
+
+  @ApiProperty({ example: [1, 2, 3] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  technicians: number[];
 }

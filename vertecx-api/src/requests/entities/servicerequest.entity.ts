@@ -1,7 +1,16 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Customers } from 'src/customers/entities/customers.entity';
 import { Services } from 'src/services/entities/services.entity';
 import { States } from 'src/shared/entities/states.entity';
+import { ServiceRequestTechnician } from './servicerequest-technician.entity';
 
 @Entity({ name: 'servicerequests' })
 @Index(['stateId', 'scheduledAt'])
@@ -14,7 +23,7 @@ export class ServiceRequest {
   scheduledAt: Date | null;
 
   @Column({ name: 'scheduledendat', type: 'timestamptz', nullable: true })
-scheduledEndAt: Date | null;
+  scheduledEndAt: Date | null;
 
   @Column({ name: 'servicetype', type: 'varchar', length: 255 })
   serviceType: string;
@@ -49,4 +58,6 @@ scheduledEndAt: Date | null;
   @JoinColumn({ name: 'clientid' })
   customer: Customers;
 
+  @OneToMany(() => ServiceRequestTechnician, (x) => x.serviceRequest, { cascade: false })
+  techniciansMap: ServiceRequestTechnician[];
 }

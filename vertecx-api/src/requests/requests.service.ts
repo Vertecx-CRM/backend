@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from "@nestjs/comm
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { ServiceRequest } from "./entities/servicerequest.entity";
+import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
 import { States } from "../shared/entities/states.entity";
@@ -16,7 +17,7 @@ function localMidnight(ymd: string) {
 }
 
 function toDateOrNull(input?: string | null) {
-  if (input === undefined) return undefined; // útil para update (no tocar)
+  if (input === undefined) return undefined;
   if (input === null || input === "") return null;
 
   const asMidnight = localMidnight(input);
@@ -33,10 +34,21 @@ function ensureEndAfterStart(start: Date | null, end: Date | null) {
   }
 }
 
+function uniqPositiveInts(arr: number[]) {
+  const set = new Set<number>();
+  for (const x of arr || []) {
+    const n = Number(x);
+    if (Number.isFinite(n) && n > 0) set.add(n);
+  }
+  return Array.from(set.values());
+}
+
 @Injectable()
 export class RequestsService {
   constructor(
     @InjectRepository(ServiceRequest) private readonly repo: Repository<ServiceRequest>,
+    @InjectRepository(ServiceRequestTechnician)
+    private readonly linkRepo: Repository<ServiceRequestTechnician>,
     @InjectRepository(States) private readonly statesRepo: Repository<States>
   ) {}
 
@@ -50,44 +62,76 @@ export class RequestsService {
     return this.statesRepo.find({ order: { stateid: "ASC" } as any });
   }
 
+  private relations() {
+    return [
+      "state",
+      "service",
+      "customer",
+      "customer.users",
+      "techniciansMap",
+      "techniciansMap.technician",
+      "techniciansMap.technician.users",
+    ];
+  }
+
   async create(dto: CreateRequestDto) {
-    await this.ensureStateExists(dto.stateId);
+    await this.ensureStateExists(5);
+
+    const technicians = uniqPositiveInts(dto.technicians || []);
+    if (!technicians.length) throw new BadRequestException("Selecciona al menos un técnico.");
 
     const direccion = String(dto?.direccion ?? "").trim();
     if (!direccion) throw new BadRequestException("direccion should not be empty");
-    if (direccion.length > 255)
+    if (direccion.length > 255) {
       throw new BadRequestException("direccion must be shorter than or equal to 255 characters");
+    }
 
     const startParsed = toDateOrNull(dto.scheduledAt ?? undefined);
-    const endParsed = toDateOrNull((dto as any).scheduledEndAt ?? undefined);
+    const endParsed = toDateOrNull(dto.scheduledEndAt ?? undefined);
 
-    const scheduledAt = startParsed === undefined ? new Date() : startParsed; // tu comportamiento actual
+    const scheduledAt = startParsed === undefined ? new Date() : startParsed;
     const scheduledEndAt = endParsed === undefined ? null : endParsed;
 
     ensureEndAfterStart(scheduledAt, scheduledEndAt);
 
-    const entity = this.repo.create({
-      scheduledAt,
-      scheduledEndAt,
-      serviceType: dto.serviceType,
-      direccion: direccion.slice(0, 255),
-      description: dto.description,
-      stateId: dto.stateId,
-      serviceId: dto.serviceId,
-      clientId: dto.clientId,
-    });
+    const saved = await this.repo.manager.transaction(async (manager) => {
+      const srRepo = manager.getRepository(ServiceRequest);
+      const linkRepo = manager.getRepository(ServiceRequestTechnician);
 
-    const saved = await this.repo.save(entity);
+      const entity = srRepo.create({
+        scheduledAt,
+        scheduledEndAt,
+        serviceType: dto.serviceType,
+        direccion: direccion.slice(0, 255),
+        description: dto.description,
+        stateId: 5,
+        serviceId: dto.serviceId,
+        clientId: dto.clientId,
+      });
+
+      const sr = await srRepo.save(entity);
+
+      const links = technicians.map((tid) =>
+        linkRepo.create({
+          serviceRequestId: sr.serviceRequestId,
+          technicianId: tid,
+        })
+      );
+
+      await linkRepo.insert(links);
+
+      return sr;
+    });
 
     return this.repo.findOne({
       where: { serviceRequestId: saved.serviceRequestId },
-      relations: ["state", "service", "customer", "customer.users"],
+      relations: this.relations(),
     });
   }
 
   async findAll() {
     return this.repo.find({
-      relations: ["state", "service", "customer", "customer.users"],
+      relations: this.relations(),
       order: { serviceRequestId: "ASC" },
     });
   }
@@ -95,7 +139,7 @@ export class RequestsService {
   async findOne(id: number) {
     const entity = await this.repo.findOne({
       where: { serviceRequestId: id },
-      relations: ["state", "service", "customer", "customer.users"],
+      relations: this.relations(),
     });
     if (!entity) throw new NotFoundException("ServiceRequest not found");
     return entity;
@@ -103,15 +147,16 @@ export class RequestsService {
 
   async update(id: number, dto: UpdateServiceRequestDto) {
     const existing = await this.findOne(id);
+
     if (dto.stateId !== undefined) await this.ensureStateExists(dto.stateId);
 
     const nextScheduledAt =
       dto.scheduledAt === undefined ? existing.scheduledAt : toDateOrNull(dto.scheduledAt) ?? null;
 
     const nextScheduledEndAt =
-      (dto as any).scheduledEndAt === undefined
+      dto.scheduledEndAt === undefined
         ? (existing as any).scheduledEndAt ?? null
-        : toDateOrNull((dto as any).scheduledEndAt) ?? null;
+        : toDateOrNull(dto.scheduledEndAt) ?? null;
 
     ensureEndAfterStart(nextScheduledAt, nextScheduledEndAt);
 
@@ -119,8 +164,9 @@ export class RequestsService {
     if ((dto as any).direccion !== undefined) {
       const dir = String((dto as any).direccion ?? "").trim();
       if (!dir) throw new BadRequestException("direccion should not be empty");
-      if (dir.length > 255)
+      if (dir.length > 255) {
         throw new BadRequestException("direccion must be shorter than or equal to 255 characters");
+      }
       direccion = dir.slice(0, 255);
     }
 
@@ -136,7 +182,28 @@ export class RequestsService {
 
     if (dto.stateId !== undefined) patch.stateId = dto.stateId;
 
-    await this.repo.update({ serviceRequestId: id }, patch);
+    await this.repo.manager.transaction(async (manager) => {
+      const srRepo = manager.getRepository(ServiceRequest);
+      const linkRepo = manager.getRepository(ServiceRequestTechnician);
+
+      await srRepo.update({ serviceRequestId: id }, patch);
+
+      if (dto.technicians !== undefined) {
+        const technicians = uniqPositiveInts(dto.technicians || []);
+        if (!technicians.length) throw new BadRequestException("Selecciona al menos un técnico.");
+
+        await linkRepo.delete({ serviceRequestId: id } as any);
+
+        const links = technicians.map((tid) =>
+          linkRepo.create({
+            serviceRequestId: id,
+            technicianId: tid,
+          })
+        );
+
+        await linkRepo.insert(links);
+      }
+    });
 
     return this.findOne(id);
   }
