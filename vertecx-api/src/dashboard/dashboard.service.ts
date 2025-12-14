@@ -68,18 +68,22 @@ export class DashboardService {
   //  VENTAS DIARIAS POR MES
 
   async getDailySalesByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.salesRepo
+    const qb = this.salesRepo
       .createQueryBuilder("s")
       .select("EXTRACT(DAY FROM s.saledate)", "day")
       .addSelect("SUM(s.totalamount)", "total")
-      .where("EXTRACT(MONTH FROM s.saledate) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM s.saledate) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM s.saledate) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM s.saledate) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
+
 
 
   // COMPRAS POR MES
@@ -113,20 +117,22 @@ export class DashboardService {
   //  COMPRAS DIARIAS POR MES
 
   async getDailyPurchasesByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.purchasesRepo
+    const qb = this.purchasesRepo
       .createQueryBuilder("p")
       .select("EXTRACT(DAY FROM p.createdat)", "day")
       .addSelect("SUM(p.amount)", "total")
-      .where("EXTRACT(MONTH FROM p.createdat) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createdat) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM p.createdat) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM p.createdat) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
 
- 
   // PRODUCTOS POR CATEGORIA
   async getCategoryProducts(year?: number) {
     const y = this.validateYear(year);
@@ -209,19 +215,23 @@ export class DashboardService {
 
   //  CLIENTES DIARIOS POR MES
   async getDailyClientsByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.customerRepo
+    const qb = this.customerRepo
       .createQueryBuilder("c")
       .innerJoin("users", "u", "u.userid = c.userid")
       .select("EXTRACT(DAY FROM u.createat)", "day")
       .addSelect("COUNT(*)", "total")
-      .where("EXTRACT(MONTH FROM u.createat) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM u.createat) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM u.createat) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM u.createat) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
+
 
 
   //  SOLICITUDES POR ESTADO

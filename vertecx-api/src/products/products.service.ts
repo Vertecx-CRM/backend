@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { Products } from './entities/products.entity';
-import { Ordersproducts } from './entities/ordersproducts.entity';
-import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
 import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
 
 import { CreateProductDto } from './dto/create-product.dto';
@@ -19,12 +17,6 @@ export class ProductsService {
     @InjectRepository(ProductCategory)
     private readonly productCategoriesRepo: Repository<ProductCategory>,
 
-    @InjectRepository(PurchaseProduct)
-    private readonly purchaseProductsRepo: Repository<PurchaseProduct>,
-
-    @InjectRepository(Ordersproducts)
-    private readonly ordersProductsRepo: Repository<Ordersproducts>,
-
     private readonly dataSource: DataSource,
   ) {}
 
@@ -34,7 +26,9 @@ export class ProductsService {
     });
 
     if (!category) {
-      throw new BadRequestException(`La categoría (${categoryid}) no existe en categories.`);
+      throw new BadRequestException(
+        `La categoría (${categoryid}) no existe en categories.`,
+      );
     }
     return category;
   }
@@ -49,8 +43,10 @@ export class ProductsService {
       suppliercategory: dto.suppliercategory.trim(),
       image: dto.image.trim(),
       productcode: dto.productcode ?? null,
-      productpriceofsale: dto.productpriceofsale ?? null,
-      productpriceofsupplier: dto.productpriceofsupplier,
+
+      // Precios y stock se gestionan desde Compras
+      productpriceofsale: null,
+      productpriceofsupplier: 0,
       isactive: dto.isactive ?? true,
     });
 
@@ -73,13 +69,29 @@ export class ProductsService {
       relations: { category: true },
     });
 
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
     return product;
   }
 
   async update(id: number, dto: UpdateProductDto) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
+
+    // Bloquear edición de precios desde este módulo
+    if (
+      dto.productpriceofsale !== undefined ||
+      dto.productpriceofsupplier !== undefined
+    ) {
+      throw new BadRequestException(
+        'Los precios de compra y venta solo se gestionan desde el módulo de Compras.',
+      );
+    }
 
     if (dto.categoryid !== undefined) {
       await this.ensureCategoryExists(dto.categoryid);
@@ -88,15 +100,23 @@ export class ProductsService {
 
     if (dto.productname !== undefined) {
       const v = dto.productname.trim();
-      if (!v) throw new BadRequestException('El nombre del producto es obligatorio.');
+      if (!v) {
+        throw new BadRequestException('El nombre del producto es obligatorio.');
+      }
       product.productname = v;
     }
 
-    if (dto.productdescription !== undefined) product.productdescription = dto.productdescription ?? null;
+    if (dto.productdescription !== undefined) {
+      product.productdescription = dto.productdescription ?? null;
+    }
 
     if (dto.suppliercategory !== undefined) {
       const v = dto.suppliercategory?.trim();
-      if (!v) throw new BadRequestException('La categoría del proveedor es obligatoria.');
+      if (!v) {
+        throw new BadRequestException(
+          'La categoría del proveedor es obligatoria.',
+        );
+      }
       product.suppliercategory = v;
     }
 
@@ -110,10 +130,13 @@ export class ProductsService {
       product.image = v;
     }
 
-    if (dto.productcode !== undefined) product.productcode = dto.productcode ?? null;
-    if (dto.productpriceofsale !== undefined) product.productpriceofsale = dto.productpriceofsale ?? null;
-    if (dto.productpriceofsupplier !== undefined) product.productpriceofsupplier = dto.productpriceofsupplier;
-    if (dto.isactive !== undefined) product.isactive = dto.isactive;
+    if (dto.productcode !== undefined) {
+      product.productcode = dto.productcode ?? null;
+    }
+
+    if (dto.isactive !== undefined) {
+      product.isactive = dto.isactive;
+    }
 
     return await this.productsRepo.save(product);
   }
@@ -141,7 +164,11 @@ export class ProductsService {
       hasOrdersProducts,
       hasOrdersServicesProducts,
       hasSales,
-      hasAny: hasPurchases || hasOrdersProducts || hasOrdersServicesProducts || hasSales,
+      hasAny:
+        hasPurchases ||
+        hasOrdersProducts ||
+        hasOrdersServicesProducts ||
+        hasSales,
     };
   }
 
@@ -157,14 +184,22 @@ export class ProductsService {
     if (rel.hasOrdersServicesProducts) parts.push('órdenes (servicios)');
     if (rel.hasSales) parts.push('ventas');
 
-    if (parts.length === 0) return 'Está asociado a otros registros del sistema.';
-    if (parts.length === 1) return `Está asociado a ${parts[0]}.`;
+    if (parts.length === 0) {
+      return 'Está asociado a otros registros del sistema.';
+    }
+    if (parts.length === 1) {
+      return `Está asociado a ${parts[0]}.`;
+    }
     return `Está asociado a ${parts.join(' y ')}.`;
   }
 
   async getDeletionInfo(id: number) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
 
     const rel = await this.isReferenced(id);
 
@@ -180,13 +215,19 @@ export class ProductsService {
   }
 
   async remove(id: number) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
 
     const rel = await this.isReferenced(id);
 
     if (rel.hasAny) {
-      if (!product.isactive) throw new BadRequestException('El producto ya está inactivo.');
+      if (!product.isactive) {
+        throw new BadRequestException('El producto ya está inactivo.');
+      }
       product.isactive = false;
       return await this.productsRepo.save(product);
     }
@@ -196,7 +237,9 @@ export class ProductsService {
       return { deleted: true, mode: 'hard', productid: id };
     } catch (e: any) {
       if (e?.code === '23503') {
-        if (!product.isactive) throw new BadRequestException('El producto ya está inactivo.');
+        if (!product.isactive) {
+          throw new BadRequestException('El producto ya está inactivo.');
+        }
         product.isactive = false;
         return await this.productsRepo.save(product);
       }
@@ -204,4 +247,3 @@ export class ProductsService {
     }
   }
 }
-

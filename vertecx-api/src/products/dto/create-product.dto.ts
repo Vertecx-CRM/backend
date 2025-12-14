@@ -28,13 +28,18 @@ export class CreateProductDto {
   @Min(1)
   categoryid: number;
 
-  @ApiProperty({ example: 'Celulares', description: 'Texto libre (categoría del proveedor)' })
+  @ApiProperty({
+    example: 'Celulares',
+    description: 'Texto libre (categoría del proveedor)',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   suppliercategory: string;
 
-  @ApiProperty({ example: 'https://res.cloudinary.com/.../products/imagen.png' })
+  @ApiProperty({
+    example: 'https://res.cloudinary.com/.../products/imagen.png',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(2048)
@@ -47,16 +52,24 @@ export class CreateProductDto {
   @MaxLength(20)
   productcode?: string | null;
 
-  @ApiPropertyOptional({ example: 680000 })
+  @ApiPropertyOptional({
+    example: 680000,
+    description: 'Precio de venta unitario. Lo actualiza el módulo de compras.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   productpriceofsale?: number | null;
 
-  @ApiProperty({ example: 520000 })
+  @ApiPropertyOptional({
+    example: 520000,
+    description:
+      'Precio de compra al proveedor. Lo actualiza el módulo de compras.',
+  })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  productpriceofsupplier: number;
+  productpriceofsupplier?: number;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()
