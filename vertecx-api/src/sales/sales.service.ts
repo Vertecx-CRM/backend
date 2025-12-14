@@ -34,7 +34,7 @@ export class SalesService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      // 1. Validar productos y calcular subtotal + descuentos por línea
+      // 1. Validar productos, stock y calcular subtotal + descuentos por línea
       let subtotal = 0;
       let discountByLines = 0;
 
@@ -48,6 +48,16 @@ export class SalesService {
             `Producto con ID ${d.productid} no encontrado.`,
           );
         }
+
+        const currentStock = product.productstock ?? 0;
+        if (currentStock < d.quantity) {
+          throw new BadRequestException(
+            `Stock insuficiente para el producto ${product.productname}. Disponible: ${currentStock}, solicitado: ${d.quantity}.`,
+          );
+        }
+
+        product.productstock = currentStock - d.quantity;
+        await manager.save(Products, product);
 
         const lineTotal = d.quantity * d.unitprice;
         const lineDiscount =
@@ -137,6 +147,7 @@ export class SalesService {
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
     return sale;
   }
+
   //  Actualizar venta
   async update(id: number, dto: UpdateSaleDto) {
     const sale = await this.salesRepo.findOne({ where: { saleid: id } });

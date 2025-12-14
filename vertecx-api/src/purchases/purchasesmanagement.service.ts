@@ -134,6 +134,12 @@ export class PurchasesmanagementService {
           newProductsToCreate.push(product);
         }
 
+        // 🔹 Siempre actualizar el precio del proveedor (producto nuevo o existente)
+        const supplierPrice =
+          item.productpriceofsupplier ?? item.unitprice;
+
+        product.productpriceofsupplier = supplierPrice;
+
         // Validar cantidad
         if (item.quantity <= 0) {
           throw new BadRequestException(
@@ -198,7 +204,10 @@ export class PurchasesmanagementService {
         `SELECT nextval('purchase_order_seq')`,
       );
       const nextNumber = result[0].nextval;
-      const numberoforder = `ORD-${year}-${String(nextNumber).padStart(3, '0')}`;
+      const numberoforder = `ORD-${year}-${String(nextNumber).padStart(
+        3,
+        '0',
+      )}`;
 
       // Crear compra
       const purchase = manager.create(Purchasesmanagement, {
@@ -330,7 +339,6 @@ export class PurchasesmanagementService {
       throw new BadRequestException('Solo se pueden anular compras aprobadas.');
     }
 
-    // Armar payload de actualización (solo columnas necesarias)
     const updateData: Partial<Purchasesmanagement> = {
       stateid: 8,
       updatedat: new Date(),
@@ -342,7 +350,6 @@ export class PurchasesmanagementService {
 
     await this.purchasesRepo.update({ purchaseorderid: id }, updateData);
 
-    // Retornar compra actualizada (rápido, sin relaciones)
     return await this.purchasesRepo.findOneBy({ purchaseorderid: id });
   }
 
