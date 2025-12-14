@@ -88,7 +88,7 @@ export class RequestsService {
   async findAll() {
     return this.repo.find({
       relations: ["state", "service", "customer", "customer.users"],
-      order: { serviceRequestId: "DESC" },
+      order: { serviceRequestId: "ASC" },
     });
   }
 

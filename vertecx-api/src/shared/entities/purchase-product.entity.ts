@@ -22,6 +22,8 @@ export class PurchaseProduct {
   @Column({ name: 'productid', nullable: false })
   productid: number;
 
+  
+
   @Column({ type: 'int', nullable: false })
   quantity: number;
 

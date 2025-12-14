@@ -20,7 +20,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 
-@ApiTags('Sales') // 🔹 Agrupa las rutas en Swagger bajo "Sales"
+@ApiTags('Sales') //  Agrupa las rutas en Swagger bajo "Sales"
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
@@ -115,6 +115,53 @@ export class SalesController {
   })
   update(@Param('id') id: string, @Body() updateSaleDto: UpdateSaleDto) {
     return this.salesService.update(+id, updateSaleDto);
+  }
+
+  // PATCH /sales/:id/cancel
+  @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Cancelar una venta',
+    description:
+      'Anula una venta existente, revierte el stock de los productos y cambia el estado a "Cancelled". ' +
+      'Solo se pueden anular ventas en estado Pending o Completed.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID de la venta que se desea cancelar',
+    type: Number,
+    example: 12,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        observation: {
+          type: 'string',
+          example: 'Cliente se retractó de la compra',
+          description:
+            'Razón de la anulación (opcional). Se guardará en las notas de la venta.',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'La venta fue anulada exitosamente.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Error de validación: la venta ya estaba cancelada, el estado no permite cancelación o stock inconsistente.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'La venta no existe.',
+  })
+  async cancelSale(
+    @Param('id') id: string,
+    @Body('observation') observation?: string,
+  ) {
+    return this.salesService.cancel(+id, observation);
   }
 
   // DELETE /sales/:id

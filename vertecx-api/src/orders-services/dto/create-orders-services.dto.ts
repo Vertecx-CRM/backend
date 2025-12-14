@@ -11,16 +11,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
-class CreateOrdersServicesProductItemDto {
-  @IsInt()
-  @Min(1)
-  productid: number;
-
-  @IsInt()
-  @Min(1)
-  cantidad: number;
-}
+import { AddProductDto } from './add-product.dto';
+import { AddServiceDto } from './add-service.dto';
 
 export class CreateOrdersServicesDto {
   @IsString()
@@ -58,11 +50,22 @@ export class CreateOrdersServicesDto {
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => CreateOrdersServicesProductItemDto)
-  products: CreateOrdersServicesProductItemDto[];
+  @Type(() => AddProductDto)
+  products: AddProductDto[];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AddServiceDto)
+  services: AddServiceDto[];
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   files?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  viaticos?: number;
 }

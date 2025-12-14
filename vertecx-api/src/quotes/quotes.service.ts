@@ -16,8 +16,15 @@ export class QuotesService {
     return 'This action adds a new quote';
   }
 
-  findAll() {
-    return `This action returns all quotes`;
+  async findAll() {
+    const rows = await this.quotesRepo.find();
+
+    return rows.map((row) => ({
+      ...row,
+      clientid: row.customerid,
+      description: row.observation,
+      technicians: row.technicianid ? [row.technicianid] : [],
+    }));
   }
 
   findOne(id: number) {
