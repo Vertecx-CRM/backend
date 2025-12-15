@@ -1,3 +1,8 @@
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { Customers } from "./entities/customers.entity";
+import { CustomersController } from "./customers.controller";
+import { CustomersService } from "./customers.service";
 // customers/customers.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,6 +26,6 @@ import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
   ],
   controllers: [CustomersController],
   providers: [CustomersService],
-  exports: [CustomersService],
+  exports: [TypeOrmModule, CustomersService],
 })
 export class CustomersModule {}

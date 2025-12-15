@@ -1,29 +1,48 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreateQuoteDetailDto } from './create-quote-detail.dto';
 
 export class CreateQuoteDto {
-  @ApiProperty()
+  @ApiProperty({ example: 10 })
   @IsInt()
-  @IsNotEmpty()
-  quotesid: number;
+  @IsPositive()
+  serviceRequestId: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ example: 5 })
+  @IsOptional()
   @IsInt()
-  @IsNotEmpty()
-  ordersservicesid: number;
+  @IsPositive()
+  ordersservicesid?: number;
 
-  @ApiProperty()
+  @ApiProperty({ example: 5 })
   @IsInt()
-  @IsNotEmpty()
+  @IsPositive()
   statesid: number;
 
-  @ApiProperty()
-  @IsString()
+  @ApiPropertyOptional({ example: 'Pendiente aprobación cliente' })
   @IsOptional()
-  quotedata?: string;
-
-  @ApiProperty()
   @IsString()
-  @IsOptional()
   observation?: string;
+
+  @ApiPropertyOptional({ example: 'MANTENIMIENTO', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  servicetype?: string;
+
+  @ApiProperty({ type: [CreateQuoteDetailDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateQuoteDetailDto)
+  details: CreateQuoteDetailDto[];
 }
