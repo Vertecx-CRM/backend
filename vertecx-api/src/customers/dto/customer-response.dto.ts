@@ -19,12 +19,16 @@ export class CustomerResponseDto {
     example: {
       userid: 1,
       username: 'johndoe',
+      name: 'John',
+      lastname: 'Doe',
       email: 'john@example.com'
     }
   })
   users?: {
     userid: number;
     username?: string;
+    name?: string;
+    lastname?: string;
     email?: string;
   };
 
@@ -48,6 +52,8 @@ export class CustomerResponseDto {
       this.users = {
         userid: customer.users.userid,
         username: customer.users.username,
+        name: customer.users.name,
+        lastname: customer.users.lastname,
         email: customer.users.email
       };
     }
