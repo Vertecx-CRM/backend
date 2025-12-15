@@ -7,6 +7,8 @@ import { ServiceRequestTechnician } from "./entities/servicerequest-technician.e
 import { Services } from "src/services/entities/services.entity";
 import { States } from "src/shared/entities/states.entity";
 import { CustomersModule } from "src/customers/customers.module";
+import { Customers } from "src/customers/entities/customers.entity";
+
 
 @Module({
   imports: [
@@ -15,6 +17,7 @@ import { CustomersModule } from "src/customers/customers.module";
       ServiceRequestTechnician,
       Services,
       States,
+      Customers
     ]),
     CustomersModule,
   ],
