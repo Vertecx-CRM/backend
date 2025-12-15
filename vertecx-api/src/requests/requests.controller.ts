@@ -7,10 +7,14 @@ import {
   ParseIntPipe,
   Patch,
   Delete,
+  Req,
+  UseGuards,
 } from "@nestjs/common";
 import { RequestsService } from "./requests.service";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
+import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
+import { AuthGuard } from "@nestjs/passport";
 
 @Controller("service-requests")
 export class RequestsController {
@@ -19,6 +23,12 @@ export class RequestsController {
   @Get("states/all")
   findAllStates() {
     return this.requestsService.findAllStates();
+  }
+
+  @UseGuards(AuthGuard("jwt"))
+  @Post("from-auth")
+  createFromAuth(@Req() req: any, @Body() dto: CreateRequestFromAuthDto) {
+    return this.requestsService.createFromAuth(req.user, dto);
   }
 
   @Post()

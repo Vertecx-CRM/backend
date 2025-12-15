@@ -4,19 +4,19 @@ import { RequestsController } from "./requests.controller";
 import { RequestsService } from "./requests.service";
 import { ServiceRequest } from "./entities/servicerequest.entity";
 import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
-import { Customers } from "src/customers/entities/customers.entity";
 import { Services } from "src/services/entities/services.entity";
 import { States } from "src/shared/entities/states.entity";
+import { CustomersModule } from "src/customers/customers.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       ServiceRequest,
       ServiceRequestTechnician,
-      Customers,
       Services,
       States,
     ]),
+    CustomersModule,
   ],
   controllers: [RequestsController],
   providers: [RequestsService],
