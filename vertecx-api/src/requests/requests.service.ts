@@ -14,6 +14,7 @@ import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
 
 import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
+import { MailService } from "src/shared/mail/mail.service";
 
 function localMidnight(ymd: string) {
   const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -64,6 +65,30 @@ function resolveUserIdFromAuth(user: any): number {
   return 0;
 }
 
+function normalizeStateName(name?: string | null) {
+  return (name ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function buildScheduleLabel(start: Date | null, end: Date | null) {
+  if (!start) return "";
+  const fmtDateTime = new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+  const fmtTime = new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
+    timeStyle: "short",
+  });
+  const startText = fmtDateTime.format(start);
+  if (end) return `${startText} - ${fmtTime.format(end)}`;
+  return startText;
+}
+
 @Injectable()
 export class RequestsService {
   constructor(
@@ -77,8 +102,46 @@ export class RequestsService {
     private readonly statesRepo: Repository<States>,
 
     @InjectRepository(Customers)
-    private readonly customersRepo: Repository<Customers>
+    private readonly customersRepo: Repository<Customers>,
+
+    private readonly mailService: MailService
   ) {}
+
+  private isScheduledState(name?: string | null) {
+    const norm = normalizeStateName(name);
+    return norm.includes("agend");
+  }
+
+  private async notifyScheduled(sr: ServiceRequest) {
+    try {
+      if (!this.isScheduledState(sr.state?.name)) return;
+      if (!sr.scheduledAt) return;
+
+      const when = buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
+
+      const customerEmail = sr.customer?.users?.email;
+      if (customerEmail) {
+        const name = [sr.customer?.users?.name, sr.customer?.users?.lastname].filter(Boolean).join(" ").trim();
+        await this.mailService.sendAppointmentScheduled(customerEmail, name, "solicitud de servicio", when);
+      }
+
+      const techEmails = (sr.techniciansMap ?? [])
+        .map((t: any) => ({
+          email: t?.technician?.users?.email,
+          name: [t?.technician?.users?.name, t?.technician?.users?.lastname].filter(Boolean).join(" ").trim(),
+        }))
+        .filter((t: any) => t.email);
+
+      await Promise.all(
+        techEmails.map((t) =>
+          this.mailService.sendAppointmentScheduled(t.email, t.name, "visita asignada", when)
+        )
+      );
+    } catch (error) {
+      // No bloquear el flujo principal por fallos de correo
+      console.error("No se pudo enviar correo de agenda de solicitud:", error?.message ?? error);
+    }
+  }
 
   async findAll() {
     return this.srRepo.find({
@@ -164,7 +227,9 @@ export class RequestsService {
       await this.linkRepo.insert(linkRows as any);
     }
 
-    return this.findOne(sr.serviceRequestId);
+    const full = await this.findOne(sr.serviceRequestId);
+    await this.notifyScheduled(full);
+    return full;
   }
 
   async createFromAuth(user: any, dto: CreateRequestFromAuthDto) {
@@ -227,12 +292,18 @@ export class RequestsService {
     });
 
     const sr = await this.srRepo.save(entity);
-    return this.findOne(sr.serviceRequestId);
+    const full = await this.findOne(sr.serviceRequestId);
+    await this.notifyScheduled(full);
+    return full;
   }
 
   async update(id: number, dto: UpdateServiceRequestDto) {
     const sr = await this.srRepo.findOne({ where: { serviceRequestId: id } });
     if (!sr) throw new NotFoundException("Solicitud no encontrada");
+
+    const prevStateId = sr.stateId;
+    const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
+    const prevEnd = sr.scheduledEndAt ? sr.scheduledEndAt.getTime() : null;
 
     const scheduledAt = toDateOrNull((dto as any)?.scheduledAt);
     const scheduledEndAt = toDateOrNull((dto as any)?.scheduledEndAt);
@@ -303,7 +374,18 @@ export class RequestsService {
       }
     }
 
-    return this.findOne(id);
+    const updated = await this.findOne(id);
+
+    const scheduleChanged =
+      prevStateId !== updated.stateId ||
+      prevStart !== (updated.scheduledAt ? updated.scheduledAt.getTime() : null) ||
+      prevEnd !== (updated.scheduledEndAt ? updated.scheduledEndAt.getTime() : null);
+
+    if (scheduleChanged && this.isScheduledState(updated.state?.name)) {
+      await this.notifyScheduled(updated);
+    }
+
+    return updated;
   }
 
   async remove(id: number) {

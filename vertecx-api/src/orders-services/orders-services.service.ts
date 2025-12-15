@@ -21,6 +21,7 @@ import { Technicians } from "src/technicians/entities/technicians.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { States } from "src/shared/entities/states.entity";
 import { Users } from "src/users/entities/users.entity";
+import { MailService } from "src/shared/mail/mail.service";
 
 import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
 import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
@@ -82,7 +83,8 @@ export class OrdersServicesService {
     @InjectRepository(States)
     private readonly statesRepo: Repository<States>,
     @InjectRepository(Users)
-    private readonly usersRepo: Repository<Users>
+    private readonly usersRepo: Repository<Users>,
+    private readonly mailService: MailService
   ) {}
 
   private asMoneyInt(v: any) {
@@ -99,6 +101,57 @@ export class OrdersServicesService {
     const iva = this.asMoneyInt((base * 19) / 100);
     const total = base + iva;
     return { base, iva, total };
+  }
+
+  private normalizeStateName(name?: string | null) {
+    return (name ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  private isScheduledState(name?: string | null) {
+    return this.normalizeStateName(name).includes("agend");
+  }
+
+  private orderScheduleLabel(order: OrdersServices) {
+    const start = [order.fechainicio, order.horainicio].filter(Boolean).join(" ");
+    const end = [order.fechafin, order.horafin].filter(Boolean).join(" ");
+    if (start && end) return `${start} - ${end}`.trim();
+    return start || end || "sin fecha definida";
+  }
+
+  private async notifyOrderScheduled(order: OrdersServices) {
+    try {
+      if (!this.isScheduledState(order.state?.name)) return;
+
+      const when = this.orderScheduleLabel(order);
+
+      const email = (order as any)?.client?.users?.email;
+      if (email) {
+        const name = [order?.client?.users?.name, order?.client?.users?.lastname]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        await this.mailService.sendAppointmentScheduled(email, name, "orden de servicio", when);
+      }
+
+      const techEmails = (order.technicians ?? [])
+        .map((t: any) => ({
+          email: t?.users?.email,
+          name: [t?.users?.name, t?.users?.lastname].filter(Boolean).join(" ").trim(),
+        }))
+        .filter((t: any) => t.email);
+
+      await Promise.all(
+        techEmails.map((t) =>
+          this.mailService.sendAppointmentScheduled(t.email, t.name, "orden asignada", when)
+        )
+      );
+    } catch (error) {
+      console.error("No se pudo enviar correo de agenda de orden:", error?.message ?? error);
+    }
   }
 
   private isAnulada(stateName?: string | null) {
@@ -397,6 +450,9 @@ export class OrdersServicesService {
       this.createCore(em, dto, actoruserid)
     );
     const order = await this.validateOrder(id);
+    if (this.isScheduledState(order.state?.name)) {
+      await this.notifyOrderScheduled(order);
+    }
     return this.present(order);
   }
 
@@ -469,6 +525,11 @@ export class OrdersServicesService {
   async update(id: number, dto: UpdateOrdersServicesDto, actoruserid?: ActorUserId) {
     const order = await this.validateOrder(id);
 
+    const prevStateName = order.state?.name;
+    const prevScheduleKey = [order.fechainicio, order.fechafin, order.horainicio, order.horafin]
+      .map((v) => (v == null ? "" : String(v)))
+      .join("|");
+
     let mustRecalc = false;
 
     if (dto.description !== undefined) order.description = dto.description;
@@ -524,6 +585,15 @@ export class OrdersServicesService {
     await this.logSystem(this.historyRepo, id, "Orden actualizada", actoruserid);
 
     const updated = await this.validateOrder(id);
+    const newScheduleKey = [updated.fechainicio, updated.fechafin, updated.horainicio, updated.horafin]
+      .map((v) => (v == null ? "" : String(v)))
+      .join("|");
+    const scheduleChanged =
+      prevScheduleKey !== newScheduleKey ||
+      this.normalizeStateName(prevStateName) !== this.normalizeStateName(updated.state?.name);
+    if (scheduleChanged && this.isScheduledState(updated.state?.name)) {
+      await this.notifyOrderScheduled(updated);
+    }
     return this.present(updated);
   }
 
@@ -1098,6 +1168,9 @@ export class OrdersServicesService {
     await this.ordersRepo.save(order);
 
     const updated = await this.validateOrder(id);
+    if (this.isScheduledState(updated.state?.name)) {
+      await this.notifyOrderScheduled(updated);
+    }
     return this.present(updated);
   }
 
