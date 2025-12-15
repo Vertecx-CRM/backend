@@ -19,5 +19,5 @@ export class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) 
   @IsString()
   @IsNotEmpty()
   numeroOrden?: string;
-  orderNumber: boolean;
+  orderNumber: string;
 }
