@@ -267,4 +267,125 @@ export class QuotesService {
     await this.quotesRepo.delete({ quotesid: id });
     return { message: `Quote ${id} eliminada correctamente` };
   }
+
+  /* =====================================================
+     CANCELAR COTIZACIÓN
+     ===================================================== */
+
+  async cancel(id: number, observation?: string) {
+    const quote = await this.quotesRepo.findOne({
+      where: { quotesid: id },
+    });
+
+    if (!quote) {
+      throw new NotFoundException('Cotización no encontrada');
+    }
+
+    // Ya anulada
+    if (quote.statesid === 8) {
+      throw new BadRequestException('La cotización ya está anulada.');
+    }
+
+    // Solo se permite anular si está aprobada
+    if (quote.statesid !== 3) {
+      throw new BadRequestException(
+        'Solo se pueden anular cotizaciones aprobadas.',
+      );
+    }
+
+    const updateData: Partial<Quotes> = {
+      statesid: 8, // ANULADA
+      updatedat: new Date(),
+    };
+
+    if (observation) {
+      updateData.observation = observation;
+    }
+
+    await this.quotesRepo.update({ quotesid: id }, updateData);
+
+    return await this.findOne(id);
+  }
+
+  /* =====================================================
+   APROBAR COTIZACIÓN
+   ===================================================== */
+  async approve(id: number, observation?: string) {
+    const quote = await this.quotesRepo.findOne({
+      where: { quotesid: id },
+    });
+
+    if (!quote) {
+      throw new NotFoundException('Cotización no encontrada');
+    }
+
+    // Ya aprobada
+    if (quote.statesid === 3) {
+      throw new BadRequestException('La cotización ya está aprobada.');
+    }
+
+    // No se puede aprobar si está anulada
+    if (quote.statesid === 8) {
+      throw new BadRequestException(
+        'No se puede aprobar una cotización anulada.',
+      );
+    }
+
+    const updateData: Partial<Quotes> = {
+      statesid: 3, // APROBADA
+      updatedat: new Date(),
+    };
+
+    if (observation) {
+      updateData.observation = observation;
+    }
+
+    await this.quotesRepo.update({ quotesid: id }, updateData);
+
+    return this.findOne(id);
+  }
+
+  /* =====================================================
+   CANCELAR COTIZACIÓN
+   ===================================================== */
+
+   async cancelForClient (id: number, observation?: string) {
+    const quote = await this.quotesRepo.findOne({
+      where: { quotesid: id },
+    });
+    if (!quote) {
+      throw new NotFoundException('Cotización no encontrada');
+    }
+
+    // Ya esta cancelada
+      if (quote.statesid === 4) {
+      throw new BadRequestException('La cotización ya está cancelada.');
+    }
+
+    // No se puede cancelar si esta aprovada
+    if (quote.statesid === 3) {
+      throw new BadRequestException(
+        'No se puede cancelar una cotización aprovada.',
+      );
+    }
+
+    // No se puede cancelar si esta anulada
+    if (quote.statesid === 8) {
+      throw new BadRequestException(
+        'No se puede cancelar una cotización anulada.',
+      )
+    }
+
+    
+    const updateData: Partial<Quotes> = {
+      statesid: 4, // APROBADA
+      updatedat: new Date(),
+    };
+
+
+    await this.quotesRepo.update({quotesid: id}, updateData);
+
+    return this.findOne(id)
+
+  }
 }

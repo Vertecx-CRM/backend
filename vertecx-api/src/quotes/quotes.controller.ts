@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { QuotesService } from './quotes.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
@@ -35,5 +36,28 @@ export class QuotesController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.quotesService.remove(+id);
+  }
+
+  @Patch(':id/cancel')
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('observation') observation?: string,
+  ) {
+    return this.quotesService.cancel(id, observation);
+  }
+
+  @Patch(':id/approve')
+  approve(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('observation') observation?: string,
+  ) {
+    return this.quotesService.approve(id, observation);
+  }
+
+  @Patch(':id/cancel-client')
+  cancelClient(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.quotesService.cancelForClient(id);
   }
 }
