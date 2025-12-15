@@ -4,78 +4,90 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
-  IsDate,
+  IsDateString,
   IsInt,
-  Matches,
   IsPositive,
-  MinDate,
+  Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { FindOperator } from 'typeorm';
 
 export class CreatePurchaseOrderDto {
+  // =========================
+  // Identificación
+  // =========================
+
   @ApiProperty({
     example: 'PO-2024-001',
     description: 'Número único de la orden de compra',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^PO-\d{4}-\d{3}$/, {
-    message: 'El número de orden debe seguir el formato PO-YYYY-NNN',
-  })
-  orderNumber: string;
+  numeroOrden: string;
 
-  @ApiProperty({
-    example: 1500.50,
-    description: 'Monto total de la orden',
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  totalAmount?: number;
-
-  @ApiProperty({
-    example: '2024-11-06',
-    description: 'Fecha de la orden',
-  })
-  @IsNotEmpty()
-  @Type(() => Date)
-  @IsDate()
-  orderDate: Date;
-
-  @ApiProperty({
-    example: '2024-11-20',
-    description: 'Fecha esperada de entrega',
-    required: false,
-  })
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  @MinDate(() => new Date())
-  expectedDeliveryDate?: Date;
-
-  @ApiProperty({
-    example: 'Entrega en bodega principal',
-    description: 'Notas adicionales sobre la orden',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  notes?: string;
-
-  @ApiProperty({
-    example: 1,
-    description: 'ID del estado de la orden',
-  })
-  @IsInt()
-  @IsNotEmpty()
-  stateId: number;
+  // =========================
+  // Relaciones
+  // =========================
 
   @ApiProperty({
     example: 1,
     description: 'ID del proveedor',
   })
   @IsInt()
-  @IsNotEmpty()
-  supplierId: number;
+  @Min(1)
+  proveedorId: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'ID del estado de la orden (Pendiente, Completada, Anulada, etc.)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  estadoId?: number;
+
+  // =========================
+  // Fechas
+  // =========================
+
+  @ApiProperty({
+    example: '2024-11-06',
+    description: 'Fecha de creación de la orden',
+  })
+  @IsDateString()
+  fecha: string;
+
+  // =========================
+  // Valores económicos
+  // =========================
+
+  @ApiProperty({
+    example: 150000,
+    description: 'Precio unitario del producto o servicio',
+  })
+  @IsNumber()
+  @IsPositive()
+  precioUnitario: number;
+
+  @ApiProperty({
+    example: 3,
+    description: 'Cantidad comprada',
+  })
+  @IsInt()
+  @Min(1)
+  cantidad: number;
+
+  // =========================
+  // Observaciones
+  // =========================
+
+  @ApiProperty({
+    example: 'Compra de equipos para oficina',
+    description: 'Observaciones adicionales',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  descripcion?: string;
+  orderNumber: string | FindOperator<string>;
 }

@@ -7,7 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { States } from 'src/shared/entities/states.entity';
+import { States } from './states.entity';
 import { Suppliers } from 'src/suppliers/entities/suppliers.entity';
 
 @Entity('purchase_orders')
@@ -15,38 +15,59 @@ export class PurchaseOrder {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'order_number', unique: true })
-  orderNumber: string;
+  // Identificación
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  totalAmount: number;
+  @Column({ unique: true })
+  numeroOrden: string;
 
-  @Column({ type: 'date' })
-  orderDate: Date;
-
-  @Column({ name: 'expected_delivery_date', type: 'date', nullable: true })
-  expectedDeliveryDate: Date;
-
-  @Column({ type: 'text', nullable: true })
-  notes: string;
-
-  @Column({ name: 'state_id' })
-  stateId: number;
-
-  @Column({ name: 'supplier_id' })
-  supplierId: number;
-
-  @ManyToOne(() => States, { eager: false })
-  @JoinColumn({ name: 'state_id', referencedColumnName: 'stateid' })
-  state: States;
+  // Relaciones
 
   @ManyToOne(() => Suppliers, { eager: false })
-  @JoinColumn({ name: 'supplier_id', referencedColumnName: 'supplierid' })
+  @JoinColumn({ name: 'proveedor_id' })
   supplier: Suppliers;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column()
+  proveedorId: number;
+
+  @ManyToOne(() => States, { eager: false })
+  @JoinColumn({ name: 'estado_id' })
+  state: States;
+
+  @Column()
+  estadoId: number;
+
+  // Fechas
+
+  @Column({ type: 'date' })
+  fecha: string;
+
+  // Valores económicos
+
+  @Column('decimal', { precision: 12, scale: 2 })
+  precioUnitario: number;
+
+  @Column('int')
+  cantidad: number;
+
+  @Column('decimal', { precision: 14, scale: 2 })
+  subtotal: number;
+
+  @Column('decimal', { precision: 14, scale: 2 })
+  iva: number;
+
+  @Column('decimal', { precision: 14, scale: 2 })
+  total: number;
+
+  // Observaciones
+
+  @Column({ type: 'text', nullable: true })
+  descripcion?: string | null;
+
+  // Auditoría
+
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn()
   updatedAt: Date;
 }
