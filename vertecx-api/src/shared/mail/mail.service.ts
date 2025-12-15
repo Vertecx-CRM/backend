@@ -193,4 +193,48 @@ export class MailService {
     );
   }
 }
+
+  async sendAppointmentScheduled(email: string, name: string, context: string, when: string) {
+    try {
+      const safeName = (name ?? "").trim();
+      const safeContext = (context ?? "").trim();
+      const safeWhen = (when ?? "").trim();
+
+      const displayName = safeName || "cliente";
+      const displayContext = safeContext || "cita";
+      const displayWhen = safeWhen || "la fecha acordada";
+
+      const mailOptions = {
+        from: `"Soporte SistemaPC" <${process.env.MAIL_USER}>`,
+        to: email,
+        subject: `Tu ${displayContext} fue agendada`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; border-radius: 10px; border: 1px solid #ddd; overflow: hidden;">
+            <div style="background-color: #0078d4; color: white; padding: 18px 20px; text-align: center;">
+              <h2 style="margin: 0;">Confirmaci&oacute;n de agenda</h2>
+            </div>
+
+            <div style="padding: 22px; color: #333; line-height: 1.6;">
+              <p>Hola <b>${displayName}</b>,</p>
+              <p>Tu ${displayContext} est&aacute; agendada para:</p>
+              <p style="margin: 12px 0; padding: 12px; background: #eef6ff; border-radius: 8px; border: 1px solid #cfe2ff;">
+                <b>${displayWhen}</b>
+              </p>
+              <p>Si necesitas reprogramar o tienes dudas, cont&aacute;ctanos respondiendo a este correo.</p>
+            </div>
+
+            <div style="background: #0078d4; color: white; text-align: center; padding: 14px;">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} SistemaPC | Soporte t&eacute;cnico</p>
+            </div>
+          </div>
+        `,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error enviando correo de agenda:', error);
+      throw new InternalServerErrorException('No se pudo enviar el correo de agenda.');
+    }
+  }
+
 }
