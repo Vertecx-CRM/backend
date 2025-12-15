@@ -32,11 +32,6 @@ export class QuotesController {
     return this.quotesService.findOne(+id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateQuoteDto: UpdateQuoteDto) {
-    return this.quotesService.update(+id, updateQuoteDto);
-  }
-
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.quotesService.remove(+id);

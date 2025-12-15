@@ -17,6 +17,7 @@ import { Customers } from 'src/customers/entities/customers.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
+import { Products } from 'src/products/entities/products.entity';
 
 @Injectable()
 export class QuotesService {
@@ -41,6 +42,9 @@ export class QuotesService {
 
     @InjectRepository(OrdersServices)
     private readonly ordersServicesRepo: Repository<OrdersServices>,
+
+    @InjectRepository(Products)
+    private readonly productsRepo: Repository<Products>,
   ) {}
 
   /* =====================================================
@@ -104,20 +108,101 @@ export class QuotesService {
      CREATE
      ===================================================== */
   async create(dto: CreateQuoteDto) {
-    await this.ensureRefs(dto);
+    // Buscar la solicitud de servicio
+    const serviceRequest = await this.serviceRequestRepo.findOne({
+      where: { serviceRequestId: dto.serviceRequestId },
+      relations: {
+        customer: true,
+        techniciansMap: { technician: true },
+      },
+    });
+
+    if (!serviceRequest) {
+      throw new BadRequestException(
+        `ServiceRequest ${dto.serviceRequestId} no existe`,
+      );
+    }
+
+    // Resolver cliente automáticamente
+    const customerId = serviceRequest.clientId;
+
+    // Resolver técnico automáticamente
+    const technicianMap = serviceRequest.techniciansMap?.[0];
+    if (!technicianMap) {
+      throw new BadRequestException(
+        `La solicitud ${dto.serviceRequestId} no tiene técnico asignado`,
+      );
+    }
+
+    const technicianId = technicianMap.technicianId;
+
+    const detailsCalculated = await Promise.all(
+      dto.details.map(async (d) => {
+        const quantity = Number(d.quantity);
+        if (quantity <= 0) {
+          throw new BadRequestException('Cantidad inválida');
+        }
+
+        let unitprice: number;
+
+        // PRODUCTO EXISTENTE → PRECIO REAL DE VENTA
+        if (d.productid) {
+          const product = await this.productsRepo.findOne({
+            where: { productid: d.productid },
+          });
+
+          if (!product) {
+            throw new BadRequestException(`Producto ${d.productid} no existe`);
+          }
+
+          unitprice = Number(product.productpriceofsale);
+        }
+        //  PRODUCTO MANUAL
+        else {
+          if (d.unitprice == null || d.unitprice < 0) {
+            throw new BadRequestException(
+              'Precio inválido para producto manual',
+            );
+          }
+          unitprice = Number(d.unitprice);
+        }
+
+        const subtotal = Number((unitprice * quantity).toFixed(2));
+
+        return {
+          ...d,
+          unitprice,
+          subtotal,
+        };
+      }),
+    );
+
+    const subtotalGeneral = detailsCalculated.reduce(
+      (acc, d) => acc + d.subtotal,
+      0,
+    );
+
+    const tax = Number((subtotalGeneral * 0.19).toFixed(2));
+    const total = Number((subtotalGeneral + tax).toFixed(2));
+
+    // =====================================================
+    // Crear cotización
+    // =====================================================
 
     const quote = this.quotesRepo.create({
       serviceRequestId: dto.serviceRequestId,
       ordersservicesid: dto.ordersservicesid ?? null,
       statesid: dto.statesid,
-      customerid: dto.customerid,
-      technicianid: dto.technicianid,
+      customerid: customerId,
+      technicianid: technicianId,
       observation: dto.observation ?? null,
-      servicetype: dto.servicetype ?? null,
-      subtotal: dto.subtotal ?? null,
-      tax: dto.tax ?? null,
-      total: dto.total ?? null,
-      details: dto.details.map((d) =>
+      servicetype: dto.servicetype ?? serviceRequest.serviceType,
+
+      subtotal: subtotalGeneral,
+      tax,
+      total,
+
+      details: detailsCalculated.map((d) =>
         this.detailsRepo.create({
           productid: d.productid ?? null,
           description: d.description,
@@ -167,52 +252,6 @@ export class QuotesService {
     if (!quote) throw new NotFoundException(`Quote ${id} no existe`);
 
     return quote;
-  }
-
-  /* =====================================================
-     UPDATE
-     ===================================================== */
-  async update(id: number, dto: UpdateQuoteDto) {
-    const quote = await this.quotesRepo.findOne({
-      where: { quotesid: id },
-      relations: { details: true },
-    });
-
-    if (!quote) throw new NotFoundException(`Quote ${id} no existe`);
-
-    await this.ensureRefs(dto);
-
-    Object.assign(quote, {
-      serviceRequestId: dto.serviceRequestId ?? quote.serviceRequestId,
-      ordersservicesid: dto.ordersservicesid ?? quote.ordersservicesid,
-      statesid: dto.statesid ?? quote.statesid,
-      customerid: dto.customerid ?? quote.customerid,
-      technicianid: dto.technicianid ?? quote.technicianid,
-      observation: dto.observation ?? quote.observation,
-      servicetype: dto.servicetype ?? quote.servicetype,
-      subtotal: dto.subtotal ?? quote.subtotal,
-      tax: dto.tax ?? quote.tax,
-      total: dto.total ?? quote.total,
-    });
-
-    if (dto.details) {
-      await this.detailsRepo.delete({ quotesid: id });
-
-      quote.details = dto.details.map((d) =>
-        this.detailsRepo.create({
-          quote,
-          productid: d.productid ?? null,
-          description: d.description,
-          quantity: d.quantity,
-          unitprice: d.unitprice,
-          subtotal: d.subtotal,
-          availability: d.availability ?? 'DISPONIBLE',
-        }),
-      );
-    }
-
-    await this.quotesRepo.save(quote);
-    return this.findOne(id);
   }
 
   /* =====================================================
