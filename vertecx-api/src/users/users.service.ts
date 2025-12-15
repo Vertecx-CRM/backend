@@ -135,6 +135,7 @@ export class UsersService {
         email: dto.email,
         phone: dto.phone,
         isNit,
+        image: dto.image ?? null,
         password: hashed,
         mustchangepassword: true,
         typeid: docType.typeofdocumentid,
