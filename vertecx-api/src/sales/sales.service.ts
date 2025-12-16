@@ -116,6 +116,7 @@ export class SalesService {
           discountpercent: d.discountpercent ?? 0,
           discountamount: lineDiscount,
           notes: d.notes ?? null,
+          servicerequestid: d.servicerequestid ?? null,
         });
 
         await manager.save(Salesdetail, detail);

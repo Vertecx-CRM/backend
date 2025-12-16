@@ -4,9 +4,11 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  OneToOne,
 } from 'typeorm';
 import { Sales } from './sales.entity';
 import { Products } from 'src/products/entities/products.entity';
+import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
 
 @Entity('salesdetail')
 export class Salesdetail {
@@ -37,6 +39,9 @@ export class Salesdetail {
   @Column({ nullable: true })
   notes: string;
 
+  @Column({ nullable: true })
+  servicerequestid: number;
+
   @ManyToOne(() => Sales, (sale) => sale.salesdetail, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'saleid' })
   sales: Sales;
@@ -44,4 +49,8 @@ export class Salesdetail {
   @ManyToOne(() => Products)
   @JoinColumn({ name: 'productid' })
   products: Products;
+
+  @ManyToOne(() => ServiceRequest)
+  @JoinColumn({ name: 'servicerequestid' })
+  serviceRequest: ServiceRequest;
 }
