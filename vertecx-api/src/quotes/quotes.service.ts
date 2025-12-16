@@ -11,6 +11,8 @@ import { QuoteDetail } from './entities/quotedetail.entity';
 
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
+import { SalesService } from 'src/sales/sales.service';
+import { CreateSaleDto } from 'src/sales/dto/create-sale.dto';
 
 import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
@@ -45,7 +47,10 @@ export class QuotesService {
 
     @InjectRepository(Products)
     private readonly productsRepo: Repository<Products>,
+    private readonly salesService: SalesService,
   ) {}
+
+  private completedStateIdCache: number | null = null;
 
   /* =====================================================
      VALIDACIÓN DE REFERENCIAS
@@ -102,6 +107,35 @@ export class QuotesService {
           `OrdersServices ${dto.ordersservicesid} no existe`,
         );
     }
+  }
+
+  private async resolveCompletedStateId(): Promise<number> {
+    if (this.completedStateIdCache) {
+      return this.completedStateIdCache;
+    }
+
+    const envId =
+      Number(process.env.QUOTE_COMPLETED_STATE_ID ?? process.env.QUOTE_COMPLETE_STATE_ID ?? 6) || 0;
+    if (envId > 0) {
+      const explicit = await this.statesRepo.findOne({ where: { stateid: envId } });
+      if (explicit) {
+        this.completedStateIdCache = explicit.stateid;
+        return explicit.stateid;
+      }
+    }
+
+    const states = await this.statesRepo.find();
+    const candidate = states.find(
+      (state) => typeof state.name === 'string' && /complet/i.test(state.name),
+    );
+    if (candidate) {
+      this.completedStateIdCache = candidate.stateid;
+      return candidate.stateid;
+    }
+
+    throw new BadRequestException(
+      'No se encontró un estado de cotización completado configurado.',
+    );
   }
 
   /* =====================================================
@@ -349,7 +383,7 @@ export class QuotesService {
    CANCELAR COTIZACIÓN
    ===================================================== */
 
-   async cancelForClient (id: number, observation?: string) {
+  async cancelForClient (id: number, observation?: string) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
     });
@@ -387,5 +421,83 @@ export class QuotesService {
 
     return this.findOne(id)
 
+  }
+
+  async complete(id: number) {
+    const quote = await this.quotesRepo.findOne({
+      where: { quotesid: id },
+      relations: ['details'],
+    });
+
+    if (!quote) {
+      throw new NotFoundException('Cotización no encontrada.');
+    }
+
+    const completedStateId = await this.resolveCompletedStateId();
+
+    if (quote.statesid === completedStateId) {
+      throw new BadRequestException('La cotización ya fue completada.');
+    }
+
+    if (quote.statesid === 8) {
+      throw new BadRequestException('No se puede completar una cotización anulada.');
+    }
+
+    if (quote.statesid !== 3) {
+      throw new BadRequestException(
+        'Solo cotizaciones aprobadas pueden convertirse en ventas.',
+      );
+    }
+
+    const details = quote.details ?? [];
+    if (!details.length) {
+      throw new BadRequestException(
+        'La cotización no tiene productos para generar la venta.',
+      );
+    }
+
+    for (const detail of details) {
+      if (!detail.productid) {
+        throw new BadRequestException(
+          'Todos los detalles deben estar asociados a un producto para convertir la cotización en venta.',
+        );
+      }
+    }
+
+    const salePayload: CreateSaleDto = {
+      subtotal: Number(quote.subtotal ?? 0),
+      taxamount: Number(quote.tax ?? 0),
+      discountamount: 0,
+      totalamount: Number(quote.total ?? 0),
+      saledate: new Date().toISOString(),
+      customerid: quote.customerid,
+      salecode: `COT-${quote.quotesid}-${Date.now()}`,
+      notes: quote.observation ?? undefined,
+      paymentmethod: 'Cash',
+      salestatus: 'Pending',
+      details: details.map((detail) => {
+        const unitprice = Number(detail.unitprice ?? 0);
+        const quantity = Math.max(1, Math.round(Number(detail.quantity ?? 0)));
+
+        return {
+          productid: detail.productid!,
+          quantity,
+          unitprice,
+          discountpercent: 0,
+          notes: detail.description ?? undefined,
+        };
+      }),
+      taxpercent: 19,
+    };
+
+    const sale = await this.salesService.create(salePayload);
+
+    await this.quotesRepo.update(
+      { quotesid: id },
+      { statesid: completedStateId, updatedat: new Date() },
+    );
+
+    const refreshed = await this.findOne(id);
+    return { quote: refreshed, sale };
   }
 }
