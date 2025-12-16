@@ -54,6 +54,12 @@ export class QuotesController {
     return this.quotesService.approve(id, observation);
   }
 
+  @Patch(':id/complete')
+  @ApiOperation({ summary: 'Completar cotización y generar venta asociada' })
+  complete(@Param('id', ParseIntPipe) id: number) {
+    return this.quotesService.complete(id);
+  }
+
   @Patch(':id/cancel-client')
   cancelClient(
     @Param('id', ParseIntPipe) id: number,
