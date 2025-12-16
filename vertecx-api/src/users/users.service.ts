@@ -33,6 +33,7 @@ import { hasUserLinkedRecords } from './helpers/linked-records.helper';
 import { cleanupTechnician } from './helpers/cleanup-technician.helper';
 import { cleanupCustomer } from './helpers/cleanup-customer.helper';
 import { buildUpdateNotificationHTML } from './helpers/build-update-html.helper';
+import { CheckDuplicatesDto } from './dto/check-duplicates.dto';
 
 @Injectable()
 export class UsersService {
@@ -93,6 +94,49 @@ export class UsersService {
 
   async getRoleNameByRoleId(id: number) {
     return this.normalizeRoleName((await this.getRoleById(id)).name);
+  }
+
+  // CHECK DUPLICATES (document, email, phone)
+  async checkDuplicates(dto: CheckDuplicatesDto) {
+    const { documentnumber, email, phone } = dto;
+
+    if (!documentnumber && !email && !phone) {
+      throw new BadRequestException(
+        'Debe enviar al menos un dato para validar duplicados.',
+      );
+    }
+
+    const result = {
+      documentnumber: false,
+      email: false,
+      phone: false,
+    };
+
+    if (documentnumber) {
+      const found = await this.usersRepo.findOne({
+        where: { documentnumber },
+        select: ['userid'],
+      });
+      result.documentnumber = !!found;
+    }
+
+    if (email) {
+      const found = await this.usersRepo.findOne({
+        where: { email },
+        select: ['userid'],
+      });
+      result.email = !!found;
+    }
+
+    if (phone) {
+      const found = await this.usersRepo.findOne({
+        where: { phone },
+        select: ['userid'],
+      });
+      result.phone = !!found;
+    }
+
+    return { success: true, data: result };
   }
 
   // CREATE
