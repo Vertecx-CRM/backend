@@ -343,7 +343,7 @@ export class OrdersServicesService {
     const viaticos = this.asMoneyInt(dto.viaticos ?? 0);
 
     const order = ordersRepo.create({
-      description: dto.description,
+      description: String(dto.description ?? "").trim(),
       total: 0,
       viaticos,
       files: dto.files ?? [],
