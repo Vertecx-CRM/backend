@@ -115,9 +115,15 @@ export class QuotesService {
     }
 
     const envId =
-      Number(process.env.QUOTE_COMPLETED_STATE_ID ?? process.env.QUOTE_COMPLETE_STATE_ID ?? 6) || 0;
+      Number(
+        process.env.QUOTE_COMPLETED_STATE_ID ??
+          process.env.QUOTE_COMPLETE_STATE_ID ??
+          6,
+      ) || 0;
     if (envId > 0) {
-      const explicit = await this.statesRepo.findOne({ where: { stateid: envId } });
+      const explicit = await this.statesRepo.findOne({
+        where: { stateid: envId },
+      });
       if (explicit) {
         this.completedStateIdCache = explicit.stateid;
         return explicit.stateid;
@@ -383,7 +389,7 @@ export class QuotesService {
    CANCELAR COTIZACIÓN
    ===================================================== */
 
-  async cancelForClient (id: number, observation?: string) {
+  async cancelForClient(id: number, observation?: string) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
     });
@@ -392,7 +398,7 @@ export class QuotesService {
     }
 
     // Ya esta cancelada
-      if (quote.statesid === 4) {
+    if (quote.statesid === 4) {
       throw new BadRequestException('La cotización ya está cancelada.');
     }
 
@@ -407,20 +413,17 @@ export class QuotesService {
     if (quote.statesid === 8) {
       throw new BadRequestException(
         'No se puede cancelar una cotización anulada.',
-      )
+      );
     }
 
-    
     const updateData: Partial<Quotes> = {
       statesid: 4, // APROBADA
       updatedat: new Date(),
     };
 
+    await this.quotesRepo.update({ quotesid: id }, updateData);
 
-    await this.quotesRepo.update({quotesid: id}, updateData);
-
-    return this.findOne(id)
-
+    return this.findOne(id);
   }
 
   async complete(id: number) {
@@ -440,7 +443,9 @@ export class QuotesService {
     }
 
     if (quote.statesid === 8) {
-      throw new BadRequestException('No se puede completar una cotización anulada.');
+      throw new BadRequestException(
+        'No se puede completar una cotización anulada.',
+      );
     }
 
     if (quote.statesid !== 3) {
