@@ -21,6 +21,7 @@ export class CustomerResponseDto {
       username: 'johndoe',
       name: 'John',
       lastname: 'Doe',
+      documentnumber: '1234567890',
       email: 'john@example.com'
     }
   })
@@ -29,6 +30,7 @@ export class CustomerResponseDto {
     username?: string;
     name?: string;
     lastname?: string;
+    documentnumber?: string;
     email?: string;
   };
 
@@ -54,6 +56,7 @@ export class CustomerResponseDto {
         username: customer.users.username,
         name: customer.users.name,
         lastname: customer.users.lastname,
+        documentnumber: customer.users.documentnumber,
         email: customer.users.email
       };
     }
