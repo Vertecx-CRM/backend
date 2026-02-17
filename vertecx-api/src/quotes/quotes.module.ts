@@ -10,6 +10,7 @@ import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Products } from 'src/products/entities/products.entity';
+import { SalesModule } from 'src/sales/sales.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Products } from 'src/products/entities/products.entity';
       Technicians,
       Products
     ]),
+    SalesModule,
   ],
   controllers: [QuotesController],
   providers: [QuotesService],
