@@ -27,6 +27,32 @@ export class RolesService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private readonly MODULE_PRIVILEGES: Record<string, string[]> = {
+
+    appointments: ['update', 'read', 'deactivate'],
+
+
+    sales: ['create', 'read', 'deactivate'],
+
+
+    purchaseOrders: ['read', 'deactivate'],
+
+    orderServices: [
+      'create',
+      'update',
+      'read',
+      'deactivate', 
+      'add_history',
+      'report_warranty',
+      'download_report',
+    ],
+
+    servicesRequest: ['create', 'update', 'read', 'deactivate'],
+  };
+
+
+  private readonly DEFAULT_PRIVILEGES = ['create', 'read', 'update', 'delete'];
+
   private normalizeStatus(status?: string): string | undefined {
     if (status === undefined || status === null) return undefined;
     const v = String(status).toLowerCase().trim();
@@ -35,27 +61,43 @@ export class RolesService {
     return status;
   }
 
+  private getAllowedPrivilegeNamesForModule(moduleKey: string): string[] {
+    return this.MODULE_PRIVILEGES[moduleKey] ?? this.DEFAULT_PRIVILEGES;
+  }
+
+  private async assertPrivilegeAllowed(permissionid: number, privilegeid: number) {
+    const permission = await this.permissionsRepo.findOne({
+      where: { permissionid },
+    });
+    if (!permission) {
+      throw new BadRequestException(`El permiso con ID ${permissionid} no existe`);
+    }
+
+    const privilege = await this.privilegesRepo.findOne({
+      where: { privilegeid },
+    });
+    if (!privilege) {
+      throw new BadRequestException(`El privilegio con ID ${privilegeid} no existe`);
+    }
+
+    const allowedNames = this.getAllowedPrivilegeNamesForModule(String(permission.module)).map(
+      (x) => String(x).toLowerCase(),
+    );
+
+    const privName = String(privilege.name).toLowerCase();
+
+    if (!allowedNames.includes(privName)) {
+      throw new BadRequestException(
+        `El privilegio "${privilege.name}" no está permitido para el módulo "${permission.module}".`,
+      );
+    }
+  }
+
   private async ensurePermissionsAndPrivileges(
     configurations: { permissionid: number; privilegeid: number }[],
   ) {
     for (const config of configurations) {
-      const permission = await this.permissionsRepo.findOne({
-        where: { permissionid: config.permissionid },
-      });
-      if (!permission) {
-        throw new BadRequestException(
-          `El permiso con ID ${config.permissionid} no existe`,
-        );
-      }
-
-      const privilege = await this.privilegesRepo.findOne({
-        where: { privilegeid: config.privilegeid },
-      });
-      if (!privilege) {
-        throw new BadRequestException(
-          `El privilegio con ID ${config.privilegeid} no existe`,
-        );
-      }
+      await this.assertPrivilegeAllowed(config.permissionid, config.privilegeid);
     }
   }
 
@@ -87,6 +129,7 @@ export class RolesService {
         privilegeid: c.privilegeid,
       }),
     );
+
     await this.rcRepo.save(roleConfigs);
 
     return savedRole;
@@ -171,7 +214,7 @@ export class RolesService {
     const role = await this.rolesRepo.findOne({ where: { roleid } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
-    const [permissions, privileges, current] = await Promise.all([
+    const [permissions, allPrivileges, current] = await Promise.all([
       this.permissionsRepo.find({ order: { permissionid: 'ASC' } }),
       this.privilegesRepo.find({ order: { privilegeid: 'ASC' } }),
       this.rcRepo.find({
@@ -180,38 +223,44 @@ export class RolesService {
       }),
     ]);
 
-    const currentSet = new Set(
-      current.map((rc) => `${rc.permissionid}:${rc.privilegeid}`),
-    );
+    const currentSet = new Set(current.map((rc) => `${rc.permissionid}:${rc.privilegeid}`));
+
+    const privByName = new Map<string, Privileges>();
+    allPrivileges.forEach((p) => privByName.set(String(p.name).toLowerCase(), p));
 
     return {
       role,
-      modules: permissions.map((perm) => ({
-        permissionid: perm.permissionid,
-        module: perm.module,
-        privileges: privileges.map((priv) => ({
-          privilegeid: priv.privilegeid,
-          name: priv.name,
-          checked: currentSet.has(
-            `${perm.permissionid}:${priv.privilegeid}`,
-          ),
-        })),
-        allSelected: privileges.every((priv) =>
-          currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
-        ),
-      })),
+      modules: permissions.map((perm) => {
+        const allowedNames = this.getAllowedPrivilegeNamesForModule(String(perm.module));
+
+        const allowedPrivs = allowedNames
+          .map((n) => privByName.get(String(n).toLowerCase()))
+          .filter(Boolean) as Privileges[];
+
+        return {
+          permissionid: perm.permissionid,
+          module: perm.module,
+          privileges: allowedPrivs.map((priv) => ({
+            privilegeid: priv.privilegeid,
+            name: priv.name,
+            checked: currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
+          })),
+          allSelected: allowedPrivs.length
+            ? allowedPrivs.every((priv) =>
+                currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
+              )
+            : false,
+        };
+      }),
     };
   }
 
   async updateConfigurations(dto: UpdateRoleConfigurationDto) {
-
     const updatedConfigs = [];
     const configs = Array.isArray(dto.configurations) ? dto.configurations : [];
 
     if (!dto.role && configs.length === 0) {
-      throw new BadRequestException(
-        'Debe enviar cambios en el rol o en las configuraciones.',
-      );
+      throw new BadRequestException('Debe enviar cambios en el rol o en las configuraciones.');
     }
 
     if (dto.role) {
@@ -220,9 +269,7 @@ export class RolesService {
       });
 
       if (!role) {
-        throw new BadRequestException(
-          `El rol con ID ${dto.role.roleid} no existe`,
-        );
+        throw new BadRequestException(`El rol con ID ${dto.role.roleid} no existe`);
       }
 
       if (dto.role.name && dto.role.name !== role.name) {
@@ -246,9 +293,7 @@ export class RolesService {
       });
 
       if (!current) {
-        throw new NotFoundException(
-          `La configuración ${item.roleconfigurationid} no existe`,
-        );
+        throw new NotFoundException(`La configuración ${item.roleconfigurationid} no existe`);
       }
 
       const next = {
@@ -257,14 +302,16 @@ export class RolesService {
         privilegeid: item.privilegeid ?? current.privilegeid,
       };
 
+      if (next.permissionid !== current.permissionid || next.privilegeid !== current.privilegeid) {
+        await this.assertPrivilegeAllowed(next.permissionid, next.privilegeid);
+      }
+
       const dup = await this.rcRepo.findOne({
         where: next,
       });
 
       if (dup && dup.roleconfigurationid !== current.roleconfigurationid) {
-        throw new BadRequestException(
-          'Ya existe otra configuración con estos valores.',
-        );
+        throw new BadRequestException('Ya existe otra configuración con estos valores.');
       }
 
       const merged = this.rcRepo.merge(current, next);
@@ -306,6 +353,12 @@ export class RolesService {
       }
     }
 
+    for (const item of dto.items) {
+      for (const privId of item.privilegeids || []) {
+        await this.assertPrivilegeAllowed(item.permissionid, privId);
+      }
+    }
+
     const desiredTuples = new Set<string>();
 
     dto.items.forEach((i) => {
@@ -317,21 +370,14 @@ export class RolesService {
     const current = await this.rcRepo.find({ where: { roleid } });
 
     const currentTuples = new Set(
-      current.map(
-        (rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`,
-      ),
+      current.map((rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
     );
 
     const toDelete = current.filter(
-      (rc) =>
-        !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
+      (rc) => !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
     );
 
-    const toInsertTuples: {
-      roleid: number;
-      permissionid: number;
-      privilegeid: number;
-    }[] = [];
+    const toInsertTuples: { roleid: number; permissionid: number; privilegeid: number }[] = [];
 
     desiredTuples.forEach((key) => {
       if (!currentTuples.has(key)) {
@@ -353,9 +399,7 @@ export class RolesService {
       }
 
       if (toInsertTuples.length) {
-        const rows = toInsertTuples.map((t) =>
-          manager.create(Roleconfiguration, t),
-        );
+        const rows = toInsertTuples.map((t) => manager.create(Roleconfiguration, t));
         await manager.save(Roleconfiguration, rows);
       }
     });
@@ -373,9 +417,7 @@ export class RolesService {
     );
 
     if (Number(count ?? 0) > 0) {
-      throw new BadRequestException(
-        'No se puede eliminar el rol porque tiene usuarios asociados.',
-      );
+      throw new BadRequestException('No se puede eliminar el rol porque tiene usuarios asociados.');
     }
 
     const configs = await this.rcRepo.find({
