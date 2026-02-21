@@ -1,14 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsArray,
   ArrayMinSize,
-  IsBoolean,
   Matches,
+  ValidateNested,
+  IsInt,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class RoleConfigItemDto {
+  @ApiProperty({ example: 1 })
+  @IsInt()
+  @IsNotEmpty()
+  permissionid: number;
+
+  @ApiProperty({ example: 3 })
+  @IsInt()
+  @IsNotEmpty()
+  privilegeid: number;
+}
 
 export class CreateRoleDto {
   @ApiProperty({ example: 'Administrador' })
@@ -35,10 +48,12 @@ export class CreateRoleDto {
   @ArrayMinSize(1, {
     message: 'Debe seleccionar al menos un permiso o privilegio.',
   })
-  roleconfigurations: { permissionid: number; privilegeid: number }[];
+  @ValidateNested({ each: true })
+  @Type(() => RoleConfigItemDto)
+  roleconfigurations: RoleConfigItemDto[];
 
-  @ApiProperty({ example: true, required: false })
+  @ApiProperty({ example: 'active', required: false })
   @IsOptional()
-  @IsBoolean()
-  status?: boolean = true;
+  @IsString()
+  status?: string = 'active';
 }
