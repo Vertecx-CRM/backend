@@ -8,6 +8,7 @@ import { Services } from "src/services/entities/services.entity";
 import { States } from "src/shared/entities/states.entity";
 import { CustomersModule } from "src/customers/customers.module";
 import { Customers } from "src/customers/entities/customers.entity";
+import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 
 
 @Module({
@@ -17,7 +18,8 @@ import { Customers } from "src/customers/entities/customers.entity";
       ServiceRequestTechnician,
       Services,
       States,
-      Customers
+      Customers,
+      OrdersServices,
     ]),
     CustomersModule,
   ],

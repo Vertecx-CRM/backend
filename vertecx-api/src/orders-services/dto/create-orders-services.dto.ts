@@ -7,6 +7,8 @@ import {
   IsString,
   Matches,
   Min,
+  MinLength,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -21,6 +23,11 @@ export class CreateOrdersServicesDto {
   @IsInt()
   @Min(1)
   clientid: number;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(255)
+  direccion: string;
 
   @IsInt()
   @Min(1)
