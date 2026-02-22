@@ -26,6 +26,20 @@ export class SalesService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private withDireccionFromServiceRequest<T extends Sales | null>(sale: T) {
+    if (!sale) return sale;
+    const detailList = Array.isArray((sale as any).salesdetail) ? (sale as any).salesdetail : [];
+    const withRequest = detailList.find((d: any) => {
+      const dir = String(d?.serviceRequest?.direccion ?? "").trim();
+      return dir.length > 0;
+    });
+    const direccion = String(withRequest?.serviceRequest?.direccion ?? "").trim();
+    return {
+      ...(sale as any),
+      direccion: direccion || undefined,
+    };
+  }
+
   async create(dto: CreateSaleDto) {
     if (!dto.details || dto.details.length === 0) {
       throw new BadRequestException(
@@ -123,30 +137,47 @@ export class SalesService {
       }
 
       // 5. Devolver venta con relaciones para el detalle
-      return await manager.findOne(Sales, {
+      const fullSale = await manager.findOne(Sales, {
         where: { saleid: savedSale.saleid },
-        relations: ['customer', 'salesdetail', 'salesdetail.products'],
+        relations: [
+          'customer',
+          'salesdetail',
+          'salesdetail.products',
+          'salesdetail.serviceRequest',
+        ],
       });
+      return this.withDireccionFromServiceRequest(fullSale);
     });
   }
 
   //  Obtener todas las ventas (para el DataTable)
   async findAll() {
-    return await this.salesRepo.find({
-      relations: ['customer', 'salesdetail', 'salesdetail.products'],
+    const list = await this.salesRepo.find({
+      relations: [
+        'customer',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
       order: { saleid: 'DESC' },
     });
+    return list.map((sale) => this.withDireccionFromServiceRequest(sale));
   }
 
   //  Obtener venta por ID (para ViewSale)
   async findOne(id: number) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
-      relations: ['customer', 'salesdetail', 'salesdetail.products'],
+      relations: [
+        'customer',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
     });
 
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
-    return sale;
+    return this.withDireccionFromServiceRequest(sale);
   }
 
   //  Actualizar venta
