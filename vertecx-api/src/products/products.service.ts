@@ -21,16 +21,16 @@ export class ProductsService {
   ) {}
 
   private async ensureCategoryExists(categoryid: number) {
-    const category = await this.productCategoriesRepo.findOne({
+    const exists = await this.productCategoriesRepo.exist({
       where: { id: categoryid } as any,
     });
 
-    if (!category) {
+    if (!exists) {
       throw new BadRequestException(
         `La categoría (${categoryid}) no existe en categories.`,
       );
     }
-    return category;
+    return true;
   }
 
   async create(dto: CreateProductDto) {
@@ -44,7 +44,6 @@ export class ProductsService {
       image: dto.image.trim(),
       productcode: dto.productcode ?? null,
 
-      // Precios y stock se gestionan desde Compras
       productpriceofsale: null,
       productpriceofsupplier: 0,
       isactive: dto.isactive ?? true,
@@ -54,20 +53,63 @@ export class ProductsService {
   }
 
   async findAll(status: 'active' | 'inactive' | 'all' = 'active') {
-    const where = status === 'all' ? {} : { isactive: status === 'active' };
+    const qb = this.productsRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.category', 'c')
+      .orderBy('p.productid', 'DESC');
 
-    return await this.productsRepo.find({
-      where: where as any,
-      relations: { category: true },
-      order: { productid: 'DESC' },
-    });
+    if (status !== 'all') {
+      qb.where('p.isactive = :isactive', { isactive: status === 'active' });
+    }
+
+    qb.select([
+      'p.productid',
+      'p.createddate',
+      'p.updatedat',
+      'p.categoryid',
+      'p.isactive',
+      'p.productpriceofsale',
+      'p.productpriceofsupplier',
+      'p.productstock',
+      'p.productname',
+      'p.productdescription',
+      'p.productcode',
+      'p.purchaseorderid',
+      'p.suppliercategory',
+      'p.image',
+
+      'c.id',
+      'c.name',
+    ]);
+
+    return await qb.getMany();
   }
 
   async findOne(id: number) {
-    const product = await this.productsRepo.findOne({
-      where: { productid: id },
-      relations: { category: true },
-    });
+    const product = await this.productsRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.category', 'c')
+      .where('p.productid = :id', { id })
+      .select([
+        'p.productid',
+        'p.createddate',
+        'p.updatedat',
+        'p.categoryid',
+        'p.isactive',
+        'p.productpriceofsale',
+        'p.productpriceofsupplier',
+        'p.productstock',
+        'p.productname',
+        'p.productdescription',
+        'p.productcode',
+        'p.purchaseorderid',
+        'p.suppliercategory',
+        'p.image',
+
+        'c.id',
+        'c.name',
+      ])
+      .getOne();
 
     if (!product) {
       throw new NotFoundException(`Producto (${id}) no encontrado.`);
@@ -83,7 +125,6 @@ export class ProductsService {
       throw new NotFoundException(`Producto (${id}) no encontrado.`);
     }
 
-    // Bloquear edición de precios desde este módulo
     if (
       dto.productpriceofsale !== undefined ||
       dto.productpriceofsupplier !== undefined
@@ -93,9 +134,11 @@ export class ProductsService {
       );
     }
 
+    const patch: Partial<Products> = {};
+
     if (dto.categoryid !== undefined) {
       await this.ensureCategoryExists(dto.categoryid);
-      product.categoryid = dto.categoryid;
+      patch.categoryid = dto.categoryid;
     }
 
     if (dto.productname !== undefined) {
@@ -103,11 +146,11 @@ export class ProductsService {
       if (!v) {
         throw new BadRequestException('El nombre del producto es obligatorio.');
       }
-      product.productname = v;
+      patch.productname = v;
     }
 
     if (dto.productdescription !== undefined) {
-      product.productdescription = dto.productdescription ?? null;
+      patch.productdescription = dto.productdescription ?? null;
     }
 
     if (dto.suppliercategory !== undefined) {
@@ -117,7 +160,7 @@ export class ProductsService {
           'La categoría del proveedor es obligatoria.',
         );
       }
-      product.suppliercategory = v;
+      patch.suppliercategory = v;
     }
 
     if (dto.image !== undefined) {
@@ -127,18 +170,24 @@ export class ProductsService {
           'La imagen es obligatoria. No puedes eliminarla; si deseas cambiarla, envía una nueva URL.',
         );
       }
-      product.image = v;
+      patch.image = v;
     }
 
     if (dto.productcode !== undefined) {
-      product.productcode = dto.productcode ?? null;
+      patch.productcode = dto.productcode ?? null;
     }
 
     if (dto.isactive !== undefined) {
-      product.isactive = dto.isactive;
+      patch.isactive = dto.isactive;
     }
 
-    return await this.productsRepo.save(product);
+    if (Object.keys(patch).length === 0) {
+      return await this.findOne(id);
+    }
+
+    await this.productsRepo.update({ productid: id } as any, patch);
+
+    return await this.findOne(id);
   }
 
   private async isReferenced(productid: number) {
