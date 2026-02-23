@@ -29,6 +29,9 @@ export class OrdersServices {
   @Column({ name: 'description', type: 'text' })
   description: string;
 
+  @Column({ name: 'direccion', type: 'varchar', length: 255, nullable: true })
+  direccion: string | null;
+
   @Column({ name: 'total', type: 'int', default: 0 })
   total: number;
 

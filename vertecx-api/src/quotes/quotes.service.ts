@@ -490,6 +490,7 @@ export class QuotesService {
           unitprice,
           discountpercent: 0,
           notes: detail.description ?? undefined,
+          servicerequestid: quote.serviceRequestId,
         };
       }),
       taxpercent: 19,

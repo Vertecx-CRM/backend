@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -15,6 +15,7 @@ import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
 import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { MailService } from "src/shared/mail/mail.service";
+import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 
 function localMidnight(ymd: string) {
   const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -34,7 +35,7 @@ function toDateOrNull(input?: string | null) {
 
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException("Fecha/hora inválida");
+    throw new BadRequestException("Fecha/hora invÃ¡lida");
   }
   return d;
 }
@@ -104,12 +105,134 @@ export class RequestsService {
     @InjectRepository(Customers)
     private readonly customersRepo: Repository<Customers>,
 
+    @InjectRepository(OrdersServices)
+    private readonly ordersRepo: Repository<OrdersServices>,
+
     private readonly mailService: MailService
   ) {}
 
   private isScheduledState(name?: string | null) {
     const norm = normalizeStateName(name);
     return norm.includes("agend");
+  }
+
+  private isCanceledState(name?: string | null) {
+    const norm = normalizeStateName(name);
+    return norm.includes("anul") || norm.includes("cancel");
+  }
+
+  private parseTimeToParts(raw?: string | null) {
+    const txt = String(raw ?? "").trim();
+    const m = txt.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    const ss = Number(m[3] ?? "0");
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+    return { hh, mm, ss };
+  }
+
+  private toOrderDateTime(dateRaw?: Date | string | null, timeRaw?: string | null) {
+    if (!dateRaw || !timeRaw) return null;
+    const time = this.parseTimeToParts(timeRaw);
+    if (!time) return null;
+    const base = dateRaw instanceof Date ? dateRaw : new Date(String(dateRaw));
+    if (!Number.isFinite(base.getTime())) return null;
+    return new Date(
+      base.getFullYear(),
+      base.getMonth(),
+      base.getDate(),
+      time.hh,
+      time.mm,
+      time.ss,
+      0
+    );
+  }
+
+  private buildRange(start: Date | null, end: Date | null) {
+    if (!start) return null;
+    const safeEnd =
+      end && Number.isFinite(end.getTime()) && end.getTime() > start.getTime()
+        ? end
+        : new Date(start.getTime() + 60 * 60 * 1000);
+    return { start, end: safeEnd };
+  }
+
+  private hasOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+    return Math.max(aStart.getTime(), bStart.getTime()) < Math.min(aEnd.getTime(), bEnd.getTime());
+  }
+
+  private async ensureTechniciansAvailability(
+    technicianIds: number[],
+    start: Date | null,
+    end: Date | null,
+    opts?: { excludeRequestId?: number; excludeOrderId?: number }
+  ) {
+    if (!technicianIds.length || !start) return;
+    const requested = new Set(technicianIds);
+    const target = this.buildRange(start, end);
+    if (!target) return;
+
+    const conflicts = new Set<number>();
+
+    const reqQb = this.srRepo
+      .createQueryBuilder("sr")
+      .leftJoinAndSelect("sr.state", "state")
+      .leftJoinAndSelect("sr.techniciansMap", "tm")
+      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeRequestId) {
+      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
+        excludeRequestId: opts.excludeRequestId,
+      });
+    }
+
+    const requests = await reqQb.getMany();
+    for (const sr of requests) {
+      if (this.isCanceledState(sr?.state?.name)) continue;
+      const range = this.buildRange(sr.scheduledAt, sr.scheduledEndAt);
+      if (!range) continue;
+      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const link of sr.techniciansMap ?? []) {
+        const id = Number((link as any)?.technicianId);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    const ordersQb = this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.state", "state")
+      .leftJoinAndSelect("o.technicians", "tech")
+      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeOrderId) {
+      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
+        excludeOrderId: opts.excludeOrderId,
+      });
+    }
+
+    const orders = await ordersQb.getMany();
+    for (const o of orders) {
+      if (this.isCanceledState(o?.state?.name)) continue;
+      const oStart = this.toOrderDateTime(o.fechainicio as any, o.horainicio);
+      const oEnd = this.toOrderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
+      const range = this.buildRange(oStart, oEnd);
+      if (!range) continue;
+      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const tech of o.technicians ?? []) {
+        const id = Number((tech as any)?.technicianid);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    if (conflicts.size > 0) {
+      const ids = Array.from(conflicts).sort((a, b) => a - b);
+      throw new BadRequestException(
+        `Los siguientes tÃ©cnicos ya estÃ¡n ocupados en ese horario: ${ids.join(", ")}`
+      );
+    }
   }
 
   private async notifyScheduled(sr: ServiceRequest) {
@@ -187,22 +310,34 @@ export class RequestsService {
     if (!technicians.length) {
       throw new BadRequestException("technicians should not be empty");
     }
-
     const direccion = String((dto as any).direccion || "").trim();
     if (direccion.length < 3) {
-      throw new BadRequestException("Dirección inválida");
+      throw new BadRequestException("DirecciÃ³n invÃ¡lida");
     }
 
     const description = String((dto as any).description || "").trim();
     if (description.length < 3) {
-      throw new BadRequestException("Descripción inválida");
+      throw new BadRequestException("DescripciÃ³n invÃ¡lida");
     }
 
     const stateId = Number((dto as any)?.stateId ?? 5);
     const serviceId = Number((dto as any)?.serviceId);
+    const normalizedStateId = Number.isFinite(stateId) && stateId > 0 ? stateId : 5;
+    const state = await this.statesRepo.findOne({
+      where: { stateid: normalizedStateId } as any,
+    });
+    if (!state) throw new BadRequestException("stateId invÃ¡lido");
+
+    if (!this.isCanceledState(state.name)) {
+      await this.ensureTechniciansAvailability(
+        technicians,
+        scheduledAt ?? null,
+        scheduledEndAt ?? null
+      );
+    }
 
     if (!Number.isFinite(serviceId) || serviceId <= 0) {
-      throw new BadRequestException("serviceId inválido");
+      throw new BadRequestException("serviceId invÃ¡lido");
     }
 
     const entity = this.srRepo.create({
@@ -211,7 +346,7 @@ export class RequestsService {
       serviceType: (dto as any).serviceType,
       direccion: direccion.slice(0, 255),
       description,
-      stateId: Number.isFinite(stateId) && stateId > 0 ? stateId : 5,
+      stateId: normalizedStateId,
       serviceId,
       clientId,
     });
@@ -236,7 +371,7 @@ export class RequestsService {
     const userId = resolveUserIdFromAuth(user);
     if (!userId) {
       throw new BadRequestException(
-        "Token inválido: no se pudo obtener el userid"
+        "Token invÃ¡lido: no se pudo obtener el userid"
       );
     }
 
@@ -265,19 +400,19 @@ export class RequestsService {
 
     const direccion = String(dto.direccion || "").trim();
     if (direccion.length < 3) {
-      throw new BadRequestException("Dirección inválida");
+      throw new BadRequestException("DirecciÃ³n invÃ¡lida");
     }
 
     const description = String(dto.description || "").trim();
     if (description.length < 3) {
-      throw new BadRequestException("Descripción inválida");
+      throw new BadRequestException("DescripciÃ³n invÃ¡lida");
     }
 
     const stateId = Number(dto.stateId ?? 5);
     const serviceId = Number(dto.serviceId);
 
     if (!Number.isFinite(serviceId) || serviceId <= 0) {
-      throw new BadRequestException("serviceId inválido");
+      throw new BadRequestException("serviceId invÃ¡lido");
     }
 
     const entity = this.srRepo.create({
@@ -314,6 +449,40 @@ export class RequestsService {
 
     ensureEndAfterStart(nextStart ?? null, nextEnd ?? null);
 
+    const existingLinks = await this.linkRepo.find({
+      where: { serviceRequestId: id } as any,
+    });
+    const currentTechs = Array.from(
+      new Set(
+        (existingLinks ?? [])
+          .map((x) => Number((x as any)?.technicianId))
+          .filter((x) => Number.isFinite(x) && x > 0)
+      )
+    );
+    const nextTechs =
+      (dto as any)?.technicians !== undefined
+        ? normalizeTechnicians((dto as any)?.technicians)
+        : currentTechs;
+    const stateIdInput = (dto as any)?.stateId;
+    const effectiveStateId =
+      stateIdInput != null ? Number(stateIdInput) : Number(sr.stateId);
+    if (!Number.isFinite(effectiveStateId) || effectiveStateId <= 0) {
+      throw new BadRequestException("stateId invÃ¡lido");
+    }
+    const effectiveState = await this.statesRepo.findOne({
+      where: { stateid: effectiveStateId } as any,
+    });
+    if (!effectiveState) throw new BadRequestException("stateId invÃ¡lido");
+
+    if (!this.isCanceledState(effectiveState.name)) {
+      await this.ensureTechniciansAvailability(
+        nextTechs,
+        nextStart ?? null,
+        nextEnd ?? null,
+        { excludeRequestId: id }
+      );
+    }
+
     if (scheduledAt !== undefined) sr.scheduledAt = scheduledAt;
     if (scheduledEndAt !== undefined) sr.scheduledEndAt = scheduledEndAt;
 
@@ -323,28 +492,24 @@ export class RequestsService {
 
     if ((dto as any)?.direccion != null) {
       const dir = String((dto as any).direccion).trim();
-      if (dir.length < 3) throw new BadRequestException("Dirección inválida");
+      if (dir.length < 3) throw new BadRequestException("DirecciÃ³n invÃ¡lida");
       sr.direccion = dir.slice(0, 255);
     }
 
     if ((dto as any)?.description != null) {
       const desc = String((dto as any).description).trim();
-      if (desc.length < 3) throw new BadRequestException("Descripción inválida");
+      if (desc.length < 3) throw new BadRequestException("DescripciÃ³n invÃ¡lida");
       sr.description = desc;
     }
 
     if ((dto as any)?.stateId != null) {
-      const stateId = Number((dto as any).stateId);
-      if (!Number.isFinite(stateId) || stateId <= 0) {
-        throw new BadRequestException("stateId inválido");
-      }
-      sr.stateId = stateId;
+      sr.stateId = effectiveStateId;
     }
 
     if ((dto as any)?.serviceId != null) {
       const serviceId = Number((dto as any).serviceId);
       if (!Number.isFinite(serviceId) || serviceId <= 0) {
-        throw new BadRequestException("serviceId inválido");
+        throw new BadRequestException("serviceId invÃ¡lido");
       }
       sr.serviceId = serviceId;
     }
@@ -352,7 +517,7 @@ export class RequestsService {
     if ((dto as any)?.clientId != null) {
       const clientId = Number((dto as any).clientId);
       if (!Number.isFinite(clientId) || clientId <= 0) {
-        throw new BadRequestException("clientId inválido");
+        throw new BadRequestException("clientId invÃ¡lido");
       }
       sr.clientId = clientId;
     }
@@ -397,3 +562,4 @@ export class RequestsService {
     return { ok: true };
   }
 }
+
