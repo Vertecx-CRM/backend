@@ -12,7 +12,7 @@ import {
 export class CreateTechnicianDto {
   @ApiProperty({
     example: 'kenyah',
-    description: 'Nombre del tǸcnico',
+    description: 'Nombre del técnico',
   })
   @IsString()
   @IsNotEmpty()
