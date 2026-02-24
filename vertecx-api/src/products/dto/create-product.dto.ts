@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -9,6 +12,7 @@ import {
   IsUrl,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -37,9 +41,27 @@ export class CreateProductDto {
   @MaxLength(100)
   suppliercategory: string;
 
+  @ApiPropertyOptional({
+    example: [
+      'https://res.cloudinary.com/.../products/img1.png',
+      'https://res.cloudinary.com/.../products/img2.png',
+    ],
+    description: 'Lista de imágenes (máximo 6). Si se envía, image se toma como la primera.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @MaxLength(2048, { each: true })
+  @IsUrl({}, { each: true })
+  images?: string[];
+
   @ApiProperty({
     example: 'https://res.cloudinary.com/.../products/imagen.png',
+    description: 'Imagen principal (compatibilidad). Si envías images, se ignora y se toma images[0].',
   })
+  @ValidateIf((o) => !o.images || o.images.length === 0)
   @IsString()
   @IsNotEmpty()
   @MaxLength(2048)
