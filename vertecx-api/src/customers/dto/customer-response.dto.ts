@@ -14,22 +14,28 @@ export class CustomerResponseDto {
   customerzipcode?: string;
 
   @ApiProperty({
-    description: 'Información del usuario asociado',
+    description: 'Información del usuario asociado (sin role ni password)',
     required: false,
     example: {
       userid: 1,
       username: 'johndoe',
-      name: 'John',
-      lastname: 'Doe',
-      email: 'john@example.com'
+      fullName: 'John Doe',
+      email: 'john@example.com',
+      phone: '3001234567',
+      typeid: 1,
+      documentnumber: '123456789',
+      stateid: 1
     }
   })
   users?: {
     userid: number;
     username?: string;
-    name?: string;
-    lastname?: string;
+    fullName?: string;
     email?: string;
+    phone?: string;
+    typeid?: number;
+    documentnumber?: string;
+    stateid?: number;
   };
 
   @ApiProperty({
@@ -45,21 +51,30 @@ export class CustomerResponseDto {
   constructor(customer: any) {
     this.customerid = customer.customerid;
     this.userid = customer.userid;
-    this.customercity = customer.customercity;
-    this.customerzipcode = customer.customerzipcode;
-    
+    this.customercity = customer.customercity || '';
+    this.customerzipcode = customer.customerzipcode || '';
+
+    // Mapear información del usuario asociado
     if (customer.users) {
+      const name = customer.users.name?.trim() || '';
+      const lastname = customer.users.lastname?.trim() || '';
+      const fullName = [name, lastname].filter(Boolean).join(' ').trim();
+
       this.users = {
         userid: customer.users.userid,
-        username: customer.users.username,
-        name: customer.users.name,
-        lastname: customer.users.lastname,
-        email: customer.users.email
+        username: name || undefined,
+        fullName: fullName || undefined,
+        email: customer.users.email || undefined,
+        phone: customer.users.phone || undefined,
+        typeid: customer.users.typeid || undefined,
+        documentnumber: customer.users.documentnumber || undefined,
+        stateid: customer.users.stateid || undefined,
       };
     }
-    
+
+    // Mapear ventas si existen
     if (customer.sales) {
-      this.sales = customer.sales;
+      this.sales = Array.isArray(customer.sales) ? customer.sales : [];
     }
   }
 }
