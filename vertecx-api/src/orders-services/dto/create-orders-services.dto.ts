@@ -3,11 +3,12 @@ import {
   IsArray,
   IsDateString,
   IsInt,
-  IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
   Min,
+  MinLength,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -15,13 +16,18 @@ import { AddProductDto } from './add-product.dto';
 import { AddServiceDto } from './add-service.dto';
 
 export class CreateOrdersServicesDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  description?: string;
 
   @IsInt()
   @Min(1)
   clientid: number;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(255)
+  direccion: string;
 
   @IsInt()
   @Min(1)

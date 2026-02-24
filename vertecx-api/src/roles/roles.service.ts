@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Roles } from './entities/roles.entity';
 import { Roleconfiguration } from './entities/roleconfiguration.entity';
 import { Permissions } from 'src/shared/entities/permissions.entity';
@@ -25,7 +25,25 @@ export class RolesService {
     private readonly privilegesRepo: Repository<Privileges>,
 
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
+
+  private readonly MODULE_PRIVILEGES: Record<string, string[]> = {
+    appointments: ['update', 'read', 'deactivate'],
+    sales: ['create', 'read', 'deactivate'],
+    purchaseOrders: ['read', 'deactivate'],
+    orderServices: [
+      'create',
+      'update',
+      'read',
+      'deactivate',
+      'add_history',
+      'report_warranty',
+      'download_report',
+    ],
+    servicesRequest: ['create', 'update', 'read', 'deactivate'],
+  };
+
+  private readonly DEFAULT_PRIVILEGES = ['create', 'read', 'update', 'delete'];
 
   private normalizeStatus(status?: string): string | undefined {
     if (status === undefined || status === null) return undefined;
@@ -35,28 +53,8 @@ export class RolesService {
     return status;
   }
 
-  private async ensurePermissionsAndPrivileges(
-    configurations: { permissionid: number; privilegeid: number }[],
-  ) {
-    for (const config of configurations) {
-      const permission = await this.permissionsRepo.findOne({
-        where: { permissionid: config.permissionid },
-      });
-      if (!permission) {
-        throw new BadRequestException(
-          `El permiso con ID ${config.permissionid} no existe`,
-        );
-      }
-
-      const privilege = await this.privilegesRepo.findOne({
-        where: { privilegeid: config.privilegeid },
-      });
-      if (!privilege) {
-        throw new BadRequestException(
-          `El privilegio con ID ${config.privilegeid} no existe`,
-        );
-      }
-    }
+  private getAllowedPrivilegeNamesForModule(moduleKey: string): string[] {
+    return this.MODULE_PRIVILEGES[moduleKey] ?? this.DEFAULT_PRIVILEGES;
   }
 
   private async ensureUniqueRoleName(name: string, excludeId?: number) {
@@ -70,26 +68,92 @@ export class RolesService {
     if (exists) throw new BadRequestException('El nombre del rol ya existe.');
   }
 
+  private dedupeConfigs(configs: { permissionid: number; privilegeid: number }[]) {
+    const seen = new Set<string>();
+    const out: { permissionid: number; privilegeid: number }[] = [];
+
+    for (const c of configs || []) {
+      const key = `${c.permissionid}:${c.privilegeid}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out;
+  }
+
+  private async ensurePermissionsAndPrivilegesBulk(
+    configs: { permissionid: number; privilegeid: number }[],
+  ) {
+    const deduped = this.dedupeConfigs(configs);
+
+    const permIds = [...new Set(deduped.map((c) => c.permissionid))];
+    const privIds = [...new Set(deduped.map((c) => c.privilegeid))];
+
+    const [perms, privs] = await Promise.all([
+      this.permissionsRepo.find({ where: { permissionid: In(permIds) } }),
+      this.privilegesRepo.find({ where: { privilegeid: In(privIds) } }),
+    ]);
+
+    const permById = new Map<number, Permissions>();
+    perms.forEach((p) => permById.set(p.permissionid, p));
+
+    const privById = new Map<number, Privileges>();
+    privs.forEach((v) => privById.set(v.privilegeid, v));
+
+    if (permById.size !== permIds.length) {
+      throw new BadRequestException('Algún permissionid no existe');
+    }
+    if (privById.size !== privIds.length) {
+      throw new BadRequestException('Algún privilegeid no existe');
+    }
+
+    for (const c of deduped) {
+      const perm = permById.get(c.permissionid)!;
+      const priv = privById.get(c.privilegeid)!;
+
+      const allowed = this.getAllowedPrivilegeNamesForModule(String(perm.module)).map((x) =>
+        String(x).toLowerCase(),
+      );
+
+      const privName = String(priv.name).toLowerCase();
+      if (!allowed.includes(privName)) {
+        throw new BadRequestException(
+          `El privilegio "${priv.name}" no está permitido para el módulo "${perm.module}".`,
+        );
+      }
+    }
+
+    return { deduped, permById, privById };
+  }
+
   async create(dto: CreateRoleDto): Promise<Roles> {
     await this.ensureUniqueRoleName(dto.name);
-    await this.ensurePermissionsAndPrivileges(dto.roleconfigurations);
+
+    const { deduped } = await this.ensurePermissionsAndPrivilegesBulk(dto.roleconfigurations);
 
     const role = this.rolesRepo.create({
       name: dto.name,
-      status: typeof dto.status === 'string' ? dto.status : 'active',
+      status: typeof dto.status === 'string' ? this.normalizeStatus(dto.status) ?? dto.status : 'active',
     });
-    const savedRole = await this.rolesRepo.save(role);
 
-    const roleConfigs = dto.roleconfigurations.map((c) =>
-      this.rcRepo.create({
-        roleid: savedRole.roleid,
-        permissionid: c.permissionid,
-        privilegeid: c.privilegeid,
-      }),
-    );
-    await this.rcRepo.save(roleConfigs);
+    return await this.dataSource.transaction(async (manager) => {
+      const savedRole = await manager.save(Roles, role);
 
-    return savedRole;
+      // bulk insert (deduped)
+      const rows = deduped.map((c) =>
+        manager.create(Roleconfiguration, {
+          roleid: savedRole.roleid,
+          permissionid: c.permissionid,
+          privilegeid: c.privilegeid,
+        }),
+      );
+
+      if (rows.length) {
+        await manager.save(Roleconfiguration, rows);
+      }
+
+      return savedRole;
+    });
   }
 
   async findAll() {
@@ -138,30 +202,48 @@ export class RolesService {
   }
 
   async getRoleDetail(roleid: number) {
-    const role = await this.rolesRepo.findOne({ where: { roleid } });
-    if (!role) throw new NotFoundException('Rol no encontrado');
+    const rows = await this.rcRepo
+      .createQueryBuilder('rc')
+      .leftJoin(Roles, 'r', 'r.roleid = rc.roleid')
+      .leftJoin(Permissions, 'p', 'p.permissionid = rc.permissionid')
+      .leftJoin(Privileges, 'v', 'v.privilegeid = rc.privilegeid')
+      .where('rc.roleid = :roleid', { roleid })
+      .select([
+        'rc.roleconfigurationid AS rc_roleconfigurationid',
+        'r.roleid AS r_roleid',
+        'r.name AS r_name',
+        'r.status AS r_status',
+        'p.permissionid AS p_permissionid',
+        'p.module AS p_module',
+        'v.privilegeid AS v_privilegeid',
+        'v.name AS v_name',
+      ])
+      .orderBy('rc.roleconfigurationid', 'ASC')
+      .getRawMany();
 
-    const configs = await this.rcRepo.find({
-      where: { roleid },
-      relations: ['permissions', 'privileges'],
-      order: { roleconfigurationid: 'ASC' },
-    });
+    // Si un rol puede existir sin configs, entonces debes consultar roles
+    // PERO en tu sistema siempre debe tener al menos 1 config, así que esto está OK.
+    if (!rows.length) {
+      const role = await this.rolesRepo.findOne({ where: { roleid } });
+      if (!role) throw new NotFoundException('Rol no encontrado');
+      return { role, configurations: [] };
+    }
 
     return {
       role: {
-        roleid: role.roleid,
-        name: role.name,
-        status: role.status,
+        roleid: Number(rows[0].r_roleid),
+        name: rows[0].r_name,
+        status: rows[0].r_status,
       },
-      configurations: configs.map((c) => ({
-        roleconfigurationid: c.roleconfigurationid,
+      configurations: rows.map((row) => ({
+        roleconfigurationid: Number(row.rc_roleconfigurationid),
         permission: {
-          id: c.permissionid,
-          module: c.permissions?.module ?? null,
+          id: Number(row.p_permissionid),
+          module: row.p_module,
         },
         privilege: {
-          id: c.privilegeid,
-          name: c.privileges?.name ?? null,
+          id: Number(row.v_privilegeid),
+          name: row.v_name,
         },
       })),
     };
@@ -171,7 +253,7 @@ export class RolesService {
     const role = await this.rolesRepo.findOne({ where: { roleid } });
     if (!role) throw new NotFoundException('Rol no encontrado');
 
-    const [permissions, privileges, current] = await Promise.all([
+    const [permissions, allPrivileges, current] = await Promise.all([
       this.permissionsRepo.find({ order: { permissionid: 'ASC' } }),
       this.privilegesRepo.find({ order: { privilegeid: 'ASC' } }),
       this.rcRepo.find({
@@ -180,38 +262,42 @@ export class RolesService {
       }),
     ]);
 
-    const currentSet = new Set(
-      current.map((rc) => `${rc.permissionid}:${rc.privilegeid}`),
-    );
+    const currentSet = new Set(current.map((rc) => `${rc.permissionid}:${rc.privilegeid}`));
+
+    const privByName = new Map<string, Privileges>();
+    allPrivileges.forEach((p) => privByName.set(String(p.name).toLowerCase(), p));
 
     return {
       role,
-      modules: permissions.map((perm) => ({
-        permissionid: perm.permissionid,
-        module: perm.module,
-        privileges: privileges.map((priv) => ({
-          privilegeid: priv.privilegeid,
-          name: priv.name,
-          checked: currentSet.has(
-            `${perm.permissionid}:${priv.privilegeid}`,
-          ),
-        })),
-        allSelected: privileges.every((priv) =>
-          currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
-        ),
-      })),
+      modules: permissions.map((perm) => {
+        const allowedNames = this.getAllowedPrivilegeNamesForModule(String(perm.module));
+
+        const allowedPrivs = allowedNames
+          .map((n) => privByName.get(String(n).toLowerCase()))
+          .filter(Boolean) as Privileges[];
+
+        return {
+          permissionid: perm.permissionid,
+          module: perm.module,
+          privileges: allowedPrivs.map((priv) => ({
+            privilegeid: priv.privilegeid,
+            name: priv.name,
+            checked: currentSet.has(`${perm.permissionid}:${priv.privilegeid}`),
+          })),
+          allSelected: allowedPrivs.length
+            ? allowedPrivs.every((priv) => currentSet.has(`${perm.permissionid}:${priv.privilegeid}`))
+            : false,
+        };
+      }),
     };
   }
 
   async updateConfigurations(dto: UpdateRoleConfigurationDto) {
-
     const updatedConfigs = [];
     const configs = Array.isArray(dto.configurations) ? dto.configurations : [];
 
     if (!dto.role && configs.length === 0) {
-      throw new BadRequestException(
-        'Debe enviar cambios en el rol o en las configuraciones.',
-      );
+      throw new BadRequestException('Debe enviar cambios en el rol o en las configuraciones.');
     }
 
     if (dto.role) {
@@ -220,9 +306,7 @@ export class RolesService {
       });
 
       if (!role) {
-        throw new BadRequestException(
-          `El rol con ID ${dto.role.roleid} no existe`,
-        );
+        throw new BadRequestException(`El rol con ID ${dto.role.roleid} no existe`);
       }
 
       if (dto.role.name && dto.role.name !== role.name) {
@@ -232,9 +316,7 @@ export class RolesService {
 
       if (dto.role.status !== undefined) {
         const normalized = this.normalizeStatus(dto.role.status);
-        if (normalized) {
-          role.status = normalized;
-        }
+        if (normalized) role.status = normalized;
       }
 
       await this.rolesRepo.save(role);
@@ -246,9 +328,7 @@ export class RolesService {
       });
 
       if (!current) {
-        throw new NotFoundException(
-          `La configuración ${item.roleconfigurationid} no existe`,
-        );
+        throw new NotFoundException(`La configuración ${item.roleconfigurationid} no existe`);
       }
 
       const next = {
@@ -257,14 +337,17 @@ export class RolesService {
         privilegeid: item.privilegeid ?? current.privilegeid,
       };
 
+      // Validación si cambian campos (bulk sería overkill aquí)
+      if (next.permissionid !== current.permissionid || next.privilegeid !== current.privilegeid) {
+        await this.ensurePermissionsAndPrivilegesBulk([{ permissionid: next.permissionid, privilegeid: next.privilegeid }]);
+      }
+
       const dup = await this.rcRepo.findOne({
         where: next,
       });
 
       if (dup && dup.roleconfigurationid !== current.roleconfigurationid) {
-        throw new BadRequestException(
-          'Ya existe otra configuración con estos valores.',
-        );
+        throw new BadRequestException('Ya existe otra configuración con estos valores.');
       }
 
       const merged = this.rcRepo.merge(current, next);
@@ -282,80 +365,43 @@ export class RolesService {
       return this.getRoleMatrix(roleid);
     }
 
-    const permIds = dto.items.map((i) => i.permissionid);
-
-    const perms = await this.permissionsRepo
-      .createQueryBuilder('p')
-      .where('p.permissionid IN (:...ids)', { ids: permIds })
-      .getMany();
-
-    if (perms.length !== new Set(permIds).size) {
-      throw new BadRequestException('Algún permissionid no existe');
-    }
-
-    const allPrivIds = [...new Set(dto.items.flatMap((i) => i.privilegeids))];
-
-    if (allPrivIds.length > 0) {
-      const privs = await this.privilegesRepo
-        .createQueryBuilder('v')
-        .where('v.privilegeid IN (:...ids)', { ids: allPrivIds })
-        .getMany();
-
-      if (privs.length !== allPrivIds.length) {
-        throw new BadRequestException('Algún privilegeid no existe');
+    const flatConfigs: { permissionid: number; privilegeid: number }[] = [];
+    for (const it of dto.items) {
+      for (const pid of it.privilegeids || []) {
+        flatConfigs.push({ permissionid: it.permissionid, privilegeid: pid });
       }
     }
 
-    const desiredTuples = new Set<string>();
+    const { deduped } = await this.ensurePermissionsAndPrivilegesBulk(flatConfigs);
 
-    dto.items.forEach((i) => {
-      (i.privilegeids || []).forEach((privId) => {
-        desiredTuples.add(`${roleid}:${i.permissionid}:${privId}`);
-      });
-    });
+    const desiredTuples = new Set<string>(
+      deduped.map((c) => `${roleid}:${c.permissionid}:${c.privilegeid}`),
+    );
 
     const current = await this.rcRepo.find({ where: { roleid } });
 
     const currentTuples = new Set(
-      current.map(
-        (rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`,
-      ),
+      current.map((rc) => `${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
     );
 
-    const toDelete = current.filter(
-      (rc) =>
-        !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`),
-    );
+    const toDeleteIds = current
+      .filter((rc) => !desiredTuples.has(`${rc.roleid}:${rc.permissionid}:${rc.privilegeid}`))
+      .map((x) => x.roleconfigurationid);
 
-    const toInsertTuples: {
-      roleid: number;
-      permissionid: number;
-      privilegeid: number;
-    }[] = [];
-
-    desiredTuples.forEach((key) => {
+    const toInsert: { roleid: number; permissionid: number; privilegeid: number }[] = [];
+    for (const key of desiredTuples) {
       if (!currentTuples.has(key)) {
         const [, permId, privId] = key.split(':').map(Number);
-        toInsertTuples.push({
-          roleid,
-          permissionid: permId,
-          privilegeid: privId,
-        });
+        toInsert.push({ roleid, permissionid: permId, privilegeid: privId });
       }
-    });
+    }
 
     await this.dataSource.transaction(async (manager) => {
-      if (toDelete.length) {
-        await manager.delete(
-          Roleconfiguration,
-          toDelete.map((x) => x.roleconfigurationid),
-        );
+      if (toDeleteIds.length) {
+        await manager.delete(Roleconfiguration, toDeleteIds);
       }
-
-      if (toInsertTuples.length) {
-        const rows = toInsertTuples.map((t) =>
-          manager.create(Roleconfiguration, t),
-        );
+      if (toInsert.length) {
+        const rows = toInsert.map((t) => manager.create(Roleconfiguration, t));
         await manager.save(Roleconfiguration, rows);
       }
     });
@@ -373,18 +419,15 @@ export class RolesService {
     );
 
     if (Number(count ?? 0) > 0) {
-      throw new BadRequestException(
-        'No se puede eliminar el rol porque tiene usuarios asociados.',
-      );
+      throw new BadRequestException('No se puede eliminar el rol porque tiene usuarios asociados.');
     }
 
-    const configs = await this.rcRepo.find({
-      where: { roleid: id },
-    });
-
-    if (configs.length > 0) {
-      await this.rcRepo.remove(configs);
-    }
+    await this.dataSource
+      .createQueryBuilder()
+      .delete()
+      .from(Roleconfiguration)
+      .where('roleid = :roleid', { roleid: id })
+      .execute();
 
     await this.rolesRepo.remove(role);
   }

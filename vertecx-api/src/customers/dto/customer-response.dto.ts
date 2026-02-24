@@ -19,18 +19,18 @@ export class CustomerResponseDto {
     example: {
       userid: 1,
       username: 'johndoe',
-      fullName: 'John Doe',
-      email: 'john@example.com',
-      phone: '3001234567',
-      typeid: 1,
-      documentnumber: '123456789',
-      stateid: 1
+      name: 'John',
+      lastname: 'Doe',
+      documentnumber: '1234567890',
+      email: 'john@example.com'
     }
   })
   users?: {
     userid: number;
     username?: string;
-    fullName?: string;
+    name?: string;
+    lastname?: string;
+    documentnumber?: string;
     email?: string;
     phone?: string;
     typeid?: number;
@@ -62,13 +62,11 @@ export class CustomerResponseDto {
 
       this.users = {
         userid: customer.users.userid,
-        username: name || undefined,
-        fullName: fullName || undefined,
-        email: customer.users.email || undefined,
-        phone: customer.users.phone || undefined,
-        typeid: customer.users.typeid || undefined,
-        documentnumber: customer.users.documentnumber || undefined,
-        stateid: customer.users.stateid || undefined,
+        username: customer.users.username,
+        name: customer.users.name,
+        lastname: customer.users.lastname,
+        documentnumber: customer.users.documentnumber,
+        email: customer.users.email
       };
     }
 
