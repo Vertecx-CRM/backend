@@ -28,19 +28,6 @@ export class CustomersController {
     return this.customersService.findAll(include);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Obtener un cliente por ID' })
-  @ApiQuery({ name: 'includeRelations', required: false, type: Boolean, description: 'Incluir relaciones con users y sales' })
-  @ApiResponse({ status: 200, description: 'Cliente encontrado', type: CustomerResponseDto })
-  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
-  findOne(
-    @Param('id', new ParseIntPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: number,
-    @Query('includeRelations') includeRelations?: string
-  ) {
-    const include = includeRelations === 'true';
-    return this.customersService.findOne(id, include);
-  }
-
   @Get('user/:userId')
   @ApiOperation({ summary: 'Obtener cliente por ID de usuario' })
   @ApiQuery({ name: 'includeRelations', required: false, type: Boolean, description: 'Incluir relaciones con users y sales' })
@@ -66,6 +53,19 @@ export class CustomersController {
   @ApiResponse({ status: 200, description: 'Total de clientes', type: Number })
   count() {
     return this.customersService.count();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Obtener un cliente por ID' })
+  @ApiQuery({ name: 'includeRelations', required: false, type: Boolean, description: 'Incluir relaciones con users y sales' })
+  @ApiResponse({ status: 200, description: 'Cliente encontrado', type: CustomerResponseDto })
+  @ApiResponse({ status: 404, description: 'Cliente no encontrado' })
+  findOne(
+    @Param('id', new ParseIntPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: number,
+    @Query('includeRelations') includeRelations?: string
+  ) {
+    const include = includeRelations === 'true';
+    return this.customersService.findOne(id, include);
   }
 
   @Patch(':id')

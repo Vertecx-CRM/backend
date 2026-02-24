@@ -1,4 +1,5 @@
 import { Customers } from 'src/customers/entities/customers.entity';
+import { Sales } from 'src/sales/entities/sales.entity';
 import { Roles } from 'src/roles/entities/roles.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
