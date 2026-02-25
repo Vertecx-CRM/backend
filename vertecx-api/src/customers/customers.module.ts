@@ -3,23 +3,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
 import { Customers } from './entities/customers.entity';
-import { Users } from 'src/users/entities/users.entity';
-import { Roles } from 'src/roles/entities/roles.entity';
-import { States } from 'src/shared/entities/states.entity';
-import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+import { Sales } from 'src/sales/entities/sales.entity';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Customers,
-      Users,
-      Roles,
-      States,
-      Typeofdocuments,
-    ]),
+    TypeOrmModule.forFeature([Customers, Sales]),
+    UsersModule,
   ],
   controllers: [CustomersController],
   providers: [CustomersService],
   exports: [CustomersService],
 })
-export class CustomersModule {}
+export class CustomersModule { }

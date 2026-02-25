@@ -39,7 +39,10 @@ export class Sales {
   paymentmethod: string; // 'Efectivo', 'Tarjeta', etc.
 
   @Column({ nullable: true })
-  salestatus: string; // 'Pending' | 'Completed' | ...
+  salestatus: string; // 'Pending' | 'Completed' | 'Cancelled' | ...
+
+  @Column({ nullable: true, default: null })
+  estadoPago: string | null; // 'Abonada' | 'Pagada'
 
   @Column({ nullable: true })
   createdby: string;
