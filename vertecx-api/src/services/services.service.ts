@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, QueryFailedError } from 'typeorm';
 import { Services } from './entities/services.entity';
@@ -11,21 +16,28 @@ import { ServicesQueryDto } from './dto/services-query.dto';
 @Injectable()
 export class ServicesService {
   constructor(
-    @InjectRepository(Services) private readonly servicesRepo: Repository<Services>,
-    @InjectRepository(Typeofservices) private readonly typesRepo: Repository<Typeofservices>,
-    @InjectRepository(States) private readonly statesRepo: Repository<States>,
-  ) { }
+    @InjectRepository(Services)
+    private readonly servicesRepo: Repository<Services>,
+    @InjectRepository(Typeofservices)
+    private readonly typesRepo: Repository<Typeofservices>,
+    @InjectRepository(States)
+    private readonly statesRepo: Repository<States>,
+  ) {}
 
   private ensureActiveInactiveState(stateid: number) {
     if (![1, 2].includes(stateid)) {
-      throw new BadRequestException('stateid inválido. Solo se permite 1 (Activo) o 2 (Inactivo).');
+      throw new BadRequestException(
+        'stateid inválido. Solo se permite 1 (Activo) o 2 (Inactivo).',
+      );
     }
   }
 
   private async ensureTypeExistsAndActive(typeofserviceid: number) {
     const type = await this.typesRepo.findOne({ where: { typeofserviceid } });
     if (!type) throw new BadRequestException('El tipo de servicio no existe.');
-    if (type.statusid !== 1) throw new BadRequestException('El tipo de servicio está inactivo.');
+    if (type.statusid !== 1) {
+      throw new BadRequestException('El tipo de servicio está inactivo.');
+    }
     return type;
   }
 
@@ -64,8 +76,8 @@ export class ServicesService {
       stateid: dto.stateid ?? 1,
     });
 
-
     const saved = await this.servicesRepo.save(entity);
+
     return this.findOne(saved.serviceid);
   }
 
@@ -76,37 +88,58 @@ export class ServicesService {
 
     if (q.stateid !== undefined) this.ensureActiveInactiveState(q.stateid);
 
-    const qb = this.servicesRepo
+    const baseQb = this.servicesRepo
       .createQueryBuilder('s')
-      .leftJoinAndSelect('s.typeofservice', 't')
-      .leftJoinAndSelect('s.state', 'st')
-      .orderBy('s.serviceid', 'DESC');
+      .leftJoin('s.typeofservice', 't')
+      .leftJoin('s.state', 'st');
 
     if (q.search?.trim()) {
-      qb.andWhere('LOWER(s.name) LIKE :search', { search: `%${q.search.trim().toLowerCase()}%` });
+      baseQb.andWhere('LOWER(s.name) LIKE :search', {
+        search: `%${q.search.trim().toLowerCase()}%`,
+      });
     }
 
     if (q.typeofserviceid) {
-      qb.andWhere('s.typeofserviceid = :tid', { tid: q.typeofserviceid });
+      baseQb.andWhere('s.typeofserviceid = :tid', { tid: q.typeofserviceid });
     }
 
     if (q.stateid) {
-      qb.andWhere('s.stateid = :sid', { sid: q.stateid });
+      baseQb.andWhere('s.stateid = :sid', { sid: q.stateid });
     }
 
-    const total = await qb.getCount();
-    const data = await qb.skip(skip).take(limit).getMany();
+    const { cnt } = await baseQb
+      .clone()
+      .select('COUNT(1)', 'cnt')
+      .getRawOne<{ cnt: string }>();
+
+    const total = Number(cnt ?? 0);
+
+    const rows = await baseQb
+      .select([
+        's.serviceid AS serviceid',
+        's.name AS name',
+        's.description AS description',
+        's.image AS image',
+        's.typeofserviceid AS typeofserviceid',
+        't.name AS typeofservicename',
+        's.stateid AS stateid',
+        'st.name AS statename',
+      ])
+      .orderBy('s.serviceid', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getRawMany();
 
     return {
-      data: data.map((s) => ({
-        serviceid: s.serviceid,
-        name: s.name,
-        description: s.description,
-        image: s.image,
-        typeofserviceid: s.typeofserviceid,
-        typeofservicename: s.typeofservice?.name ?? null,
-        stateid: s.stateid,
-        statename: s.state?.name ?? null,
+      data: rows.map((r) => ({
+        serviceid: Number(r.serviceid),
+        name: r.name,
+        description: r.description,
+        image: r.image,
+        typeofserviceid: Number(r.typeofserviceid),
+        typeofservicename: r.typeofservicename ?? null,
+        stateid: Number(r.stateid),
+        statename: r.statename ?? null,
       })),
       meta: {
         page,
@@ -118,22 +151,34 @@ export class ServicesService {
   }
 
   async findOne(id: number) {
-    const s = await this.servicesRepo.findOne({
-      where: { serviceid: id },
-      relations: { typeofservice: true, state: true },
-    });
+    const row = await this.servicesRepo
+      .createQueryBuilder('s')
+      .leftJoin('s.typeofservice', 't')
+      .leftJoin('s.state', 'st')
+      .select([
+        's.serviceid AS serviceid',
+        's.name AS name',
+        's.description AS description',
+        's.image AS image',
+        's.typeofserviceid AS typeofserviceid',
+        't.name AS typeofservicename',
+        's.stateid AS stateid',
+        'st.name AS statename',
+      ])
+      .where('s.serviceid = :id', { id })
+      .getRawOne();
 
-    if (!s) throw new NotFoundException('Servicio no encontrado.');
+    if (!row) throw new NotFoundException('Servicio no encontrado.');
 
     return {
-      serviceid: s.serviceid,
-      name: s.name,
-      description: s.description,
-      image: s.image,
-      typeofserviceid: s.typeofserviceid,
-      typeofservicename: s.typeofservice?.name ?? null,
-      stateid: s.stateid,
-      statename: s.state?.name ?? null,
+      serviceid: Number(row.serviceid),
+      name: row.name,
+      description: row.description,
+      image: row.image,
+      typeofserviceid: Number(row.typeofserviceid),
+      typeofservicename: row.typeofservicename ?? null,
+      stateid: Number(row.stateid),
+      statename: row.statename ?? null,
     };
   }
 
@@ -164,11 +209,13 @@ export class ServicesService {
   }
 
   async remove(id: number) {
-    const existing = await this.servicesRepo.findOne({ where: { serviceid: id } });
-    if (!existing) throw new NotFoundException('Servicio no encontrado.');
-
     try {
-      await this.servicesRepo.delete({ serviceid: id });
+      const res = await this.servicesRepo.delete({ serviceid: id });
+
+      if (!res.affected) {
+        throw new NotFoundException('Servicio no encontrado.');
+      }
+
       return { message: 'Servicio eliminado correctamente.' };
     } catch (e) {
       if (e instanceof QueryFailedError) {
