@@ -1,5 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -38,8 +41,26 @@ export class UpdateProductDto {
   @MaxLength(100)
   suppliercategory?: string;
 
+  // NUEVO
+  @ApiPropertyOptional({
+    example: [
+      'https://res.cloudinary.com/.../products/img1.png',
+      'https://res.cloudinary.com/.../products/img2.png',
+    ],
+    description: 'Reemplaza la galería completa (1 a 6).',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @MaxLength(2048, { each: true })
+  @IsUrl({}, { each: true })
+  images?: string[];
+
   @ApiPropertyOptional({
     example: 'https://res.cloudinary.com/.../products/x.png',
+    description: 'Imagen principal (compatibilidad).',
   })
   @ValidateIf((o) => o.image !== undefined)
   @IsString()

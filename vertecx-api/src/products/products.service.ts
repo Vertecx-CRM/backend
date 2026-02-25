@@ -33,15 +33,54 @@ export class ProductsService {
     return true;
   }
 
+  private normalizeImages(input: {
+    image?: string | null;
+    images?: string[] | null;
+  }): { image: string; images: string[] } {
+    const normalizedArr = (input.images ?? [])
+      .map((x) => String(x ?? '').trim())
+      .filter(Boolean);
+
+    const normalizedImage = String(input.image ?? '').trim();
+
+    let finalImages: string[] = [];
+
+    if (normalizedArr.length > 0) {
+      finalImages = normalizedArr;
+    } else if (normalizedImage) {
+      finalImages = [normalizedImage];
+    }
+
+    if (finalImages.length === 0) {
+      throw new BadRequestException('Debes enviar al menos una imagen.');
+    }
+    if (finalImages.length > 6) {
+      throw new BadRequestException('Máximo 6 imágenes por producto.');
+    }
+
+    finalImages = Array.from(new Set(finalImages));
+
+    if (finalImages.length > 6) {
+      throw new BadRequestException('Máximo 6 imágenes por producto.');
+    }
+
+    return { image: finalImages[0], images: finalImages };
+  }
+
   async create(dto: CreateProductDto) {
     await this.ensureCategoryExists(dto.categoryid);
+
+    const imgs = this.normalizeImages({ image: dto.image, images: dto.images });
 
     const entity = this.productsRepo.create({
       productname: dto.productname.trim(),
       productdescription: dto.productdescription ?? null,
       categoryid: dto.categoryid,
       suppliercategory: dto.suppliercategory.trim(),
-      image: dto.image.trim(),
+
+      image: imgs.image,
+      images: imgs.images,
+
       productcode: dto.productcode ?? null,
 
       productpriceofsale: null,
@@ -77,6 +116,7 @@ export class ProductsService {
       'p.purchaseorderid',
       'p.suppliercategory',
       'p.image',
+      'p.images', 
 
       'c.id',
       'c.name',
@@ -105,6 +145,7 @@ export class ProductsService {
         'p.purchaseorderid',
         'p.suppliercategory',
         'p.image',
+        'p.images',
 
         'c.id',
         'c.name',
@@ -163,14 +204,27 @@ export class ProductsService {
       patch.suppliercategory = v;
     }
 
-    if (dto.image !== undefined) {
+    if (dto.images !== undefined) {
+      const imgs = this.normalizeImages({ images: dto.images });
+      patch.images = imgs.images;
+      patch.image = imgs.image;
+    } else if (dto.image !== undefined) {
       const v = dto.image?.trim();
       if (!v) {
         throw new BadRequestException(
           'La imagen es obligatoria. No puedes eliminarla; si deseas cambiarla, envía una nueva URL.',
         );
       }
+
       patch.image = v;
+
+      const existing = Array.isArray(product.images) ? [...product.images] : [];
+      if (existing.length === 0) {
+        patch.images = [v];
+      } else {
+        existing[0] = v;
+        patch.images = existing.slice(0, 6);
+      }
     }
 
     if (dto.productcode !== undefined) {

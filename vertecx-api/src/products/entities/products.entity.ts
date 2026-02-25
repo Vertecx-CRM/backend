@@ -80,6 +80,9 @@ export class Products {
   @Column({ name: 'image', type: 'text', nullable: false })
   image: string;
 
+  @Column({ name: 'images', type: 'text', array: true, nullable: true })
+  images: string[] | null;
+
   @OneToMany(() => PurchaseProduct, (pp) => pp.product)
   purchaseProducts: PurchaseProduct[];
 
