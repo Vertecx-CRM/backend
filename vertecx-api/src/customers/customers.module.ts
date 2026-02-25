@@ -3,20 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
 import { Customers } from './entities/customers.entity';
-import { Users } from 'src/users/entities/users.entity';
-import { Roles } from 'src/roles/entities/roles.entity';
-import { States } from 'src/shared/entities/states.entity';
-import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
+import { UsersModule } from 'src/users/users.module'; // ✅ IMPORT CORRECTO
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Customers,
-      Users,
-      Roles,
-      States,
-      Typeofdocuments,
-    ]),
+    TypeOrmModule.forFeature([Customers]),
+    UsersModule, // ✅ Inyección correcta
   ],
   controllers: [CustomersController],
   providers: [CustomersService],

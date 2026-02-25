@@ -1,78 +1,59 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { Customers } from '../entities/customers.entity';
 
 export class CustomerResponseDto {
-  @ApiProperty({ description: 'ID único del cliente', example: 1 })
   customerid: number;
+  customercity: string;
+  customerzipcode: string;
 
-  @ApiProperty({ description: 'ID del usuario asociado', example: 1 })
-  userid: number;
+  users: any;
 
-  @ApiProperty({ description: 'Ciudad del cliente', example: 'Bogotá', required: false })
-  customercity?: string;
+  sales: any[];
 
-  @ApiProperty({ description: 'Código postal', example: '110111', required: false })
-  customerzipcode?: string;
-
-  @ApiProperty({
-    description: 'Información del usuario asociado (sin role ni password)',
-    required: false,
-    example: {
-      userid: 1,
-      username: 'johndoe',
-      name: 'John',
-      lastname: 'Doe',
-      documentnumber: '1234567890',
-      email: 'john@example.com'
-    }
-  })
-  users?: {
-    userid: number;
-    username?: string;
-    name?: string;
-    lastname?: string;
-    documentnumber?: string;
-    email?: string;
-    phone?: string;
-    typeid?: number;
-    documentnumber?: string;
-    stateid?: number;
-  };
-
-  @ApiProperty({
-    description: 'Ventas asociadas al cliente',
-    required: false,
-    type: 'array',
-    items: {
-      type: 'object'
-    }
-  })
-  sales?: any[];
-
-  constructor(customer: any) {
+  constructor(customer: Customers) {
     this.customerid = customer.customerid;
-    this.userid = customer.userid;
-    this.customercity = customer.customercity || '';
-    this.customerzipcode = customer.customerzipcode || '';
+    this.customercity = customer.customercity;
+    this.customerzipcode = customer.customerzipcode;
 
-    // Mapear información del usuario asociado
-    if (customer.users) {
-      const name = customer.users.name?.trim() || '';
-      const lastname = customer.users.lastname?.trim() || '';
-      const fullName = [name, lastname].filter(Boolean).join(' ').trim();
+    this.users = customer.users
+      ? {
+          userid: customer.users.userid,
+          name: customer.users.name,
+          lastname: customer.users.lastname,
+          email: customer.users.email,
+          documentnumber: customer.users.documentnumber,
+          phone: customer.users.phone,
+          image: customer.users.image,
 
-      this.users = {
-        userid: customer.users.userid,
-        username: customer.users.username,
-        name: customer.users.name,
-        lastname: customer.users.lastname,
-        documentnumber: customer.users.documentnumber,
-        email: customer.users.email
-      };
-    }
+          typeofdocuments: customer.users.typeofdocuments
+            ? {
+                id:
+                  (customer.users.typeofdocuments as any).typeid ??
+                  (customer.users.typeofdocuments as any).typeofdocumentid ??
+                  (customer.users.typeofdocuments as any).id,
+                name: customer.users.typeofdocuments.name,
+              }
+            : null,
 
-    // Mapear ventas si existen
-    if (customer.sales) {
-      this.sales = Array.isArray(customer.sales) ? customer.sales : [];
-    }
+          states: customer.users.states
+            ? {
+                id:
+                  (customer.users.states as any).stateid ??
+                  (customer.users.states as any).id,
+                name: customer.users.states.name,
+              }
+            : null,
+
+          roles: customer.users.roles
+            ? {
+                id:
+                  (customer.users.roles as any).roleid ??
+                  (customer.users.roles as any).id,
+                name: customer.users.roles.name,
+              }
+            : null,
+        }
+      : null;
+
+    this.sales = customer.sales ?? [];
   }
 }
