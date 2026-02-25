@@ -18,23 +18,23 @@ export class PurchaseOrder {
   // Identificación
 
   @Column({ unique: true })
-  numeroOrden: string;
+  numeroorden: string;
 
   // Relaciones
 
   @ManyToOne(() => Suppliers, { eager: false })
-  @JoinColumn({ name: 'proveedor_id' })
+  @JoinColumn({ name: 'proveedorid' })
   supplier: Suppliers;
 
   @Column()
-  proveedorId: number;
+  proveedorid: number;
 
   @ManyToOne(() => States, { eager: false })
-  @JoinColumn({ name: 'estado_id' })
+  @JoinColumn({ name: 'estadoid' })
   state: States;
 
   @Column()
-  estadoId: number;
+  estadoid: number;
 
   // Fechas
 
@@ -44,7 +44,7 @@ export class PurchaseOrder {
   // Valores económicos
 
   @Column('decimal', { precision: 12, scale: 2 })
-  precioUnitario: number;
+  preciounitario: number;
 
   @Column('int')
   cantidad: number;
@@ -66,8 +66,8 @@ export class PurchaseOrder {
   // Auditoría
 
   @CreateDateColumn()
-  createdAt: Date;
+  createat: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updateat: Date;
 }

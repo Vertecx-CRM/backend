@@ -24,7 +24,7 @@ export class SalesService {
     private readonly productsRepo: Repository<Products>,
 
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   private withDireccionFromServiceRequest<T extends Sales | null>(sale: T) {
     if (!sale) return sale;
@@ -212,6 +212,19 @@ export class SalesService {
       );
     }
 
+    // ✅ No permitir anular si tiene pago registrado
+    if (sale.estadoPago === 'Pagada') {
+      throw new BadRequestException(
+        'No se puede anular una venta que ya fue pagada.',
+      );
+    }
+
+    if (sale.estadoPago === 'Abonada') {
+      throw new BadRequestException(
+        'No se puede anular una venta con abono registrado. Revise el pago antes de anular.',
+      );
+    }
+
     return await this.dataSource.transaction(async (manager) => {
       // Reintegrar stock
       for (const detail of sale.salesdetail) {
@@ -238,6 +251,30 @@ export class SalesService {
   }
 
   /* ============================================================
+     ACTUALIZAR ESTADO DE PAGO
+     Si estadoPago = 'Pagada' → salestatus = 'Completed' automáticamente
+  ============================================================ */
+  async updateEstadoPago(
+    id: number,
+    estadoPago: 'Abonada' | 'Pagada',
+  ) {
+    const sale = await this.salesRepo.findOne({ where: { saleid: id } });
+
+    if (!sale) {
+      throw new NotFoundException(`Venta ${id} no encontrada.`);
+    }
+
+    sale.estadoPago = estadoPago;
+
+    // Cambio automático de estado al marcar como pagada
+    if (estadoPago === 'Pagada') {
+      sale.salestatus = 'Completed';
+    }
+
+    return await this.salesRepo.save(sale);
+  }
+
+  /* ============================================================
      ELIMINAR VENTA (solo si está cancelada)
   ============================================================ */
   async remove(id: number) {
@@ -260,3 +297,4 @@ export class SalesService {
     return { message: `Venta ${id} eliminada correctamente.` };
   }
 }
+

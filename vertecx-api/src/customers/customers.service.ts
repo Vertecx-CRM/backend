@@ -3,10 +3,13 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
+  HttpException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Customers } from './entities/customers.entity';
+import { Sales } from 'src/sales/entities/sales.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerResponseDto } from './dto/customer-response.dto';
@@ -19,11 +22,15 @@ export class CustomersService {
   constructor(
     @InjectRepository(Customers)
     private readonly customersRepository: Repository<Customers>,
+    @InjectRepository(Sales)
+    private readonly salesRepository: Repository<Sales>,
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
+
+  private readonly logger = new Logger(CustomersService.name);
 
   // ================================
-  // CREATE (CORREGIDO)
+  // CREATE
   // ================================
   async create(
     createCustomerDto: CreateCustomerDto,
@@ -38,28 +45,30 @@ export class CustomersService {
         documentnumber: createCustomerDto.documentnumber,
         phone: createCustomerDto.phone,
         typeid: createCustomerDto.typeid,
-        image: createCustomerDto.image,
+        image: createCustomerDto.image || '', // ← permite string vacío
         stateid: 1,
         roleid: roleId,
         customercity: createCustomerDto.customercity,
         customerzipcode: createCustomerDto.customerzipcode,
       };
 
-      // 🔥 UsersService ya crea el Customer internamente
       const userResponse = await this.usersService.create(userDto);
-
       const createdUser = userResponse.data;
 
       return await this.findOneByUserId(createdUser.userid);
-
     } catch (error) {
-      if (error instanceof ConflictException) throw error;
+      this.logger.error(`Error al crear cliente: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException('Error al crear el cliente');
     }
   }
 
   // ================================
-  // FIND ONE BY USER ID (NUEVO)
+  // FIND ONE BY USER ID
   // ================================
   async findOneByUserId(userId: number): Promise<CustomerResponseDto> {
     const customer = await this.customersRepository.findOne({
@@ -96,9 +105,7 @@ export class CustomersService {
         order: { customerid: 'ASC' },
       });
 
-      return customers.map(
-        (customer) => new CustomerResponseDto(customer),
-      );
+      return customers.map((customer) => new CustomerResponseDto(customer));
     } catch (error) {
       throw new InternalServerErrorException('Error al obtener los clientes');
     }
@@ -121,9 +128,7 @@ export class CustomersService {
       });
 
       if (!customer) {
-        throw new NotFoundException(
-          `Cliente con ID ${id} no encontrado`,
-        );
+        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
       }
 
       return new CustomerResponseDto(customer);
@@ -146,9 +151,7 @@ export class CustomersService {
       });
 
       if (!customer) {
-        throw new NotFoundException(
-          `Cliente con ID ${id} no encontrado`,
-        );
+        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
       }
 
       const userDto: UpdateUserDto = {};
@@ -184,7 +187,7 @@ export class CustomersService {
   }
 
   // ================================
-  // REMOVE
+  // REMOVE – con restricción de ventas activas
   // ================================
   async remove(id: number): Promise<{ message: string }> {
     try {
@@ -193,8 +196,21 @@ export class CustomersService {
       });
 
       if (!customer) {
-        throw new NotFoundException(
-          `Cliente con ID ${id} no encontrado`,
+        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+      }
+
+      // 🔒 Bloquear eliminación si tiene ventas en estado pendiente o abonada
+      const activeStatuses = ['Pending', 'Abonada'];
+      const activeCount = await this.salesRepository.count({
+        where: {
+          customerid: customer.userid,
+          salestatus: In(activeStatuses),
+        },
+      });
+
+      if (activeCount > 0) {
+        throw new ConflictException(
+          `No se puede eliminar el cliente porque tiene ${activeCount} venta(s) en estado Pendiente o Abonada.`,
         );
       }
 

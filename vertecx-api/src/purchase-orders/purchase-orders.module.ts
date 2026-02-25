@@ -10,6 +10,8 @@ import { PurchaseOrder } from '../shared/entities/purchase-order.entity';
 // Entidades relacionadas (FK / validaciones)
 import { States } from 'src/shared/entities/states.entity';
 import { Suppliers } from 'src/suppliers/entities/suppliers.entity';
+import { Products } from 'src/products/entities/products.entity';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
   imports: [
@@ -17,10 +19,12 @@ import { Suppliers } from 'src/suppliers/entities/suppliers.entity';
       PurchaseOrder,
       States,
       Suppliers,
+      Products,
     ]),
+    MailModule,
   ],
   controllers: [PurchaseOrdersController],
   providers: [PurchaseOrdersService],
   exports: [PurchaseOrdersService],
 })
-export class PurchaseOrdersModule {}
+export class PurchaseOrdersModule { }

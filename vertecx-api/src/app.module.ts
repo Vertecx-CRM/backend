@@ -24,11 +24,11 @@ import { AuthModule } from './auth/auth.module';
 import { OrdersServicesModule } from './orders-services/orders-services.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { SystemStatus } from './security/panic/system-status.entity';
+// import { SystemStatus } from './security/panic/system-status.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SystemStatus]),
+    // TypeOrmModule.forFeature([SystemStatus]),
     AuthModule,
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
