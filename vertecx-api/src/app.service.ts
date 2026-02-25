@@ -3,29 +3,35 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { rm } from 'fs/promises';
 import * as path from 'path';
-import { SystemStatus } from './security/panic/system-status.entity';
+// import { SystemStatus } from './security/panic/system-status.entity';
 @Injectable()
 export class AppService {
   constructor(
-    @InjectRepository(SystemStatus)
-    private readonly systemStatusRepo: Repository<SystemStatus>,
-  ) {}
+    // @InjectRepository(SystemStatus)
+    // private readonly systemStatusRepo: Repository<SystemStatus>,
+  ) { }
 
-  async getStatus(): Promise<SystemStatus> {
+  async getStatus(): Promise<any> {
+    return { id: 1, panicMode: false };
+    /*
     let status = await this.systemStatusRepo.findOne({ where: { id: 1 } });
     if (!status) {
       status = this.systemStatusRepo.create({ id: 1, panicMode: false });
       await this.systemStatusRepo.save(status);
     }
     return status;
+    */
   }
 
   async triggerPanic(reason?: string) {
+    /*
     const status = await this.getStatus();
     status.panicMode = true;
     status.reason = reason ?? 'Kill switch activado';
     status.updatedAt = new Date();
     await this.systemStatusRepo.save(status);
+    */
+    console.log('Panic triggered:', reason);
 
     await this.deleteSensitiveFolders();
 

@@ -2,29 +2,52 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
+  Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PurchaseOrder } from '../shared/entities/purchase-order.entity';
+import { Products } from '../products/entities/products.entity';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
+import { SendNotificationDto } from './dto/send-notification.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class PurchaseOrdersService {
   constructor(
     @InjectRepository(PurchaseOrder)
     private readonly purchaseOrderRepo: Repository<PurchaseOrder>,
-  ) {}
+    @InjectRepository(Products)
+    private readonly productsRepo: Repository<Products>,
+    private readonly mailService: MailService,
+  ) { }
+
+  private readonly logger = new Logger(PurchaseOrdersService.name);
+
+  // ─── Generar número de orden único ─────────────────────────────────────────
+  private generateOrderNumber(): string {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0');
+    return `OC-${timestamp}-${random}`;
+  }
 
   // CREATE
   async create(dto: CreatePurchaseOrderDto): Promise<PurchaseOrder> {
+    // Si el frontend no envía numeroOrden, generarlo automáticamente
+    const numeroorden = dto.numeroOrden || this.generateOrderNumber();
+
     const existing = await this.purchaseOrderRepo.findOne({
-      where: { numeroOrden: dto.numeroOrden },
+      where: { numeroorden },
     });
 
     if (existing) {
       throw new ConflictException(
-        `El número de orden ${dto.numeroOrden} ya existe`,
+        `El número de orden ${numeroorden} ya existe`,
       );
     }
 
@@ -33,11 +56,11 @@ export class PurchaseOrdersService {
     const total = subtotal + iva;
 
     const purchaseOrder = this.purchaseOrderRepo.create({
-      numeroOrden: dto.numeroOrden,
-      proveedorId: dto.proveedorId,
-      estadoId: dto.estadoId ?? 1, // Pendiente por defecto
+      numeroorden,
+      proveedorid: dto.proveedorId,
+      estadoid: dto.estadoId ?? 1, // 1 = Pendiente por defecto
       fecha: dto.fecha,
-      precioUnitario: dto.precioUnitario,
+      preciounitario: dto.precioUnitario,
       cantidad: dto.cantidad,
       subtotal,
       iva,
@@ -50,10 +73,15 @@ export class PurchaseOrdersService {
 
   // FIND ALL
   async findAll(): Promise<PurchaseOrder[]> {
-    return await this.purchaseOrderRepo.find({
-      relations: ['state', 'supplier'],
-      order: { createdAt: 'DESC' },
-    });
+    try {
+      return await this.purchaseOrderRepo.find({
+        relations: ['state', 'supplier'],
+        order: { createat: 'DESC' },
+      });
+    } catch (error) {
+      this.logger.error(`Error al listar órdenes de compra: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Error al listar las órdenes de compra');
+    }
   }
 
   // FIND ONE
@@ -73,15 +101,15 @@ export class PurchaseOrdersService {
   }
 
   // FIND BY NUMERO ORDEN
-  async findByNumeroOrden(numeroOrden: string): Promise<PurchaseOrder> {
+  async findByNumeroOrden(numeroorden: string): Promise<PurchaseOrder> {
     const purchaseOrder = await this.purchaseOrderRepo.findOne({
-      where: { numeroOrden },
+      where: { numeroorden },
       relations: ['state', 'supplier'],
     });
 
     if (!purchaseOrder) {
       throw new NotFoundException(
-        `Orden de compra ${numeroOrden} no encontrada`,
+        `Orden de compra ${numeroorden} no encontrada`,
       );
     }
 
@@ -97,10 +125,10 @@ export class PurchaseOrdersService {
 
     if (
       dto.numeroOrden &&
-      dto.numeroOrden !== purchaseOrder.numeroOrden
+      dto.numeroOrden !== purchaseOrder.numeroorden
     ) {
       const existing = await this.purchaseOrderRepo.findOne({
-        where: { numeroOrden: dto.numeroOrden },
+        where: { numeroorden: dto.numeroOrden },
       });
 
       if (existing && existing.id !== id) {
@@ -109,27 +137,27 @@ export class PurchaseOrdersService {
         );
       }
 
-      purchaseOrder.numeroOrden = dto.numeroOrden;
+      purchaseOrder.numeroorden = dto.numeroOrden;
     }
 
     if (dto.fecha) purchaseOrder.fecha = dto.fecha;
     if (dto.precioUnitario !== undefined)
-      purchaseOrder.precioUnitario = dto.precioUnitario;
+      purchaseOrder.preciounitario = dto.precioUnitario;
     if (dto.cantidad !== undefined)
       purchaseOrder.cantidad = dto.cantidad;
     if (dto.descripcion !== undefined)
       purchaseOrder.descripcion = dto.descripcion;
     if (dto.estadoId !== undefined)
-      purchaseOrder.estadoId = dto.estadoId;
+      purchaseOrder.estadoid = dto.estadoId;
     if (dto.proveedorId !== undefined)
-      purchaseOrder.proveedorId = dto.proveedorId;
+      purchaseOrder.proveedorid = dto.proveedorId;
 
     if (
       dto.precioUnitario !== undefined ||
       dto.cantidad !== undefined
     ) {
       const subtotal =
-        purchaseOrder.precioUnitario * purchaseOrder.cantidad;
+        purchaseOrder.preciounitario * purchaseOrder.cantidad;
       const iva = subtotal * 0.19;
       const total = subtotal + iva;
 
@@ -148,13 +176,13 @@ export class PurchaseOrdersService {
   ): Promise<PurchaseOrder> {
     const purchaseOrder = await this.findOne(id);
 
-    purchaseOrder.estadoId = 3; // 3 = Anulada (ajusta según tu tabla states)
+    purchaseOrder.estadoid = 3; // 3 = Anulada
     purchaseOrder.descripcion = motivo;
 
     return await this.purchaseOrderRepo.save(purchaseOrder);
   }
 
-  // DELETE (TEMPORAL)
+  // DELETE
   async remove(id: number): Promise<{ message: string }> {
     const purchaseOrder = await this.findOne(id);
     await this.purchaseOrderRepo.remove(purchaseOrder);
@@ -166,10 +194,10 @@ export class PurchaseOrdersService {
 
   // FIND BY SUPPLIER
   async findBySupplier(
-    proveedorId: number,
+    proveedorid: number,
   ): Promise<PurchaseOrder[]> {
     return await this.purchaseOrderRepo.find({
-      where: { proveedorId },
+      where: { proveedorid },
       relations: ['state', 'supplier'],
       order: { fecha: 'DESC' },
     });
@@ -177,12 +205,112 @@ export class PurchaseOrdersService {
 
   // FIND BY STATE
   async findByState(
-    estadoId: number,
+    estadoid: number,
   ): Promise<PurchaseOrder[]> {
     return await this.purchaseOrderRepo.find({
-      where: { estadoId },
+      where: { estadoid },
       relations: ['state', 'supplier'],
       order: { fecha: 'DESC' },
     });
+  }
+
+  // ─── GET PRODUCTS BY SUPPLIER ───────────────────────────────────────────────
+  async getProductsBySupplier(
+    supplierId: number,
+  ): Promise<Products[]> {
+    if (!supplierId || supplierId <= 0) {
+      throw new BadRequestException('ID de proveedor inválido');
+    }
+    return await this.productsRepo.find({
+      where: { isactive: true },
+      order: { productname: 'ASC' },
+    });
+  }
+
+  // ─── SEND NOTIFICATION ─────────────────────────────────────────────────────
+  async sendNotification(dto: SendNotificationDto): Promise<{
+    success: boolean;
+    channel: 'whatsapp' | 'email' | 'both';
+    emailSent: boolean;
+    payload: object;
+  }> {
+    if (!dto.supplierEmail && !dto.supplierPhone) {
+      throw new BadRequestException(
+        'El proveedor no tiene WhatsApp ni correo registrado. Debe agregar esta información antes de enviar.',
+      );
+    }
+
+    const channel: 'whatsapp' | 'email' | 'both' =
+      dto.supplierEmail && dto.supplierPhone
+        ? 'both'
+        : dto.supplierEmail
+          ? 'email'
+          : 'whatsapp';
+
+    const subject = `Orden de Compra ${dto.numeroOrden} — ${dto.supplierName}`;
+
+    const messageBody = `
+Orden de Compra: ${dto.numeroOrden}
+Proveedor: ${dto.supplierName}
+Fecha: ${dto.fecha ?? 'Por definir'}
+
+Productos:
+${dto.productos
+        .map(
+          (p, i) =>
+            `  ${i + 1}. ${p.producto} — Cant: ${p.cantidad} × $${p.precioUnitario.toLocaleString('es-CO')} = $${(p.cantidad * p.precioUnitario).toLocaleString('es-CO')}`,
+        )
+        .join('\n')}
+
+Total: $${dto.total.toLocaleString('es-CO')}
+${dto.descripcion ? `\nObservaciones: ${dto.descripcion}` : ''}
+    `.trim();
+
+    // ── Envío real de correo ─────────────────────────────────────────────────
+    let emailSent = false;
+    if (dto.supplierEmail) {
+      const html = this.mailService.buildOrderEmailHtml({
+        numeroOrden: dto.numeroOrden,
+        supplierName: dto.supplierName,
+        fecha: dto.fecha,
+        productos: dto.productos,
+        total: dto.total,
+        descripcion: dto.descripcion,
+      });
+
+      await this.mailService.sendMail({
+        to: dto.supplierEmail,
+        subject,
+        html,
+        text: messageBody,
+      });
+      emailSent = true;
+    }
+
+    const notificationPayload = {
+      to: {
+        email: dto.supplierEmail ?? null,
+        phone: dto.supplierPhone ?? null,
+      },
+      subject,
+      body: messageBody,
+      order: {
+        numeroOrden: dto.numeroOrden,
+        proveedorId: dto.proveedorId,
+        supplierName: dto.supplierName,
+        fecha: dto.fecha,
+        productos: dto.productos,
+        total: dto.total,
+        descripcion: dto.descripcion,
+      },
+      sentAt: new Date().toISOString(),
+    };
+
+    return {
+      success: true,
+      channel,
+      emailSent,
+      payload: notificationPayload,
+    };
   }
 }

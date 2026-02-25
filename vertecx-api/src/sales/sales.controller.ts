@@ -8,10 +8,12 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
+import { UpdateEstadoPagoDto } from './dto/update-estado-pago.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -23,7 +25,7 @@ import {
 @ApiTags('Sales') //  Agrupa las rutas en Swagger bajo "Sales"
 @Controller('sales')
 export class SalesController {
-  constructor(private readonly salesService: SalesService) {}
+  constructor(private readonly salesService: SalesService) { }
 
   //  POST /sales
   @Post()
@@ -115,6 +117,26 @@ export class SalesController {
   })
   update(@Param('id') id: string, @Body() updateSaleDto: UpdateSaleDto) {
     return this.salesService.update(+id, updateSaleDto);
+  }
+
+  // PATCH /sales/:id/estado-pago
+  @Patch(':id/estado-pago')
+  @ApiOperation({
+    summary: 'Actualizar estado de pago de una venta',
+    description:
+      'Cambia el estadoPago de la venta a "Abonada" o "Pagada". ' +
+      'Si se marca como "Pagada", el salestatus se cambia automáticamente a "Completed".',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateEstadoPagoDto })
+  @ApiResponse({ status: 200, description: 'Estado de pago actualizado correctamente.' })
+  @ApiResponse({ status: 400, description: 'Valor de estadoPago no permitido.' })
+  @ApiResponse({ status: 404, description: 'Venta no encontrada.' })
+  updateEstadoPago(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateEstadoPagoDto,
+  ) {
+    return this.salesService.updateEstadoPago(id, dto.estadoPago);
   }
 
   // PATCH /sales/:id/cancel
