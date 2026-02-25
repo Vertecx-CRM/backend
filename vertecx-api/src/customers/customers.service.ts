@@ -1,186 +1,229 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customers } from './entities/customers.entity';
-import { Users } from '../users/entities/users.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerResponseDto } from './dto/customer-response.dto';
-
+import { UsersService } from '../users/users.service';
+import { CreateUserDto } from '../users/dto/create-user.dto';
+import { UpdateUserDto } from '../users/dto/update-user.dto';
 
 @Injectable()
 export class CustomersService {
   constructor(
     @InjectRepository(Customers)
-    private customersRepository: Repository<Customers>,
-    @InjectRepository(Users)
-    private usersRepository: Repository<Users>,
+    private readonly customersRepository: Repository<Customers>,
+    private readonly usersService: UsersService,
   ) {}
 
-  async create(createCustomerDto: CreateCustomerDto): Promise<CustomerResponseDto> {
+  // ================================
+  // CREATE (CORREGIDO)
+  // ================================
+  async create(
+    createCustomerDto: CreateCustomerDto,
+  ): Promise<CustomerResponseDto> {
     try {
-      // Verificar si el usuario existe
-      const user = await this.usersRepository.findOne({
-        where: { userid: createCustomerDto.userid }
-      });
+      const roleId = await this.usersService.getRoleIdByName('Cliente');
 
-      if (!user) {
-        throw new NotFoundException(`Usuario con ID ${createCustomerDto.userid} no encontrado`);
-      }
+      const userDto: CreateUserDto = {
+        name: createCustomerDto.name,
+        lastname: createCustomerDto.lastname,
+        email: createCustomerDto.email,
+        documentnumber: createCustomerDto.documentnumber,
+        phone: createCustomerDto.phone,
+        typeid: createCustomerDto.typeid,
+        image: createCustomerDto.image,
+        stateid: 1,
+        roleid: roleId,
+        customercity: createCustomerDto.customercity,
+        customerzipcode: createCustomerDto.customerzipcode,
+      };
 
-      // Verificar si ya existe un cliente para este usuario
-      const existingCustomer = await this.customersRepository.findOne({
-        where: { userid: createCustomerDto.userid }
-      });
+      // 🔥 UsersService ya crea el Customer internamente
+      const userResponse = await this.usersService.create(userDto);
 
-      if (existingCustomer) {
-        throw new ConflictException('Ya existe un cliente para este usuario');
-      }
+      const createdUser = userResponse.data;
 
-      // Crear el cliente
-      const customer = this.customersRepository.create(createCustomerDto);
-      const savedCustomer = await this.customersRepository.save(customer);
+      return await this.findOneByUserId(createdUser.userid);
 
-      return new CustomerResponseDto(savedCustomer);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
-        throw error;
-      }
+      if (error instanceof ConflictException) throw error;
       throw new InternalServerErrorException('Error al crear el cliente');
     }
   }
 
-  async findAll(includeRelations: boolean = false): Promise<CustomerResponseDto[]> {
-    try {
-      const relations = [];
-      if (includeRelations) {
-        relations.push('users', 'sales');
-      }
+  // ================================
+  // FIND ONE BY USER ID (NUEVO)
+  // ================================
+  async findOneByUserId(userId: number): Promise<CustomerResponseDto> {
+    const customer = await this.customersRepository.findOne({
+      where: { userid: userId },
+      relations: [
+        'users',
+        'users.typeofdocuments',
+        'users.states',
+        'users.roles',
+        'sales',
+      ],
+    });
 
+    if (!customer) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    return new CustomerResponseDto(customer);
+  }
+
+  // ================================
+  // FIND ALL
+  // ================================
+  async findAll(): Promise<CustomerResponseDto[]> {
+    try {
       const customers = await this.customersRepository.find({
-        relations: relations,
-        order: { customerid: 'ASC' }
+        relations: [
+          'users',
+          'users.typeofdocuments',
+          'users.states',
+          'users.roles',
+          'sales',
+        ],
+        order: { customerid: 'ASC' },
       });
 
-      return customers.map(customer => new CustomerResponseDto(customer));
+      return customers.map(
+        (customer) => new CustomerResponseDto(customer),
+      );
     } catch (error) {
       throw new InternalServerErrorException('Error al obtener los clientes');
     }
   }
 
-  async findOne(id: number, includeRelations: boolean = false): Promise<CustomerResponseDto> {
+  // ================================
+  // FIND ONE
+  // ================================
+  async findOne(id: number): Promise<CustomerResponseDto> {
     try {
-      const relations = [];
-      if (includeRelations) {
-        relations.push('users', 'sales');
-      }
-
       const customer = await this.customersRepository.findOne({
         where: { customerid: id },
-        relations: relations
+        relations: [
+          'users',
+          'users.typeofdocuments',
+          'users.states',
+          'users.roles',
+          'sales',
+        ],
       });
 
       if (!customer) {
-        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+        throw new NotFoundException(
+          `Cliente con ID ${id} no encontrado`,
+        );
       }
 
       return new CustomerResponseDto(customer);
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
+      if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Error al obtener el cliente');
     }
   }
 
-  async findByUserId(userId: number, includeRelations: boolean = false): Promise<CustomerResponseDto> {
+  // ================================
+  // UPDATE
+  // ================================
+  async update(
+    id: number,
+    updateCustomerDto: UpdateCustomerDto,
+  ): Promise<CustomerResponseDto> {
     try {
-      const relations = [];
-      if (includeRelations) {
-        relations.push('users', 'sales');
-      }
-
       const customer = await this.customersRepository.findOne({
-        where: { userid: userId },
-        relations: relations
+        where: { customerid: id },
       });
 
       if (!customer) {
-        throw new NotFoundException(`Cliente para el usuario con ID ${userId} no encontrado`);
+        throw new NotFoundException(
+          `Cliente con ID ${id} no encontrado`,
+        );
       }
 
-      return new CustomerResponseDto(customer);
+      const userDto: UpdateUserDto = {};
+
+      if (updateCustomerDto.name) userDto.name = updateCustomerDto.name;
+      if (updateCustomerDto.lastname)
+        userDto.lastname = updateCustomerDto.lastname;
+      if (updateCustomerDto.email) userDto.email = updateCustomerDto.email;
+      if (updateCustomerDto.documentnumber)
+        userDto.documentnumber = updateCustomerDto.documentnumber;
+      if (updateCustomerDto.phone) userDto.phone = updateCustomerDto.phone;
+      if (updateCustomerDto.typeid) userDto.typeid = updateCustomerDto.typeid;
+      if (updateCustomerDto.image) userDto.image = updateCustomerDto.image;
+      if (updateCustomerDto.stateid) userDto.stateid = updateCustomerDto.stateid;
+
+      if (Object.keys(userDto).length > 0) {
+        await this.usersService.update(customer.userid, userDto);
+      }
+
+      if (updateCustomerDto.customercity)
+        customer.customercity = updateCustomerDto.customercity;
+
+      if (updateCustomerDto.customerzipcode)
+        customer.customerzipcode = updateCustomerDto.customerzipcode;
+
+      await this.customersRepository.save(customer);
+
+      return await this.findOne(id);
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Error al obtener el cliente por usuario');
-    }
-  }
-
-  async update(id: number, updateCustomerDto: UpdateCustomerDto): Promise<CustomerResponseDto> {
-    try {
-      const customer = await this.customersRepository.findOne({
-        where: { customerid: id }
-      });
-
-      if (!customer) {
-        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
-      }
-
-      // Actualizar solo los campos proporcionados
-      Object.assign(customer, updateCustomerDto);
-      const updatedCustomer = await this.customersRepository.save(customer);
-
-      return new CustomerResponseDto(updatedCustomer);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
+      if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Error al actualizar el cliente');
     }
   }
 
+  // ================================
+  // REMOVE
+  // ================================
   async remove(id: number): Promise<{ message: string }> {
     try {
       const customer = await this.customersRepository.findOne({
         where: { customerid: id },
-        relations: ['sales']
       });
 
       if (!customer) {
-        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+        throw new NotFoundException(
+          `Cliente con ID ${id} no encontrado`,
+        );
       }
 
-      if (customer.sales && customer.sales.length > 0) {
-        throw new ConflictException('No se puede eliminar el cliente porque tiene ventas asociadas');
+      try {
+        await this.usersService.remove(customer.userid);
+      } catch (error) {
+        if (error.code === '23503') {
+          throw new ConflictException(
+            'No se puede eliminar el cliente porque tiene registros relacionados',
+          );
+        }
+        throw error;
       }
-
-      await this.customersRepository.remove(customer);
 
       return { message: `Cliente con ID ${id} eliminado correctamente` };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      )
         throw error;
-      }
+
       throw new InternalServerErrorException('Error al eliminar el cliente');
     }
   }
 
-  async findByCity(city: string): Promise<CustomerResponseDto[]> {
-    try {
-      const customers = await this.customersRepository.find({
-        where: { customercity: city },
-        relations: ['users'],
-        order: { customerid: 'ASC' }
-      });
-
-      return customers.map(customer => new CustomerResponseDto(customer));
-    } catch (error) {
-      throw new InternalServerErrorException('Error al buscar clientes por ciudad');
-    }
-  }
-
+  // ================================
+  // COUNT
+  // ================================
   async count(): Promise<number> {
     try {
       return await this.customersRepository.count();
