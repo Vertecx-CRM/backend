@@ -155,6 +155,7 @@ export class SalesService {
     const list = await this.salesRepo.find({
       relations: [
         'customer',
+        'customer.users',
         'salesdetail',
         'salesdetail.products',
         'salesdetail.serviceRequest',
@@ -170,6 +171,7 @@ export class SalesService {
       where: { saleid: id },
       relations: [
         'customer',
+        'customer.users',
         'salesdetail',
         'salesdetail.products',
         'salesdetail.serviceRequest',
