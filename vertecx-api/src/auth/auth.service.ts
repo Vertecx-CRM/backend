@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -62,7 +66,8 @@ export class AuthService {
       type: 'reset',
     };
 
-    const secret = process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
+    const secret =
+      process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
     const ttl = Number(process.env.JWT_RESET_TTL || 900);
 
     return this.jwt.sign(payload, {
@@ -112,7 +117,8 @@ export class AuthService {
   }
 
   async refreshByToken(refreshToken: string) {
-    if (!refreshToken) throw new UnauthorizedException('Refresh token requerido');
+    if (!refreshToken)
+      throw new UnauthorizedException('Refresh token requerido');
 
     let decoded: any;
     try {
@@ -128,21 +134,24 @@ export class AuthService {
 
     return this.refresh({ userid });
   }
-
   async register(data: {
     email: string;
     name: string;
     lastname: string;
     documentnumber: string;
     phone: string;
-    password: string;
+    password?: string; // opcional
     typeid: number;
     stateid: number;
     roleid: number;
   }) {
+    // Verificar si ya existe el email
     const exists = await this.users.findOne({ where: { email: data.email } });
-    if (exists) throw new BadRequestException('Email ya registrado');
+    if (exists) {
+      throw new BadRequestException('Email ya registrado');
+    }
 
+    // Crear entidad usuario
     const user: Users = this.users.create({
       email: data.email,
       name: data.name,
@@ -152,23 +161,26 @@ export class AuthService {
       typeid: data.typeid,
       stateid: data.stateid,
       roleid: data.roleid,
-      mustchangepassword: true,
+      mustchangepassword: true, // obligar a crear contraseña real
     });
 
-    user.password = await bcrypt.hash(data.password, 12);
+    // Si no llega password, generar uno temporal seguro
+    const tempPassword =
+      data.password?.trim() || `${Math.random().toString(36).slice(2, 10)}A1!`;
+
+    user.password = await bcrypt.hash(tempPassword, 12);
+
     await this.users.save(user);
 
-    const permissions = await this.access.getAccessKeys(user.roleid);
+    // Enviar correo para que el usuario cree su contraseña
+    await this.requestPasswordReset(user.email);
 
-    const payload = {
-      userid: user.userid,
-      email: user.email,
-      name: user.name,
-      roleid: user.roleid,
-      permissions: Array.from(permissions),
+    // Respuesta limpia (sin login automático)
+    return {
+      ok: true,
+      message:
+        'Usuario creado correctamente. Revisa tu correo para establecer tu contraseña.',
     };
-
-    return this.login(payload);
   }
 
   async requestPasswordReset(email: string): Promise<void> {
@@ -187,7 +199,8 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
     try {
-      const secret = process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
+      const secret =
+        process.env.JWT_RESET_SECRET || process.env.JWT_ACCESS_SECRET;
 
       const decoded = this.jwt.verify<{
         sub: number;
@@ -218,12 +231,17 @@ export class AuthService {
     }
   }
 
-  async changePassword(userid: number, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userid: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.users.findOne({ where: { userid } });
     if (!user) throw new BadRequestException('Usuario no encontrado');
 
     const ok = await bcrypt.compare(currentPassword, user.password);
-    if (!ok) throw new BadRequestException('La contraseña actual es incorrecta.');
+    if (!ok)
+      throw new BadRequestException('La contraseña actual es incorrecta.');
 
     user.password = await bcrypt.hash(newPassword, 10);
     user.mustchangepassword = false;
