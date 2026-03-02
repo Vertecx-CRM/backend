@@ -27,7 +27,7 @@ export class Customers {
   @ManyToOne(() => Users, (user) => user.customers, {
     eager: false,
     nullable: false,
-    onDelete: 'CASCADE', // ✅ Si se elimina el usuario, se elimina el customer
+    onDelete: 'CASCADE', // Si se elimina el usuario, se elimina el customer
   })
   @JoinColumn({ name: 'userid' })
   users: Users;

@@ -60,7 +60,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   customerzipcode?: string;
-
+  
   @IsOptional()
   isNit?: boolean;
 }
