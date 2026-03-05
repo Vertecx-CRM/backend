@@ -1,14 +1,8 @@
-import { Customers } from '../entities/customers.entity';
-import { Customers } from '../entities/customers.entity';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CustomerResponseDto {
+  @ApiProperty({ description: 'ID único del cliente', example: 1 })
   customerid: number;
-  customercity: string;
-  customerzipcode: string;
-
-  users: any;
-
-  sales: any[];
 
   @ApiProperty({ description: 'ID del usuario asociado', example: 1 })
   userid: number;
@@ -28,12 +22,10 @@ export class CustomerResponseDto {
       name: 'John',
       lastname: 'Doe',
       documentnumber: '1234567890',
-      email: 'john@example.com'
-      fullName: 'John Doe',
       email: 'john@example.com',
+      fullName: 'John Doe',
       phone: '3001234567',
       typeid: 1,
-      documentnumber: '123456789',
       stateid: 1
     }
   })
@@ -42,7 +34,6 @@ export class CustomerResponseDto {
     username?: string;
     name?: string;
     lastname?: string;
-    documentnumber?: string;
     fullName?: string;
     email?: string;
     phone?: string;
@@ -60,60 +51,13 @@ export class CustomerResponseDto {
     }
   })
   sales?: any[];
-  customercity: string;
-  customerzipcode: string;
 
-  users: any;
-
-  sales: any[];
-
-  constructor(customer: Customers) {
-  constructor(customer: Customers) {
+  constructor(customer: any) {
     this.customerid = customer.customerid;
-    this.customercity = customer.customercity;
-    this.customerzipcode = customer.customerzipcode;
+    this.userid = customer.userid;
+    this.customercity = customer.customercity || '';
+    this.customerzipcode = customer.customerzipcode || '';
 
-    this.users = customer.users
-      ? {
-          userid: customer.users.userid,
-          name: customer.users.name,
-          lastname: customer.users.lastname,
-          email: customer.users.email,
-          documentnumber: customer.users.documentnumber,
-          phone: customer.users.phone,
-          image: customer.users.image,
-
-          typeofdocuments: customer.users.typeofdocuments
-            ? {
-                id:
-                  (customer.users.typeofdocuments as any).typeid ??
-                  (customer.users.typeofdocuments as any).typeofdocumentid ??
-                  (customer.users.typeofdocuments as any).id,
-                name: customer.users.typeofdocuments.name,
-              }
-            : null,
-
-          states: customer.users.states
-            ? {
-                id:
-                  (customer.users.states as any).stateid ??
-                  (customer.users.states as any).id,
-                name: customer.users.states.name,
-              }
-            : null,
-
-          roles: customer.users.roles
-            ? {
-                id:
-                  (customer.users.roles as any).roleid ??
-                  (customer.users.roles as any).id,
-                name: customer.users.roles.name,
-              }
-            : null,
-        }
-      : null;
-
-    this.sales = customer.sales ?? [];
     // Mapear información del usuario asociado
     if (customer.users) {
       const name = customer.users.name?.trim() || '';
@@ -126,13 +70,10 @@ export class CustomerResponseDto {
         name: customer.users.name,
         lastname: customer.users.lastname,
         documentnumber: customer.users.documentnumber,
-        email: customer.users.email
-        username: name || undefined,
+        email: customer.users.email,
         fullName: fullName || undefined,
-        email: customer.users.email || undefined,
         phone: customer.users.phone || undefined,
         typeid: customer.users.typeid || undefined,
-        documentnumber: customer.users.documentnumber || undefined,
         stateid: customer.users.stateid || undefined,
       };
     }
@@ -141,49 +82,5 @@ export class CustomerResponseDto {
     if (customer.sales) {
       this.sales = Array.isArray(customer.sales) ? customer.sales : [];
     }
-  }
-}
-
-    this.users = customer.users
-      ? {
-          userid: customer.users.userid,
-          name: customer.users.name,
-          lastname: customer.users.lastname,
-          email: customer.users.email,
-          documentnumber: customer.users.documentnumber,
-          phone: customer.users.phone,
-          image: customer.users.image,
-
-          typeofdocuments: customer.users.typeofdocuments
-            ? {
-                id:
-                  (customer.users.typeofdocuments as any).typeid ??
-                  (customer.users.typeofdocuments as any).typeofdocumentid ??
-                  (customer.users.typeofdocuments as any).id,
-                name: customer.users.typeofdocuments.name,
-              }
-            : null,
-
-          states: customer.users.states
-            ? {
-                id:
-                  (customer.users.states as any).stateid ??
-                  (customer.users.states as any).id,
-                name: customer.users.states.name,
-              }
-            : null,
-
-          roles: customer.users.roles
-            ? {
-                id:
-                  (customer.users.roles as any).roleid ??
-                  (customer.users.roles as any).id,
-                name: customer.users.roles.name,
-              }
-            : null,
-        }
-      : null;
-
-    this.sales = customer.sales ?? [];
   }
 }
