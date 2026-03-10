@@ -30,8 +30,8 @@ export class RequestsController {
 
   @UseGuards(AuthGuard("jwt"))
   @Post("from-auth")
-  createFromAuth(@Req() req: any, @Body() dto: CreateRequestFromAuthDto) {
-    return this.requestsService.createFromAuth(req.user, dto);
+  createFromAuth(@Req() { user }: any, @Body() dto: CreateRequestFromAuthDto) {
+    return this.requestsService.createFromAuth(user, dto);
   }
 
   @Post()

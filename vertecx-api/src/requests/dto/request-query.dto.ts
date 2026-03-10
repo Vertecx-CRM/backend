@@ -1,6 +1,6 @@
 import {ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsOptional, IsPositive, IsString } from "class-validator";
+import { IsDateString, IsInt, IsOptional, IsPositive } from "class-validator";
 
 export class RequestQueryDto {
   @ApiPropertyOptional({ example: 32 })
