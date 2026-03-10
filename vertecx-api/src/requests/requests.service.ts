@@ -4,7 +4,7 @@
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { MoreThan, MoreThanOrEqual, Repository } from "typeorm";
 
 import { ServiceRequest } from "./entities/servicerequest.entity";
 import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
@@ -268,7 +268,9 @@ export class RequestsService {
   }
 
   async findAll(query: RequestQueryDto) {
-    const result = await this.srRepo.find({
+    const { clientId, stateId, fromScheduleDate, serviceTypeId } = query;
+    
+    return this.srRepo.find({
       relations: {
         state: true,
         service: true,
@@ -276,13 +278,13 @@ export class RequestsService {
         techniciansMap: { technician: { users: true } },
       },
       where: {
-        clientId: query.clientId
+        clientId: clientId,
+        stateId: stateId,
+        scheduledAt: MoreThanOrEqual(new Date(fromScheduleDate)),
+        service: { typeofserviceid: serviceTypeId }
       },
       order: { serviceRequestId: "ASC" },
     });
-
-    // console.log(result);
-    return result;
   }
 
   async findOne(id: number) {

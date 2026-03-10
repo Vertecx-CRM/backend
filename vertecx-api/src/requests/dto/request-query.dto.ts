@@ -22,11 +22,6 @@ export class RequestQueryDto {
   @IsDateString()
   fromScheduleDate?: string;
 
-  @ApiPropertyOptional({ example: 'MANTENIMIENTO' })
-  @IsOptional()
-  @IsString()
-  serviceType?: string;
-
   @ApiPropertyOptional({ example: 3 })
   @IsOptional()
   @Type(() => Number)
