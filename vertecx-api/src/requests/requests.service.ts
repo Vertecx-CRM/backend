@@ -269,8 +269,8 @@ export class RequestsService {
 
   async findAll(query: RequestQueryDto) {
     const { clientId, stateId, fromScheduleDate, serviceTypeId } = query;
-    
-    return this.srRepo.find({
+
+    const result = await this.srRepo.find({
       relations: {
         state: true,
         service: true,
@@ -285,6 +285,11 @@ export class RequestsService {
       },
       order: { serviceRequestId: "ASC" },
     });
+
+    if (!result.length)
+      throw new NotFoundException('Solicitudes no encontradas')
+
+    return result;
   }
 
   async findOne(id: number) {
