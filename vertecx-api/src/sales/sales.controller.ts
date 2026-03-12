@@ -13,7 +13,7 @@ import {
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import { UpdateEstadoPagoDto } from './dto/update-estado-pago.dto';
+import { UpdateEstadoPagoDto } from './dto/update-payment-state.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -136,7 +136,7 @@ export class SalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEstadoPagoDto,
   ) {
-    return this.salesService.updateEstadoPago(id, dto.estadoPago);
+    return this.salesService.updateEstadoPago(id, dto.payState);
   }
 
   // PATCH /sales/:id/cancel

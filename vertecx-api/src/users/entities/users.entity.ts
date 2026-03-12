@@ -34,7 +34,7 @@ export class Users {
   @Column({ nullable: false })
   email: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: false, select: false })
   password: string;
 
   @Column({ name: 'mustchangepassword', type: 'boolean', default: true })

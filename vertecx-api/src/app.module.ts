@@ -29,8 +29,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   imports: [
     // TypeOrmModule.forFeature([SystemStatus]),
-    AuthModule,
     ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
     DatabaseModule,
     SalesModule,
     UsersModule,
