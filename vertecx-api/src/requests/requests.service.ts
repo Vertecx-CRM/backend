@@ -19,7 +19,7 @@ import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 import { DateUtils } from '../shared/utils/date-utils';
 import { NormalizationClass } from '../shared/utils/normalization.class';
 import { isCanceledState } from "../shared/utils/is-cancelled-state";
-import { TechniciansService } from "../technicians/technicians.service";
+import { OrdersServices } from "../orders-services/entities/orders-services.entity";
 
 @Injectable()
 export class RequestsService {
@@ -36,7 +36,8 @@ export class RequestsService {
     @InjectRepository(Customers)
     private readonly customersRepo: Repository<Customers>,
 
-    private readonly techniciansService: TechniciansService,
+    @InjectRepository(OrdersServices)
+      private readonly ordersRepo: Repository<OrdersServices>,
 
     private readonly mailService: MailService
   ) {}
@@ -148,7 +149,7 @@ export class RequestsService {
     if (!state) throw new BadRequestException("stateId invÃ¡lido");
 
     if (!isCanceledState(state.name)) {
-      await this.techniciansService.ensureTechniciansAvailability(
+      await this.ensureTechniciansAvailability(
         technicians,
         scheduledAt ?? null,
         scheduledEndAt ?? null
@@ -295,7 +296,7 @@ export class RequestsService {
     if (!effectiveState) throw new BadRequestException("stateId invÃ¡lido");
 
     if (!isCanceledState(effectiveState.name)) {
-      await this.techniciansService.ensureTechniciansAvailability(
+      await this.ensureTechniciansAvailability(
         nextTechs,
         nextStart ?? null,
         nextEnd ?? null,
@@ -380,6 +381,81 @@ export class RequestsService {
     await this.linkRepo.delete({ serviceRequestId: id } as any);
     await this.srRepo.delete({ serviceRequestId: id });
     return { ok: true };
+  }
+
+  private async ensureTechniciansAvailability(
+    technicianIds: number[],
+    start: Date | null,
+    end: Date | null,
+    opts?: { excludeRequestId?: number; excludeOrderId?: number }
+  ) {
+    if (!technicianIds.length || !start) return;
+    const requested = new Set(technicianIds);
+    const target = DateUtils.buildRange(start, end);
+    if (!target) return;
+
+    const conflicts = new Set<number>();
+
+    const reqQb = this.srRepo
+      .createQueryBuilder("sr")
+      .leftJoinAndSelect("sr.state", "state")
+      .leftJoinAndSelect("sr.techniciansMap", "tm")
+      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeRequestId) {
+      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
+        excludeRequestId: opts.excludeRequestId,
+      });
+    }
+
+    const requests = await reqQb.getMany();
+    for (const sr of requests) {
+      if (isCanceledState(sr?.state?.name)) continue;
+      const range = DateUtils.buildRange(sr.scheduledAt, sr.scheduledEndAt);
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const link of sr.techniciansMap ?? []) {
+        const id = Number((link as any)?.technicianId);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    const ordersQb = this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.state", "state")
+      .leftJoinAndSelect("o.technicians", "tech")
+      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeOrderId) {
+      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
+        excludeOrderId: opts.excludeOrderId,
+      });
+    }
+
+    const orders = await ordersQb.getMany();
+    for (const o of orders) {
+      if (isCanceledState(o?.state?.name)) continue;
+
+      const oStart = DateUtils.orderDateTime(o.fechainicio as any, o.horainicio);
+      const oEnd = DateUtils.orderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
+      const range = DateUtils.buildRange(oStart, oEnd);
+
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const tech of o.technicians ?? []) {
+        const id = Number((tech as any)?.technicianid);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    if (conflicts.size > 0) {
+      const ids = Array.from(conflicts).sort((a, b) => a - b);
+      throw new BadRequestException(
+        `Los siguientes tecnicos ya estann ocupados en ese horario: ${ids.join(", ")}`
+      );
+    }
   }
 }
 
