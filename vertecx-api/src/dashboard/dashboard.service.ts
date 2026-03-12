@@ -21,8 +21,6 @@ export class DashboardService {
     @InjectRepository(ServiceRequest) private serviceRequestsRepo: Repository<ServiceRequest>
   ) { }
 
-
-  //  VALIDACION DE AÑO
   private validateYear(year?: number): number | null {
     if (year === undefined || year === null || year === 0) return null;
 
@@ -32,9 +30,6 @@ export class DashboardService {
 
     return year;
   }
-
-
-  //  VENTAS POR MES
 
   async getSalesByMonth(year?: number) {
     const y = this.validateYear(year);
@@ -49,9 +44,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  TOTAL VENTAS
-
   async getTotalSales(year?: number) {
     const y = this.validateYear(year);
 
@@ -63,9 +55,6 @@ export class DashboardService {
 
     return { total: Number(result.total) || 0 };
   }
-
-
-  //  VENTAS DIARIAS POR MES
 
   async getDailySalesByMonth(month: number, year?: number) {
     const qb = this.salesRepo
@@ -84,9 +73,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  // COMPRAS POR MES
   async getPurchasesByMonth(year?: number) {
     const y = this.validateYear(year);
 
@@ -100,8 +86,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  TOTAL COMPRAS
   async getTotalPurchases(year?: number) {
     const y = this.validateYear(year);
 
@@ -113,8 +97,6 @@ export class DashboardService {
 
     return { total: Number(result.total) || 0 };
   }
-
-  //  COMPRAS DIARIAS POR MES
 
   async getDailyPurchasesByMonth(month: number, year?: number) {
     const qb = this.purchasesRepo
@@ -133,7 +115,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-  // PRODUCTOS POR CATEGORIA
   async getCategoryProducts(year?: number) {
     const y = this.validateYear(year);
 
@@ -147,8 +128,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  ÓRDENES POR ESTADO
 
   async getOrdersByState(year?: number) {
     const y = this.validateYear(year);
@@ -164,9 +143,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  // TOTAL ÓRDENES
   async getTotalOrders(year?: number) {
     const y = this.validateYear(year);
 
@@ -179,8 +155,6 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-
-  // CLIENTES POR MES
   async getClientsByMonth(year?: number) {
     const y = this.validateYear(year);
 
@@ -195,9 +169,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  //  TOTAL CLIENTES
   async getTotalClients(year?: number) {
     const y = this.validateYear(year);
 
@@ -211,9 +182,6 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-
-
-  //  CLIENTES DIARIOS POR MES
   async getDailyClientsByMonth(month: number, year?: number) {
     const qb = this.customerRepo
       .createQueryBuilder("c")
@@ -232,9 +200,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  //  SOLICITUDES POR ESTADO
   async getServiceRequestsByState(year?: number) {
     const y = year ?? null;
 
@@ -249,9 +214,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  //  TOTAL SOLICITUDES
   async getTotalServiceRequests(year?: number) {
     const y = this.validateYear(year);
 
