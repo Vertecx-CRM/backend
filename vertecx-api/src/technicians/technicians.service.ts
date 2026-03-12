@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 
@@ -9,6 +9,10 @@ import { UpdateTechnicianDto } from './dto/update-technician.dto';
 import { UsersService } from 'src/users/users.service';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UpdateUserDto } from 'src/users/dto/update-user.dto';
+import { DateUtils } from '../shared/utils/date-utils';
+import { isCanceledState } from '../shared/utils/is-cancelled-state';
+import { OrdersServices } from '../orders-services/entities/orders-services.entity';
+import { ServiceRequest } from '../requests/entities/servicerequest.entity';
 
 @Injectable()
 export class TechniciansService {
@@ -20,6 +24,12 @@ export class TechniciansService {
 
     @InjectRepository(TechnicianTypeMap)
     private readonly typeMapRepo: Repository<TechnicianTypeMap>,
+
+     @InjectRepository(OrdersServices)
+        private readonly ordersRepo: Repository<OrdersServices>,
+
+    @InjectRepository(ServiceRequest)
+        private readonly srRepo: Repository<ServiceRequest>,
 
     private readonly usersService: UsersService,
   ) {}
@@ -187,6 +197,81 @@ export class TechniciansService {
         }
       }
       throw e;
+    }
+  }
+
+  async ensureTechniciansAvailability(
+    technicianIds: number[],
+    start: Date | null,
+    end: Date | null,
+    opts?: { excludeRequestId?: number; excludeOrderId?: number }
+  ) {
+    if (!technicianIds.length || !start) return;
+    const requested = new Set(technicianIds);
+    const target = DateUtils.buildRange(start, end);
+    if (!target) return;
+
+    const conflicts = new Set<number>();
+
+    const reqQb = this.srRepo
+      .createQueryBuilder("sr")
+      .leftJoinAndSelect("sr.state", "state")
+      .leftJoinAndSelect("sr.techniciansMap", "tm")
+      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeRequestId) {
+      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
+        excludeRequestId: opts.excludeRequestId,
+      });
+    }
+
+    const requests = await reqQb.getMany();
+    for (const sr of requests) {
+      if (isCanceledState(sr?.state?.name)) continue;
+      const range = DateUtils.buildRange(sr.scheduledAt, sr.scheduledEndAt);
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const link of sr.techniciansMap ?? []) {
+        const id = Number((link as any)?.technicianId);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    const ordersQb = this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.state", "state")
+      .leftJoinAndSelect("o.technicians", "tech")
+      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeOrderId) {
+      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
+        excludeOrderId: opts.excludeOrderId,
+      });
+    }
+
+    const orders = await ordersQb.getMany();
+    for (const o of orders) {
+      if (isCanceledState(o?.state?.name)) continue;
+
+      const oStart = DateUtils.orderDateTime(o.fechainicio as any, o.horainicio);
+      const oEnd = DateUtils.orderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
+      const range = DateUtils.buildRange(oStart, oEnd);
+
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const tech of o.technicians ?? []) {
+        const id = Number((tech as any)?.technicianid);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    if (conflicts.size > 0) {
+      const ids = Array.from(conflicts).sort((a, b) => a - b);
+      throw new BadRequestException(
+        `Los siguientes tecnicos ya estann ocupados en ese horario: ${ids.join(", ")}`
+      );
     }
   }
 }

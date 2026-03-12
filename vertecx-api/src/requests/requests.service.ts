@@ -14,11 +14,12 @@ import { UpdateServiceRequestDto } from "./dto/update-request.dto";
 import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { MailService } from "src/shared/mail/mail.service";
-import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 import { RequestQueryDto } from "./dto/request-query.dto";
 import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 import { DateUtils } from '../shared/utils/date-utils';
 import { NormalizationClass } from '../shared/utils/normalization.class';
+import { isCanceledState } from "../shared/utils/is-cancelled-state";
+import { TechniciansService } from "../technicians/technicians.service";
 
 @Injectable()
 export class RequestsService {
@@ -35,139 +36,14 @@ export class RequestsService {
     @InjectRepository(Customers)
     private readonly customersRepo: Repository<Customers>,
 
-    @InjectRepository(OrdersServices)
-    private readonly ordersRepo: Repository<OrdersServices>,
+    private readonly techniciansService: TechniciansService,
 
     private readonly mailService: MailService
   ) {}
 
-  private isScheduledState(name?: string | null) {
-    const norm = NormalizationClass.normalizeStateName(name);
-    return norm.includes("agend");
-  }
-
-  private isCanceledState(name?: string | null) {
-    const norm = NormalizationClass.normalizeStateName(name);
-    return norm.includes("anul") || norm.includes("cancel");
-  }
-
-  private parseTimeToParts(raw?: string | null) {
-    const txt = String(raw ?? "").trim();
-    const m = txt.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
-    if (!m) return null;
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    const ss = Number(m[3] ?? "0");
-    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
-    return { hh, mm, ss };
-  }
-
-  private toOrderDateTime(dateRaw?: Date | string | null, timeRaw?: string | null) {
-    if (!dateRaw || !timeRaw) return null;
-    const time = this.parseTimeToParts(timeRaw);
-    if (!time) return null;
-    const base = dateRaw instanceof Date ? dateRaw : new Date(String(dateRaw));
-    if (!Number.isFinite(base.getTime())) return null;
-    return new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate(),
-      time.hh,
-      time.mm,
-      time.ss,
-      0
-    );
-  }
-
-  private buildRange(start: Date | null, end: Date | null) {
-    if (!start) return null;
-    const safeEnd =
-      end && Number.isFinite(end.getTime()) && end.getTime() > start.getTime()
-        ? end
-        : new Date(start.getTime() + 60 * 60 * 1000);
-    return { start, end: safeEnd };
-  }
-
-  private hasOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
-    return Math.max(aStart.getTime(), bStart.getTime()) < Math.min(aEnd.getTime(), bEnd.getTime());
-  }
-
-  private async ensureTechniciansAvailability(
-    technicianIds: number[],
-    start: Date | null,
-    end: Date | null,
-    opts?: { excludeRequestId?: number; excludeOrderId?: number }
-  ) {
-    if (!technicianIds.length || !start) return;
-    const requested = new Set(technicianIds);
-    const target = this.buildRange(start, end);
-    if (!target) return;
-
-    const conflicts = new Set<number>();
-
-    const reqQb = this.srRepo
-      .createQueryBuilder("sr")
-      .leftJoinAndSelect("sr.state", "state")
-      .leftJoinAndSelect("sr.techniciansMap", "tm")
-      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
-
-    if (opts?.excludeRequestId) {
-      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
-        excludeRequestId: opts.excludeRequestId,
-      });
-    }
-
-    const requests = await reqQb.getMany();
-    for (const sr of requests) {
-      if (this.isCanceledState(sr?.state?.name)) continue;
-      const range = this.buildRange(sr.scheduledAt, sr.scheduledEndAt);
-      if (!range) continue;
-      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
-
-      for (const link of sr.techniciansMap ?? []) {
-        const id = Number((link as any)?.technicianId);
-        if (requested.has(id)) conflicts.add(id);
-      }
-    }
-
-    const ordersQb = this.ordersRepo
-      .createQueryBuilder("o")
-      .leftJoinAndSelect("o.state", "state")
-      .leftJoinAndSelect("o.technicians", "tech")
-      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
-
-    if (opts?.excludeOrderId) {
-      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
-        excludeOrderId: opts.excludeOrderId,
-      });
-    }
-
-    const orders = await ordersQb.getMany();
-    for (const o of orders) {
-      if (this.isCanceledState(o?.state?.name)) continue;
-      const oStart = this.toOrderDateTime(o.fechainicio as any, o.horainicio);
-      const oEnd = this.toOrderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
-      const range = this.buildRange(oStart, oEnd);
-      if (!range) continue;
-      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
-
-      for (const tech of o.technicians ?? []) {
-        const id = Number((tech as any)?.technicianid);
-        if (requested.has(id)) conflicts.add(id);
-      }
-    }
-
-    if (conflicts.size > 0) {
-      const ids = Array.from(conflicts).sort((a, b) => a - b);
-      throw new BadRequestException(
-        `Los siguientes tÃ©cnicos ya estÃ¡n ocupados en ese horario: ${ids.join(", ")}`
-      );
-    }
-  }
-
   private async notifyScheduled(sr: ServiceRequest) {
     try {
-      if (!this.isScheduledState(sr.state?.name)) return;
+      if (!DateUtils.isScheduledState(sr.state?.name)) return;
       if (!sr.scheduledAt) return;
 
       const when = DateUtils.buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
@@ -271,8 +147,8 @@ export class RequestsService {
     });
     if (!state) throw new BadRequestException("stateId invÃ¡lido");
 
-    if (!this.isCanceledState(state.name)) {
-      await this.ensureTechniciansAvailability(
+    if (!isCanceledState(state.name)) {
+      await this.techniciansService.ensureTechniciansAvailability(
         technicians,
         scheduledAt ?? null,
         scheduledEndAt ?? null
@@ -418,8 +294,8 @@ export class RequestsService {
     });
     if (!effectiveState) throw new BadRequestException("stateId invÃ¡lido");
 
-    if (!this.isCanceledState(effectiveState.name)) {
-      await this.ensureTechniciansAvailability(
+    if (!isCanceledState(effectiveState.name)) {
+      await this.techniciansService.ensureTechniciansAvailability(
         nextTechs,
         nextStart ?? null,
         nextEnd ?? null,
@@ -490,7 +366,7 @@ export class RequestsService {
       prevStart !== (updated.scheduledAt ? updated.scheduledAt.getTime() : null) ||
       prevEnd !== (updated.scheduledEndAt ? updated.scheduledEndAt.getTime() : null);
 
-    if (scheduleChanged && this.isScheduledState(updated.state?.name)) {
+    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name)) {
       await this.notifyScheduled(updated);
     }
 

@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { NormalizationClass } from "./normalization.class";
 
 export class DateUtils {
   static localMidnight(ymd: string) {
@@ -46,5 +47,51 @@ export class DateUtils {
     const startText = fmtDateTime.format(start);
     if (end) return `${startText} - ${fmtTime.format(end)}`;
     return startText;
+  }
+
+  static isScheduledState(name?: string | null) {
+    const norm = NormalizationClass.normalizeStateName(name);
+    return norm.includes("agend");
+  }
+
+  static parseTimeToParts(raw?: string | null) {
+    const txt = String(raw ?? "").trim();
+    const m = txt.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    const ss = Number(m[3] ?? "0");
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+    return { hh, mm, ss };
+  }
+
+  static orderDateTime(dateRaw?: Date | string | null, timeRaw?: string | null) {
+    if (!dateRaw || !timeRaw) return null;
+    const time = DateUtils.parseTimeToParts(timeRaw);
+    if (!time) return null;
+    const base = dateRaw instanceof Date ? dateRaw : new Date(String(dateRaw));
+    if (!Number.isFinite(base.getTime())) return null;
+    return new Date(
+      base.getFullYear(),
+      base.getMonth(),
+      base.getDate(),
+      time.hh,
+      time.mm,
+      time.ss,
+      0
+    );
+  }
+
+  static buildRange(start: Date | null, end: Date | null) {
+    if (!start) return null;
+    const safeEnd =
+      end && Number.isFinite(end.getTime()) && end.getTime() > start.getTime()
+        ? end
+        : new Date(start.getTime() + 60 * 60 * 1000);
+    return { start, end: safeEnd };
+  }
+
+  static hasOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+    return Math.max(aStart.getTime(), bStart.getTime()) < Math.min(aEnd.getTime(), bEnd.getTime());
   }
 }
