@@ -4,92 +4,21 @@
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { MoreThan, MoreThanOrEqual, Repository } from "typeorm";
+import { MoreThanOrEqual, Repository } from "typeorm";
 
 import { ServiceRequest } from "./entities/servicerequest.entity";
 import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
-import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
 
 import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { MailService } from "src/shared/mail/mail.service";
 import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
 import { RequestQueryDto } from "./dto/request-query.dto";
-
-function localMidnight(ymd: string) {
-  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mm = Number(m[2]);
-  const d = Number(m[3]);
-  return new Date(y, mm - 1, d, 0, 0, 0, 0);
-}
-
-function toDateOrNull(input?: string | null) {
-  if (input === undefined) return undefined;
-  if (input === null || input === "") return null;
-
-  const asMidnight = localMidnight(input);
-  if (asMidnight) return asMidnight;
-
-  const d = new Date(input);
-  if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException("Fecha/hora invÃ¡lida");
-  }
-  return d;
-}
-
-function ensureEndAfterStart(start: Date | null, end: Date | null) {
-  if (start && end && end.getTime() <= start.getTime()) {
-    throw new BadRequestException(
-      "La hora final debe ser mayor a la hora inicial"
-    );
-  }
-}
-
-function normalizeTechnicians(input: any): number[] {
-  const raw = Array.isArray(input) ? input : [];
-  const flat = raw.flatMap((x: any) => (Array.isArray(x) ? x : [x]));
-  const ids = flat
-    .map((t: any) => Number(t))
-    .filter((n: number) => Number.isFinite(n) && n > 0);
-  return Array.from(new Set(ids));
-}
-
-function resolveUserIdFromAuth(user: any): number {
-  const candidates = [user?.userid, user?.id, user?.sub];
-  for (const c of candidates) {
-    const n = Number(c);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return 0;
-}
-
-function normalizeStateName(name?: string | null) {
-  return (name ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function buildScheduleLabel(start: Date | null, end: Date | null) {
-  if (!start) return "";
-  const fmtDateTime = new Intl.DateTimeFormat("es-CO", {
-    timeZone: "America/Bogota",
-    dateStyle: "full",
-    timeStyle: "short",
-  });
-  const fmtTime = new Intl.DateTimeFormat("es-CO", {
-    timeZone: "America/Bogota",
-    timeStyle: "short",
-  });
-  const startText = fmtDateTime.format(start);
-  if (end) return `${startText} - ${fmtTime.format(end)}`;
-  return startText;
-}
+import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
+import { DateUtils } from '../shared/utils/date-utils';
+import { NormalizationClass } from '../shared/utils/normalization.class';
 
 @Injectable()
 export class RequestsService {
@@ -113,12 +42,12 @@ export class RequestsService {
   ) {}
 
   private isScheduledState(name?: string | null) {
-    const norm = normalizeStateName(name);
+    const norm = NormalizationClass.normalizeStateName(name);
     return norm.includes("agend");
   }
 
   private isCanceledState(name?: string | null) {
-    const norm = normalizeStateName(name);
+    const norm = NormalizationClass.normalizeStateName(name);
     return norm.includes("anul") || norm.includes("cancel");
   }
 
@@ -241,7 +170,7 @@ export class RequestsService {
       if (!this.isScheduledState(sr.state?.name)) return;
       if (!sr.scheduledAt) return;
 
-      const when = buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
+      const when = DateUtils.buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
 
       const customerEmail = sr.customer?.users?.email;
       if (customerEmail) {
@@ -310,17 +239,17 @@ export class RequestsService {
     return this.statesRepo.find({ order: { stateid: "ASC" as any } as any });
   }
 
-  async create(dto: CreateRequestDto) {
-    const scheduledAt = toDateOrNull((dto as any).scheduledAt);
-    const scheduledEndAt = toDateOrNull((dto as any).scheduledEndAt);
-    ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+  async createByAdmin(dto: CreateRequestDto) {
+    const scheduledAt = DateUtils.toDateOrNull((dto as any).scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull((dto as any).scheduledEndAt);
+    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
 
     const clientId = Number((dto as any)?.clientId);
     if (!Number.isFinite(clientId) || clientId <= 0) {
       throw new BadRequestException("clientId must not be less than 1");
     }
 
-    const technicians = normalizeTechnicians((dto as any)?.technicians);
+    const technicians = NormalizationClass.normalizeTechnicians((dto as any)?.technicians);
     if (!technicians.length) {
       throw new BadRequestException("technicians should not be empty");
     }
@@ -381,11 +310,12 @@ export class RequestsService {
     return full;
   }
 
-  async createFromAuth(user: any, dto: CreateRequestFromAuthDto) {
+  async create(user: any, dto: CreateRequestDto) {
     const userId = resolveUserIdFromAuth(user);
+
     if (!userId) {
       throw new BadRequestException(
-        "Token invÃ¡lido: no se pudo obtener el userid"
+        "Token invalido: no se pudo obtener el userid"
       );
     }
 
@@ -408,11 +338,11 @@ export class RequestsService {
       );
     }
 
-    const scheduledAt = toDateOrNull(dto.scheduledAt);
-    const scheduledEndAt = toDateOrNull(dto.scheduledEndAt);
-    ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+    const scheduledAt = DateUtils.toDateOrNull(dto.scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull(dto.scheduledEndAt);
+    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
 
-    const direccion = String(dto.direccion || "").trim();
+    const direccion = String(dto.address || "").trim();
     if (direccion.length < 3) {
       throw new BadRequestException("DirecciÃ³n invÃ¡lida");
     }
@@ -422,11 +352,11 @@ export class RequestsService {
       throw new BadRequestException("DescripciÃ³n invÃ¡lida");
     }
 
-    const stateId = Number(dto.stateId ?? 5);
+    // const stateId = Number(dto.stateId ?? 5);
     const serviceId = Number(dto.serviceId);
 
     if (!Number.isFinite(serviceId) || serviceId <= 0) {
-      throw new BadRequestException("serviceId invÃ¡lido");
+      throw new BadRequestException("serviceId invalido");
     }
 
     const entity = this.srRepo.create({
@@ -435,7 +365,7 @@ export class RequestsService {
       serviceType: dto.serviceType,
       direccion: direccion.slice(0, 255),
       description,
-      stateId: Number.isFinite(stateId) && stateId > 0 ? stateId : 5,
+      stateId: 5,
       serviceId,
       clientId,
     });
@@ -454,14 +384,14 @@ export class RequestsService {
     const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
     const prevEnd = sr.scheduledEndAt ? sr.scheduledEndAt.getTime() : null;
 
-    const scheduledAt = toDateOrNull((dto as any)?.scheduledAt);
-    const scheduledEndAt = toDateOrNull((dto as any)?.scheduledEndAt);
+    const scheduledAt = DateUtils.toDateOrNull((dto as any)?.scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull((dto as any)?.scheduledEndAt);
 
     const nextStart = scheduledAt === undefined ? sr.scheduledAt : scheduledAt;
     const nextEnd =
       scheduledEndAt === undefined ? sr.scheduledEndAt : scheduledEndAt;
 
-    ensureEndAfterStart(nextStart ?? null, nextEnd ?? null);
+    DateUtils.ensureEndAfterStart(nextStart ?? null, nextEnd ?? null);
 
     const existingLinks = await this.linkRepo.find({
       where: { serviceRequestId: id } as any,
@@ -475,7 +405,7 @@ export class RequestsService {
     );
     const nextTechs =
       (dto as any)?.technicians !== undefined
-        ? normalizeTechnicians((dto as any)?.technicians)
+        ? NormalizationClass.normalizeTechnicians((dto as any)?.technicians)
         : currentTechs;
     const stateIdInput = (dto as any)?.stateId;
     const effectiveStateId =
@@ -539,7 +469,7 @@ export class RequestsService {
     await this.srRepo.save(sr);
 
     if ((dto as any)?.technicians !== undefined) {
-      const techs = normalizeTechnicians((dto as any)?.technicians);
+      const techs = NormalizationClass.normalizeTechnicians((dto as any)?.technicians);
 
       await this.linkRepo.delete({ serviceRequestId: id } as any);
 
