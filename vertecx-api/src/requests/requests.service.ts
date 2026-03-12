@@ -74,7 +74,8 @@ export class RequestsService {
   }
 
   async findAll(query: RequestQueryDto) {
-    const { clientId, stateId, fromScheduleDate, serviceTypeId } = query;
+    const { clientId, stateId, fromScheduleDate, serviceTypeId, serviceId } = query;
+    const scheduledAt = !DateUtils.toDateOrNull(fromScheduleDate) ? undefined : MoreThanOrEqual(DateUtils.toDateOrNull(fromScheduleDate))
 
     const result = await this.srRepo.find({
       relations: {
@@ -86,7 +87,8 @@ export class RequestsService {
       where: {
         clientId: clientId,
         stateId: stateId,
-        scheduledAt: MoreThanOrEqual(new Date(fromScheduleDate)),
+        scheduledAt,
+        serviceId: serviceId,
         service: { typeofserviceid: serviceTypeId }
       },
       order: { serviceRequestId: "ASC" },
