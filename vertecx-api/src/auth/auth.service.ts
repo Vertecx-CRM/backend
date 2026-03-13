@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -45,17 +46,37 @@ export class AuthService {
     };
   }
 
+  private getRequiredEnv(name: string) {
+    const value = process.env[name];
+    if (!value?.trim()) {
+      throw new InternalServerErrorException(
+        `Missing required auth configuration: ${name}`,
+      );
+    }
+    return value;
+  }
+
+  private getRequiredTtl(name: string) {
+    const value = Number(this.getRequiredEnv(name));
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new InternalServerErrorException(
+        `Invalid auth configuration value: ${name}`,
+      );
+    }
+    return value;
+  }
+
   private signAccess(payload: any) {
     return this.jwt.sign(payload, {
-      secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: Number(process.env.JWT_ACCESS_TTL),
+      secret: this.getRequiredEnv('JWT_ACCESS_SECRET'),
+      expiresIn: this.getRequiredTtl('JWT_ACCESS_TTL'),
     });
   }
 
   private signRefresh(payload: any) {
     return this.jwt.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
-      expiresIn: Number(process.env.JWT_REFRESH_TTL),
+      secret: this.getRequiredEnv('JWT_REFRESH_SECRET'),
+      expiresIn: this.getRequiredTtl('JWT_REFRESH_TTL'),
     });
   }
 
@@ -191,7 +212,7 @@ export class AuthService {
     }
 
     const token = this.signResetToken(user);
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const baseUrl = process.env.FRONTEND_URL || 'vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net';
     const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
 
     await this.mailService.sendPasswordReset(user.email, user.name, resetLink);
