@@ -30,6 +30,15 @@ export class AuthService {
     try {
       const user = await this.users.findOne({
         where: { email },
+        select: {
+          userid: true,
+          email: true,
+          password: true,
+          name: true,
+          roleid: true,
+          stateid: true,
+          mustchangepassword: true,
+        },
         relations: ['roles'],
       });
 
@@ -41,6 +50,18 @@ export class AuthService {
       if (user.stateid !== 1) {
         this.logger.warn(
           `LOGIN_USER_INACTIVE email=${email} userid=${user.userid} stateid=${user.stateid}`,
+        );
+        return null;
+      }
+
+      if (password == null) {
+        this.logger.warn(`LOGIN_PASSWORD_MISSING email=${email}`);
+        return null;
+      }
+
+      if (!user.password?.trim()) {
+        this.logger.error(
+          `LOGIN_PASSWORD_HASH_MISSING email=${email} userid=${user.userid}`,
         );
         return null;
       }
