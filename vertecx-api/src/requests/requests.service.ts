@@ -4,7 +4,7 @@
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { MoreThan, MoreThanOrEqual, Repository } from "typeorm";
 
 import { ServiceRequest } from "./entities/servicerequest.entity";
 import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
@@ -16,6 +16,7 @@ import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { MailService } from "src/shared/mail/mail.service";
 import { OrdersServices } from "src/orders-services/entities/orders-services.entity";
+import { RequestQueryDto } from "./dto/request-query.dto";
 
 function localMidnight(ymd: string) {
   const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -266,16 +267,29 @@ export class RequestsService {
     }
   }
 
-  async findAll() {
-    return this.srRepo.find({
+  async findAll(query: RequestQueryDto) {
+    const { clientId, stateId, fromScheduleDate, serviceTypeId } = query;
+
+    const result = await this.srRepo.find({
       relations: {
         state: true,
         service: true,
         customer: { users: true },
         techniciansMap: { technician: { users: true } },
       },
+      where: {
+        clientId: clientId,
+        stateId: stateId,
+        scheduledAt: MoreThanOrEqual(new Date(fromScheduleDate)),
+        service: { typeofserviceid: serviceTypeId }
+      },
       order: { serviceRequestId: "ASC" },
     });
+
+    if (!result.length)
+      throw new NotFoundException('Solicitudes no encontradas')
+
+    return result;
   }
 
   async findOne(id: number) {

@@ -11,5 +11,5 @@ export class UpdateEstadoPagoDto {
     @IsIn(['Abonada', 'Pagada'], {
         message: 'estadoPago debe ser "Abonada" o "Pagada"',
     })
-    estadoPago: 'Abonada' | 'Pagada';
+    payState: 'Abonada' | 'Pagada';
 }

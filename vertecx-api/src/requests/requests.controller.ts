@@ -9,12 +9,15 @@ import {
   Delete,
   Req,
   UseGuards,
+  Query,
 } from "@nestjs/common";
 import { RequestsService } from "./requests.service";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
 import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
 import { AuthGuard } from "@nestjs/passport";
+import { RequestQueryDto } from "./dto/request-query.dto";
+import { ApiResponse } from "@nestjs/swagger";
 
 @Controller("service-requests")
 export class RequestsController {
@@ -27,8 +30,8 @@ export class RequestsController {
 
   @UseGuards(AuthGuard("jwt"))
   @Post("from-auth")
-  createFromAuth(@Req() req: any, @Body() dto: CreateRequestFromAuthDto) {
-    return this.requestsService.createFromAuth(req.user, dto);
+  createFromAuth(@Req() { user }: any, @Body() dto: CreateRequestFromAuthDto) {
+    return this.requestsService.createFromAuth(user, dto);
   }
 
   @Post()
@@ -36,9 +39,11 @@ export class RequestsController {
     return this.requestsService.create(dto);
   }
 
+  @ApiResponse({ status: 404, description: 'Solicitudes no encontradas, verificar parametros de consulta' })
+  @ApiResponse({ status: 200, description: 'Solicitudes encontradas' })
   @Get()
-  findAll() {
-    return this.requestsService.findAll();
+  findAll(@Query() query: RequestQueryDto) {
+    return this.requestsService.findAll(query);
   }
 
   @Get(":id")
