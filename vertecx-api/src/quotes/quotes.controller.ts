@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { QuotesService } from './quotes.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
-import { UpdateQuoteDto } from './dto/update-quote.dto';
 import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('quotes')

@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsPositive,
   IsString,
@@ -21,23 +22,28 @@ export class CreateQuoteDto {
   @IsOptional()
   @IsInt()
   @IsPositive()
-  ordersservicesid?: number;
+  ordersServicesId?: number;
 
   @ApiProperty({ example: 5 })
   @IsInt()
   @IsPositive()
-  statesid: number;
+  statesId: number;
+
+  @ApiProperty({ example: 5 })
+  @IsInt()
+  @IsPositive()
+  clientId: number;
 
   @ApiPropertyOptional({ example: 'Pendiente aprobación cliente' })
   @IsOptional()
   @IsString()
   observation?: string;
 
-  @ApiPropertyOptional({ example: 'MANTENIMIENTO', maxLength: 50 })
-  @IsOptional()
+  @ApiProperty({ example: 'MANTENIMIENTO', maxLength: 50 })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
-  servicetype?: string;
+  serviceType: string;
 
   @ApiProperty({ type: [CreateQuoteDetailDto] })
   @IsArray()
