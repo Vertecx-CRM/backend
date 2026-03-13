@@ -1,6 +1,8 @@
 import {
   Injectable,
   BadRequestException,
+  InternalServerErrorException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -13,6 +15,8 @@ import { MailService } from 'src/shared/mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwt: JwtService,
     private readonly access: AccessService,
@@ -21,41 +25,113 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string) {
-    const user = await this.users.findOne({
-      where: { email },
-      relations: ['roles'],
-    });
+    this.logger.log(`LOGIN_VALIDATE_START email=${email}`);
 
-    if (!user || user.stateid !== 1) return null;
+    try {
+      const user = await this.users.findOne({
+        where: { email },
+        select: {
+          userid: true,
+          email: true,
+          password: true,
+          name: true,
+          roleid: true,
+          stateid: true,
+          mustchangepassword: true,
+        },
+        relations: ['roles'],
+      });
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return null;
+      if (!user) {
+        this.logger.warn(`LOGIN_USER_NOT_FOUND email=${email}`);
+        return null;
+      }
 
-    const permissions = await this.access.getAccessKeys(user.roleid);
+      if (user.stateid !== 1) {
+        this.logger.warn(
+          `LOGIN_USER_INACTIVE email=${email} userid=${user.userid} stateid=${user.stateid}`,
+        );
+        return null;
+      }
 
-    return {
-      userid: user.userid,
-      email: user.email,
-      name: user.name,
-      roleid: user.roleid,
-      rolename: user.roles?.name,
-      isactive: user.stateid === 1,
-      mustchangepassword: user.mustchangepassword,
-      permissions: Array.from(permissions),
-    };
+      if (password == null) {
+        this.logger.warn(`LOGIN_PASSWORD_MISSING email=${email}`);
+        return null;
+      }
+
+      if (!user.password?.trim()) {
+        this.logger.error(
+          `LOGIN_PASSWORD_HASH_MISSING email=${email} userid=${user.userid}`,
+        );
+        return null;
+      }
+
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) {
+        this.logger.warn(`LOGIN_PASSWORD_MISMATCH email=${email} userid=${user.userid}`);
+        return null;
+      }
+
+      this.logger.log(`LOGIN_PASSWORD_OK email=${email} userid=${user.userid}`);
+
+      const permissions = await this.access.getAccessKeys(user.roleid);
+
+      const payload = {
+        userid: user.userid,
+        email: user.email,
+        name: user.name,
+        roleid: user.roleid,
+        rolename: user.roles?.name,
+        isactive: user.stateid === 1,
+        mustchangepassword: user.mustchangepassword,
+        permissions: Array.from(permissions),
+      };
+
+      this.logger.log(
+        `LOGIN_VALIDATE_OK email=${email} userid=${user.userid} roleid=${user.roleid} permissions=${payload.permissions.length}`,
+      );
+
+      return payload;
+    } catch (error) {
+      this.logger.error(
+        `LOGIN_VALIDATE_ERROR email=${email}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
+  }
+
+  private getRequiredEnv(name: string) {
+    const value = process.env[name];
+    if (!value?.trim()) {
+      throw new InternalServerErrorException(
+        `Missing required auth configuration: ${name}`,
+      );
+    }
+    return value;
+  }
+
+  private getRequiredTtl(name: string) {
+    const value = Number(this.getRequiredEnv(name));
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new InternalServerErrorException(
+        `Invalid auth configuration value: ${name}`,
+      );
+    }
+    return value;
   }
 
   private signAccess(payload: any) {
     return this.jwt.sign(payload, {
-      secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: Number(process.env.JWT_ACCESS_TTL),
+      secret: this.getRequiredEnv('JWT_ACCESS_SECRET'),
+      expiresIn: this.getRequiredTtl('JWT_ACCESS_TTL'),
     });
   }
 
   private signRefresh(payload: any) {
     return this.jwt.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
-      expiresIn: Number(process.env.JWT_REFRESH_TTL),
+      secret: this.getRequiredEnv('JWT_REFRESH_SECRET'),
+      expiresIn: this.getRequiredTtl('JWT_REFRESH_TTL'),
     });
   }
 
@@ -80,11 +156,25 @@ export class AuthService {
     const { exp, iat, ...clean } = userPayload;
     const access_token = this.signAccess(clean);
     const refresh_token = this.signRefresh(clean);
+    this.logger.log(
+      `LOGIN_TOKENS_OK userid=${clean.userid ?? 'unknown'} roleid=${clean.roleid ?? 'unknown'}`,
+    );
     return { access_token, refresh_token };
   }
 
   async login(userPayload: any) {
-    return this.issueTokensFromPayload(userPayload);
+    try {
+      this.logger.log(
+        `LOGIN_ISSUE_START userid=${userPayload?.userid ?? 'unknown'} roleid=${userPayload?.roleid ?? 'unknown'}`,
+      );
+      return this.issueTokensFromPayload(userPayload);
+    } catch (error) {
+      this.logger.error(
+        `LOGIN_ISSUE_ERROR userid=${userPayload?.userid ?? 'unknown'}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
 
   async refresh(userPayload: any) {
@@ -191,7 +281,7 @@ export class AuthService {
     }
 
     const token = this.signResetToken(user);
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const baseUrl = process.env.FRONTEND_URL || 'vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net';
     const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
 
     await this.mailService.sendPasswordReset(user.email, user.name, resetLink);

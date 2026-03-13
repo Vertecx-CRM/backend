@@ -1,4 +1,4 @@
-FROM node:22-alpine AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json yarn.lock ./
@@ -9,7 +9,7 @@ WORKDIR /app
 COPY . .
 RUN yarn build
 
-FROM node:22.11-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
