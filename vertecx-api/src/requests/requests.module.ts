@@ -13,6 +13,7 @@ import { TechniciansModule } from "../technicians/technicians.module";
 import { Technicians } from "../technicians/entities/technicians.entity";
 import { TechnicianTypeMap } from "../shared/entities/technician-type-map.entity";
 import { UsersModule } from "../users/users.module";
+import { ServicesModule } from "../services/services.module";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { UsersModule } from "../users/users.module";
     UsersModule,
     TechniciansModule,
     CustomersModule,
+    ServicesModule
   ],
   controllers: [RequestsController],
   providers: [RequestsService],

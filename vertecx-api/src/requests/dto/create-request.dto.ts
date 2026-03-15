@@ -20,9 +20,16 @@ export class CreateRequestDto{
   @IsDateString()
   scheduledEndAt?: string;
 
+  @ApiPropertyOptional({ example: 5 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  stateId?: number;
+
   @ApiProperty({ example: "cr 44 # 20-50" })
   @IsString()
   @IsNotEmpty()
+  @MinLength(4)
   @MaxLength(255)
   address: string;
 

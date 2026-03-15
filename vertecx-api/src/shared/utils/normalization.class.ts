@@ -1,3 +1,5 @@
+import { BadRequestException } from "@nestjs/common";
+
 export class NormalizationClass {
   static normalizeTechnicians(input: any): number[] {
     const raw = Array.isArray(input) ? input : [];
@@ -5,7 +7,12 @@ export class NormalizationClass {
     const ids = flat
       .map((t: any) => Number(t))
       .filter((n: number) => Number.isFinite(n) && n > 0);
-    return Array.from(new Set(ids));
+
+    const result = Array.from(new Set(ids));
+    
+    if (!result.length) throw new BadRequestException("Tecnicos vacios");
+
+    return result
   }
 
   static normalizeStateName(name?: string | null) {

@@ -15,11 +15,13 @@ import { States } from "../shared/entities/states.entity";
 import { Customers } from "src/customers/entities/customers.entity";
 import { MailService } from "src/shared/mail/mail.service";
 import { RequestQueryDto } from "./dto/request-query.dto";
-import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 import { DateUtils } from '../shared/utils/date-utils';
 import { NormalizationClass } from '../shared/utils/normalization.class';
 import { isCanceledState } from "../shared/utils/is-cancelled-state";
 import { OrdersServices } from "../orders-services/entities/orders-services.entity";
+import { ServicesService } from "../services/services.service";
+import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
+import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 
 @Injectable()
 export class RequestsService {
@@ -39,6 +41,7 @@ export class RequestsService {
     @InjectRepository(OrdersServices)
       private readonly ordersRepo: Repository<OrdersServices>,
 
+    private readonly servicesService: ServicesService,
     private readonly mailService: MailService
   ) {}
 
@@ -88,7 +91,7 @@ export class RequestsService {
         clientId: clientId,
         stateId: stateId,
         scheduledAt,
-        serviceId: serviceId,
+        serviceId,
         service: { typeofserviceid: serviceTypeId }
       },
       order: { serviceRequestId: "ASC" },
@@ -118,55 +121,37 @@ export class RequestsService {
     return this.statesRepo.find({ order: { stateid: "ASC" as any } as any });
   }
 
-  async createByAdmin(dto: CreateRequestDto) {
-    const scheduledAt = DateUtils.toDateOrNull((dto as any).scheduledAt);
-    const scheduledEndAt = DateUtils.toDateOrNull((dto as any).scheduledEndAt);
-    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+  async createByAdmin(dto: CreateAdminRequestDto) {
+    const { address, description, stateId, scheduledAt, scheduledEndAt } = this.getCommonFields(dto);
+    const { clientId, technicians, serviceId, serviceType } = dto;
 
-    const clientId = Number((dto as any)?.clientId);
-    if (!Number.isFinite(clientId) || clientId <= 0) {
+    if (!Number.isFinite(clientId))
       throw new BadRequestException("clientId must not be less than 1");
-    }
 
-    const technicians = NormalizationClass.normalizeTechnicians((dto as any)?.technicians);
-    if (!technicians.length) {
-      throw new BadRequestException("technicians should not be empty");
-    }
-    const direccion = String((dto as any).direccion || "").trim();
-    if (direccion.length < 3) {
-      throw new BadRequestException("DirecciÃ³n invÃ¡lida");
-    }
+    const normalizedTechnicians = NormalizationClass.normalizeTechnicians(technicians);
 
-    const description = String((dto as any).description || "").trim();
-    if (description.length < 3) {
-      throw new BadRequestException("DescripciÃ³n invÃ¡lida");
-    }
+    await this.validateService(serviceId);
 
-    const stateId = Number((dto as any)?.stateId ?? 5);
-    const serviceId = Number((dto as any)?.serviceId);
     const normalizedStateId = Number.isFinite(stateId) && stateId > 0 ? stateId : 5;
     const state = await this.statesRepo.findOne({
       where: { stateid: normalizedStateId } as any,
     });
-    if (!state) throw new BadRequestException("stateId invÃ¡lido");
 
-    if (!isCanceledState(state.name)) {
+    if (!state)
+      throw new BadRequestException("stateId invÃ¡lido");
+
+    if (!isCanceledState(state.name))
       await this.ensureTechniciansAvailability(
         technicians,
         scheduledAt ?? null,
         scheduledEndAt ?? null
       );
-    }
-
-    if (!Number.isFinite(serviceId) || serviceId <= 0) {
-      throw new BadRequestException("serviceId invÃ¡lido");
-    }
 
     const entity = this.srRepo.create({
       scheduledAt: scheduledAt ?? null,
       scheduledEndAt: scheduledEndAt ?? null,
-      serviceType: (dto as any).serviceType,
-      direccion: direccion.slice(0, 255),
+      serviceType,
+      direccion: address,
       description,
       stateId: normalizedStateId,
       serviceId,
@@ -175,7 +160,7 @@ export class RequestsService {
 
     const sr = await this.srRepo.save(entity);
 
-    const linkRows = technicians.map((tid) => ({
+    const linkRows = normalizedTechnicians.map((tid) => ({
       serviceRequestId: sr.serviceRequestId,
       technicianId: tid,
     }));
@@ -190,13 +175,8 @@ export class RequestsService {
   }
 
   async create(user: any, dto: CreateRequestDto) {
+    const { serviceId } = dto
     const userId = resolveUserIdFromAuth(user);
-
-    if (!userId) {
-      throw new BadRequestException(
-        "Token invalido: no se pudo obtener el userid"
-      );
-    }
 
     const customer = await this.customersRepo
       .createQueryBuilder("c")
@@ -204,47 +184,26 @@ export class RequestsService {
       .where("u.userid = :userId", { userId })
       .getOne();
 
-    if (!customer) {
-      throw new BadRequestException(
+    if (!customer) throw new BadRequestException(
         "El usuario autenticado no tiene un cliente asociado"
       );
-    }
 
     const clientId = Number((customer as any)?.customerid ?? (customer as any)?.id);
-    if (!Number.isFinite(clientId) || clientId <= 0) {
-      throw new BadRequestException(
+    if (!Number.isFinite(clientId)) throw new BadRequestException(
         "No se pudo resolver el clientId del cliente asociado"
       );
-    }
 
-    const scheduledAt = DateUtils.toDateOrNull(dto.scheduledAt);
-    const scheduledEndAt = DateUtils.toDateOrNull(dto.scheduledEndAt);
-    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+    const { address, description, stateId, scheduledAt, scheduledEndAt } = this.getCommonFields(dto);
 
-    const direccion = String(dto.address || "").trim();
-    if (direccion.length < 3) {
-      throw new BadRequestException("DirecciÃ³n invÃ¡lida");
-    }
-
-    const description = String(dto.description || "").trim();
-    if (description.length < 3) {
-      throw new BadRequestException("DescripciÃ³n invÃ¡lida");
-    }
-
-    // const stateId = Number(dto.stateId ?? 5);
-    const serviceId = Number(dto.serviceId);
-
-    if (!Number.isFinite(serviceId) || serviceId <= 0) {
-      throw new BadRequestException("serviceId invalido");
-    }
+    await this.validateService(serviceId);
 
     const entity = this.srRepo.create({
       scheduledAt: scheduledAt ?? null,
       scheduledEndAt: scheduledEndAt ?? null,
       serviceType: dto.serviceType,
-      direccion: direccion.slice(0, 255),
+      direccion: address,
       description,
-      stateId: 5,
+      stateId,
       serviceId,
       clientId,
     });
@@ -253,6 +212,25 @@ export class RequestsService {
     const full = await this.findOne(sr.serviceRequestId);
     await this.notifyScheduled(full);
     return full;
+  }
+
+  async validateService(id: number) {
+    if (!Number.isFinite(id))
+      throw new BadRequestException("serviceId invalido");
+
+    return await this.servicesService.findOne(id);
+  }
+
+  private getCommonFields(dto: CreateRequestDto) {
+    const scheduledAt = DateUtils.toDateOrNull((dto as any).scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull((dto as any).scheduledEndAt);
+    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+
+    const address = String((dto as any).address || "").trim().slice(0, 255);
+    const description = String((dto as any).description || "").trim();
+    const stateId = Number((dto as any)?.stateId ?? 5);
+
+    return { address, description, stateId, scheduledAt, scheduledEndAt }
   }
 
   async update(id: number, dto: UpdateServiceRequestDto) {

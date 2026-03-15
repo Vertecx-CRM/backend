@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsInt, IsOptional, Min } from "class-validator";
+import { ArrayNotEmpty, IsArray, IsDateString, IsInt, IsOptional, Min } from "class-validator";
 import { CreateRequestDto } from "./create-request.dto";
 
 export class CreateAdminRequestDto extends CreateRequestDto{
@@ -7,12 +7,6 @@ export class CreateAdminRequestDto extends CreateRequestDto{
   @IsInt()
   @Min(1)
   clientId: number;
-
-  @ApiPropertyOptional({ example: 5 })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  stateId?: number;
 
   @ApiPropertyOptional({ example: "2025-11-12T10:00:00.000Z" })
   @IsOptional()
@@ -23,4 +17,11 @@ export class CreateAdminRequestDto extends CreateRequestDto{
   @IsOptional()
   @IsDateString()
   scheduledEndAt?: string;
+
+  @ApiProperty({ example: [1, 2, 3] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  technicians: number[];
 }
