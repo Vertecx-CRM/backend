@@ -22,6 +22,7 @@ import { OrdersServices } from "../orders-services/entities/orders-services.enti
 import { ServicesService } from "../services/services.service";
 import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
 import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
+import { CustomersService } from "../customers/customers.service";
 
 @Injectable()
 export class RequestsService {
@@ -42,6 +43,7 @@ export class RequestsService {
       private readonly ordersRepo: Repository<OrdersServices>,
 
     private readonly servicesService: ServicesService,
+    private readonly customersService: CustomersService,
     private readonly mailService: MailService
   ) {}
 
@@ -125,8 +127,7 @@ export class RequestsService {
     const { address, description, stateId, scheduledAt, scheduledEndAt } = this.getCommonFields(dto);
     const { clientId, technicians, serviceId, serviceType } = dto;
 
-    if (!Number.isFinite(clientId))
-      throw new BadRequestException("clientId must not be less than 1");
+    await this.customersService.findOne(clientId);
 
     const normalizedTechnicians = NormalizationClass.normalizeTechnicians(technicians);
 
@@ -138,7 +139,7 @@ export class RequestsService {
     });
 
     if (!state)
-      throw new BadRequestException("stateId invÃ¡lido");
+      throw new BadRequestException("stateId invalido");
 
     if (!isCanceledState(state.name))
       await this.ensureTechniciansAvailability(
@@ -268,12 +269,12 @@ export class RequestsService {
     const effectiveStateId =
       stateIdInput != null ? Number(stateIdInput) : Number(sr.stateId);
     if (!Number.isFinite(effectiveStateId) || effectiveStateId <= 0) {
-      throw new BadRequestException("stateId invÃ¡lido");
+      throw new BadRequestException("stateId invalido");
     }
     const effectiveState = await this.statesRepo.findOne({
       where: { stateid: effectiveStateId } as any,
     });
-    if (!effectiveState) throw new BadRequestException("stateId invÃ¡lido");
+    if (!effectiveState) throw new BadRequestException("stateId invalido");
 
     if (!isCanceledState(effectiveState.name)) {
       await this.ensureTechniciansAvailability(
@@ -389,6 +390,10 @@ export class RequestsService {
     }
 
     const requests = await reqQb.getMany();
+    
+    if (!requests.length)
+      throw new NotFoundException('Technicians not found')
+
     for (const sr of requests) {
       if (isCanceledState(sr?.state?.name)) continue;
       const range = DateUtils.buildRange(sr.scheduledAt, sr.scheduledEndAt);
