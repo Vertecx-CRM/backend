@@ -315,9 +315,8 @@ export class RequestsService {
       prevStart !== (updated.scheduledAt ? updated.scheduledAt.getTime() : null) ||
       prevEnd !== (updated.scheduledEndAt ? updated.scheduledEndAt.getTime() : null);
 
-    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name)) {
+    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name))
       await this.notifyScheduled(updated);
-    }
 
     return updated;
   }
