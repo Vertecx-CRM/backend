@@ -19,7 +19,7 @@ export class CreateQuoteDetailDto {
   @IsOptional()
   @IsInt()
   @IsPositive()
-  productid?: number | null;
+  productId?: number | null;
 
   @ApiProperty({ example: 'Cambio de tarjeta electrónica', maxLength: 150 })
   @IsString()
@@ -35,7 +35,7 @@ export class CreateQuoteDetailDto {
   @ApiProperty({ example: 85000 })
   @IsNumber()
   @Min(0)
-  unitprice: number;
+  unitPrice: number;
 
   @ApiProperty({ example: 170000 })
   @IsNumber()

@@ -14,10 +14,10 @@ import {
 import { RequestsService } from "./requests.service";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
-import { CreateRequestFromAuthDto } from "./dto/create-request-from-auth.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { RequestQueryDto } from "./dto/request-query.dto";
 import { ApiResponse } from "@nestjs/swagger";
+import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
 
 @Controller("service-requests")
 export class RequestsController {
@@ -29,14 +29,14 @@ export class RequestsController {
   }
 
   @UseGuards(AuthGuard("jwt"))
-  @Post("from-auth")
-  createFromAuth(@Req() { user }: any, @Body() dto: CreateRequestFromAuthDto) {
-    return this.requestsService.createFromAuth(user, dto);
+  @Post()
+  create(@Req() { user }: any, @Body() dto: CreateRequestDto) {
+    return this.requestsService.create(user, dto);
   }
 
-  @Post()
-  create(@Body() dto: CreateRequestDto) {
-    return this.requestsService.create(dto);
+  @Post("admin")
+  createByAdmin(@Body() dto: CreateAdminRequestDto) {
+    return this.requestsService.createByAdmin(dto);
   }
 
   @ApiResponse({ status: 404, description: 'Solicitudes no encontradas, verificar parametros de consulta' })

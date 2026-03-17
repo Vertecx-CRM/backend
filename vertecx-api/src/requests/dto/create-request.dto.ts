@@ -1,23 +1,50 @@
 import {
-  IsArray,
   IsInt,
   Min,
-  ArrayNotEmpty,
-  
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
 } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
-import { CreateRequestFromAuthDto } from "./create-request-from-auth.dto";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
-export class CreateRequestDto extends CreateRequestFromAuthDto{
-  @ApiProperty({ example: 34 })
+export class CreateRequestDto{
+  @ApiProperty({ example: "2025-11-12T10:00:00.000Z" })
+  @IsDateString()
+  scheduledAt: string;
+
+  @ApiPropertyOptional({ example: "2025-11-12T11:00:00.000Z" })
+  @IsOptional()
+  @IsDateString()
+  scheduledEndAt?: string;
+
+  @ApiPropertyOptional({ example: 5 })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  clientId: number;
+  stateId?: number;
 
-  @ApiProperty({ example: [1, 2, 3] })
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  technicians: number[];
+  @ApiProperty({ example: "cr 44 # 20-50" })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(255)
+  address: string;
+
+  @ApiProperty({ example: "Equipo no enciende; posible daño en fuente" })
+  @IsString()
+  @MinLength(3)
+  description: string;
+
+  @ApiProperty({ example: 12 })
+  @IsInt()
+  @Min(1)
+  serviceId: number;
+
+  @ApiProperty({ example: "MANTENIMIENTO" })
+  @IsString()
+  @IsNotEmpty()
+  serviceType: string;
 }

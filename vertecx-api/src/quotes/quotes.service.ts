@@ -52,9 +52,6 @@ export class QuotesService {
 
   private completedStateIdCache: number | null = null;
 
-  /* =====================================================
-     VALIDACIÓN DE REFERENCIAS
-     ===================================================== */
   private async ensureRefs(dto: {
     serviceRequestId?: number;
     customerid?: number;
@@ -110,9 +107,7 @@ export class QuotesService {
   }
 
   private async resolveCompletedStateId(): Promise<number> {
-    if (this.completedStateIdCache) {
-      return this.completedStateIdCache;
-    }
+    if (this.completedStateIdCache) return this.completedStateIdCache;
 
     const envId =
       Number(
@@ -120,20 +115,21 @@ export class QuotesService {
           process.env.QUOTE_COMPLETE_STATE_ID ??
           6,
       ) || 0;
-    if (envId > 0) {
-      const explicit = await this.statesRepo.findOne({
-        where: { stateid: envId },
-      });
-      if (explicit) {
-        this.completedStateIdCache = explicit.stateid;
-        return explicit.stateid;
-      }
+
+    const explicit = envId > 0 ? await this.statesRepo.findOne({
+      where: { stateid: envId },
+    }) : undefined;
+
+    if (explicit) {
+      this.completedStateIdCache = explicit.stateid;
+      return explicit.stateid;
     }
 
     const states = await this.statesRepo.find();
     const candidate = states.find(
       (state) => typeof state.name === 'string' && /complet/i.test(state.name),
     );
+
     if (candidate) {
       this.completedStateIdCache = candidate.stateid;
       return candidate.stateid;
@@ -144,11 +140,7 @@ export class QuotesService {
     );
   }
 
-  /* =====================================================
-     CREATE
-     ===================================================== */
   async create(dto: CreateQuoteDto) {
-    // Buscar la solicitud de servicio
     const serviceRequest = await this.serviceRequestRepo.findOne({
       where: { serviceRequestId: dto.serviceRequestId },
       relations: {
@@ -163,10 +155,8 @@ export class QuotesService {
       );
     }
 
-    // Resolver cliente automáticamente
     const customerId = serviceRequest.clientId;
 
-    // Resolver técnico automáticamente
     const technicianMap = serviceRequest.techniciansMap?.[0];
     if (!technicianMap) {
       throw new BadRequestException(
@@ -186,25 +176,24 @@ export class QuotesService {
         let unitprice: number;
 
         // PRODUCTO EXISTENTE → PRECIO REAL DE VENTA
-        if (d.productid) {
+        if (d.productId) {
           const product = await this.productsRepo.findOne({
-            where: { productid: d.productid },
+            where: { productid: d.productId },
           });
 
-          if (!product) {
-            throw new BadRequestException(`Producto ${d.productid} no existe`);
-          }
+          if (!product) 
+            throw new BadRequestException(`Producto ${d.productId} no existe`);
+          
 
           unitprice = Number(product.productpriceofsale);
         }
+
         //  PRODUCTO MANUAL
         else {
-          if (d.unitprice == null || d.unitprice < 0) {
-            throw new BadRequestException(
+          if (d.unitPrice == null ) throw new BadRequestException(
               'Precio inválido para producto manual',
             );
-          }
-          unitprice = Number(d.unitprice);
+          unitprice = Number(d.unitPrice);
         }
 
         const subtotal = Number((unitprice * quantity).toFixed(2));
@@ -225,18 +214,14 @@ export class QuotesService {
     const tax = Number((subtotalGeneral * 0.19).toFixed(2));
     const total = Number((subtotalGeneral + tax).toFixed(2));
 
-    // =====================================================
-    // Crear cotización
-    // =====================================================
-
     const quote = this.quotesRepo.create({
       serviceRequestId: dto.serviceRequestId,
-      ordersservicesid: dto.ordersservicesid ?? null,
-      statesid: dto.statesid,
+      ordersservicesid: dto.ordersServicesId ?? null,
+      statesid: dto.statesId,
       customerid: customerId,
       technicianid: technicianId,
       observation: dto.observation ?? null,
-      servicetype: dto.servicetype ?? serviceRequest.serviceType,
+      servicetype: dto.serviceType ?? serviceRequest.serviceType,
 
       subtotal: subtotalGeneral,
       tax,
@@ -244,7 +229,7 @@ export class QuotesService {
 
       details: detailsCalculated.map((d) =>
         this.detailsRepo.create({
-          productid: d.productid ?? null,
+          productid: d.productId ?? null,
           description: d.description,
           quantity: d.quantity,
           unitprice: d.unitprice,
@@ -258,9 +243,6 @@ export class QuotesService {
     return this.findOne(saved.quotesid);
   }
 
-  /* =====================================================
-     FIND ALL
-     ===================================================== */
   async findAll() {
     return this.quotesRepo.find({
       relations: {
@@ -273,9 +255,6 @@ export class QuotesService {
     });
   }
 
-  /* =====================================================
-     FIND ONE
-     ===================================================== */
   async findOne(id: number) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
@@ -294,9 +273,6 @@ export class QuotesService {
     return quote;
   }
 
-  /* =====================================================
-     REMOVE
-     ===================================================== */
   async remove(id: number) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
@@ -308,30 +284,22 @@ export class QuotesService {
     return { message: `Quote ${id} eliminada correctamente` };
   }
 
-  /* =====================================================
-     CANCELAR COTIZACIÓN
-     ===================================================== */
-
   async cancel(id: number, observation?: string) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
     });
 
-    if (!quote) {
-      throw new NotFoundException('Cotización no encontrada');
-    }
+    if (!quote) throw new NotFoundException('Cotización no encontrada');
+    
 
     // Ya anulada
-    if (quote.statesid === 8) {
-      throw new BadRequestException('La cotización ya está anulada.');
-    }
+    if (quote.statesid === 8) throw new BadRequestException('La cotización ya está anulada.');
+    
 
     // Solo se permite anular si está aprobada
-    if (quote.statesid !== 3) {
-      throw new BadRequestException(
+    if (quote.statesid !== 3) throw new BadRequestException(
         'Solo se pueden anular cotizaciones aprobadas.',
       );
-    }
 
     const updateData: Partial<Quotes> = {
       statesid: 8, // ANULADA
@@ -347,9 +315,6 @@ export class QuotesService {
     return await this.findOne(id);
   }
 
-  /* =====================================================
-   APROBAR COTIZACIÓN
-   ===================================================== */
   async approve(id: number, observation?: string) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
@@ -360,16 +325,12 @@ export class QuotesService {
     }
 
     // Ya aprobada
-    if (quote.statesid === 3) {
-      throw new BadRequestException('La cotización ya está aprobada.');
-    }
+    if (quote.statesid === 3) throw new BadRequestException('La cotización ya está aprobada.');
 
     // No se puede aprobar si está anulada
-    if (quote.statesid === 8) {
-      throw new BadRequestException(
+    if (quote.statesid === 8) throw new BadRequestException(
         'No se puede aprobar una cotización anulada.',
       );
-    }
 
     const updateData: Partial<Quotes> = {
       statesid: 3, // APROBADA
@@ -385,10 +346,6 @@ export class QuotesService {
     return this.findOne(id);
   }
 
-  /* =====================================================
-   CANCELAR COTIZACIÓN
-   ===================================================== */
-
   async cancelForClient(id: number, observation?: string) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
@@ -398,23 +355,17 @@ export class QuotesService {
     }
 
     // Ya esta cancelada
-    if (quote.statesid === 4) {
-      throw new BadRequestException('La cotización ya está cancelada.');
-    }
+    if (quote.statesid === 4)  throw new BadRequestException('La cotización ya está cancelada.');
 
     // No se puede cancelar si esta aprovada
-    if (quote.statesid === 3) {
-      throw new BadRequestException(
+    if (quote.statesid === 3) throw new BadRequestException(
         'No se puede cancelar una cotización aprovada.',
       );
-    }
 
     // No se puede cancelar si esta anulada
-    if (quote.statesid === 8) {
-      throw new BadRequestException(
+    if (quote.statesid === 8) throw new BadRequestException(
         'No se puede cancelar una cotización anulada.',
       );
-    }
 
     const updateData: Partial<Quotes> = {
       statesid: 4, // APROBADA
@@ -432,41 +383,29 @@ export class QuotesService {
       relations: ['details'],
     });
 
-    if (!quote) {
-      throw new NotFoundException('Cotización no encontrada.');
-    }
+    if (!quote) throw new NotFoundException('Cotización no encontrada.');
 
     const completedStateId = await this.resolveCompletedStateId();
 
-    if (quote.statesid === completedStateId) {
-      throw new BadRequestException('La cotización ya fue completada.');
-    }
+    if (quote.statesid === completedStateId) throw new BadRequestException('La cotización ya fue completada.');
 
-    if (quote.statesid === 8) {
-      throw new BadRequestException(
+    if (quote.statesid === 8) throw new BadRequestException(
         'No se puede completar una cotización anulada.',
       );
-    }
 
-    if (quote.statesid !== 3) {
-      throw new BadRequestException(
+    if (quote.statesid !== 3) throw new BadRequestException(
         'Solo cotizaciones aprobadas pueden convertirse en ventas.',
       );
-    }
 
     const details = quote.details ?? [];
-    if (!details.length) {
-      throw new BadRequestException(
+    if (!details.length) throw new BadRequestException(
         'La cotización no tiene productos para generar la venta.',
       );
-    }
 
     for (const detail of details) {
-      if (!detail.productid) {
-        throw new BadRequestException(
+      if (!detail.productid) throw new BadRequestException(
           'Todos los detalles deben estar asociados a un producto para convertir la cotización en venta.',
         );
-      }
     }
 
     const salePayload: CreateSaleDto = {
