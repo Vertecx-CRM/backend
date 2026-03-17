@@ -326,8 +326,24 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ) {
-    const user = await this.users.findOne({ where: { userid } });
+    const user = await this.users.findOne({
+      where: { userid },
+      select: {
+        userid: true,
+        password: true,
+        mustchangepassword: true,
+        updateat: true,
+      },
+    });
     if (!user) throw new BadRequestException('Usuario no encontrado');
+    if (!currentPassword?.trim()) {
+      throw new BadRequestException('La contraseÃ±a actual es obligatoria.');
+    }
+    if (!user.password?.trim()) {
+      throw new BadRequestException(
+        'El usuario no tiene una contraseÃ±a actual configurada.',
+      );
+    }
 
     const ok = await bcrypt.compare(currentPassword, user.password);
     if (!ok)

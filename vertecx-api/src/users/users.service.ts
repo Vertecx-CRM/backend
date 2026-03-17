@@ -626,9 +626,25 @@ export class UsersService {
   // PASSWORD CHANGE
 
   async changePassword(id: number, oldPass: string, newPass: string) {
-    const user = await this.usersRepo.findOne({ where: { userid: id } });
+    const user = await this.usersRepo.findOne({
+      where: { userid: id },
+      select: {
+        userid: true,
+        password: true,
+        mustchangepassword: true,
+        updateat: true,
+      },
+    });
 
     if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!oldPass?.trim()) {
+      throw new BadRequestException('Contraseña actual obligatoria.');
+    }
+    if (!user.password?.trim()) {
+      throw new BadRequestException(
+        'El usuario no tiene contraseña configurada.',
+      );
+    }
 
     const matches = await bcrypt.compare(oldPass, user.password);
     if (!matches) {
