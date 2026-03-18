@@ -12,6 +12,9 @@ import { UpdateServiceDto } from './dto/update-service.dto';
 import { Typeofservices } from './entities/typeofservices.entity';
 import { States } from './entities/states.entity';
 import { ServicesQueryDto } from './dto/services-query.dto';
+import { EnsureServiceDto } from './dto/ensure-service.dto';
+
+const DEFAULT_SERVICE_IMAGE = '/assets/imgs/services/bannerservices.jpg';
 
 @Injectable()
 export class ServicesService {
@@ -44,6 +47,27 @@ export class ServicesService {
   private ensureNonEmptyImage(image: unknown) {
     const val = typeof image === 'string' ? image.trim() : '';
     if (!val) throw new BadRequestException('No se puede guardar un servicio sin imagen.');
+  }
+
+  private normalizeServiceName(name: unknown) {
+    return String(name ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  private async findExistingByNameAndType(name: string, typeofserviceid: number) {
+    const normalizedTarget = this.normalizeServiceName(name);
+    const candidates = await this.servicesRepo.find({
+      where: { typeofserviceid },
+      order: { serviceid: 'DESC' },
+    });
+
+    return (
+      candidates.find((item) => this.normalizeServiceName(item.name) === normalizedTarget) ??
+      null
+    );
   }
 
   async getTypes() {
@@ -79,6 +103,24 @@ export class ServicesService {
     const saved = await this.servicesRepo.save(entity);
 
     return this.findOne(saved.serviceid);
+  }
+
+  async ensure(dto: EnsureServiceDto) {
+    const name = String(dto.name ?? '').trim();
+    if (!name) throw new BadRequestException('El nombre del servicio es obligatorio.');
+
+    await this.ensureTypeExistsAndActive(dto.typeofserviceid);
+
+    const existing = await this.findExistingByNameAndType(name, dto.typeofserviceid);
+    if (existing) return this.findOne(existing.serviceid);
+
+    return this.create({
+      name,
+      description: String(dto.description ?? name).trim(),
+      image: DEFAULT_SERVICE_IMAGE,
+      typeofserviceid: dto.typeofserviceid,
+      stateid: 1,
+    });
   }
 
   async findAll(q: ServicesQueryDto) {

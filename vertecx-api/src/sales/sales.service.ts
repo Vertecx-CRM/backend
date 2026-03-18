@@ -10,6 +10,8 @@ import { Salesdetail } from './entities/salesdetail.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Products } from 'src/products/entities/products.entity';
+import { Customers } from 'src/customers/entities/customers.entity';
+import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
 
 @Injectable()
 export class SalesService {
@@ -22,6 +24,9 @@ export class SalesService {
 
     @InjectRepository(Products)
     private readonly productsRepo: Repository<Products>,
+
+    @InjectRepository(Customers)
+    private readonly customersRepo: Repository<Customers>,
 
     private readonly dataSource: DataSource,
   ) { }
@@ -89,10 +94,11 @@ export class SalesService {
         ((subtotal - discountByLines) * taxPercent) / 100,
       );
       const globalDiscount = dto.discountamount ?? 0;
+      const shippingAmount = Number(dto.shippingamount ?? 0);
 
       const totalDiscount = discountByLines + globalDiscount;
 
-      const totalamount = subtotal - totalDiscount + taxamount;
+      const totalamount = subtotal - totalDiscount + taxamount + shippingAmount;
 
       // 3. Crear venta
       const sale = manager.create(Sales, {
@@ -147,6 +153,24 @@ export class SalesService {
         ],
       });
       return this.withDireccionFromServiceRequest(fullSale);
+    });
+  }
+
+  async createFromAuth(user: any, dto: Omit<CreateSaleDto, 'customerid'>) {
+    const userId = resolveUserIdFromAuth(user);
+    const customer = await this.customersRepo.findOne({
+      where: { userid: userId },
+    });
+
+    if (!customer) {
+      throw new BadRequestException(
+        'El usuario autenticado no tiene un cliente asociado.',
+      );
+    }
+
+    return this.create({
+      ...dto,
+      customerid: Number(customer.customerid),
     });
   }
 

@@ -9,9 +9,12 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { CreateSaleFromAuthDto } from './dto/create-sale-from-auth.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { UpdateEstadoPagoDto } from './dto/update-payment-state.dto';
 import {
@@ -21,6 +24,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('Sales') //  Agrupa las rutas en Swagger bajo "Sales"
 @Controller('sales')
@@ -52,6 +56,34 @@ export class SalesController {
   })
   create(@Body() createSaleDto: CreateSaleDto) {
     return this.salesService.create(createSaleDto);
+  }
+
+  @Post('from-auth')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Crear una nueva venta para el usuario autenticado',
+    description:
+      'Crea una nueva venta usando el cliente asociado al usuario autenticado en el token.',
+  })
+  @ApiBody({
+    type: CreateSaleFromAuthDto,
+    description:
+      'Objeto que representa la venta y su detalle. El customerid se resuelve automáticamente en backend.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Venta creada exitosamente para el cliente autenticado.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No se pudo resolver el cliente autenticado o la venta contiene datos inconsistentes.',
+  })
+  createFromAuth(
+    @Req() { user }: any,
+    @Body() createSaleDto: CreateSaleFromAuthDto,
+  ) {
+    return this.salesService.createFromAuth(user, createSaleDto);
   }
 
   // GET /sales

@@ -100,6 +100,16 @@ export class CreateSaleDto {
   @IsNumber()
   discountamount?: number;
 
+  @ApiPropertyOptional({
+    description:
+      'Costo de envio aplicado a la venta. Si no se envÃ­a, puede asumirse 0.',
+    example: 20000,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  shippingamount?: number;
+
   @ApiProperty({
     description:
       'Monto total final de la venta (subtotal + impuestos - descuentos). ' +
