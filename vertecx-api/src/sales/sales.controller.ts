@@ -26,12 +26,11 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
-@ApiTags('Sales') //  Agrupa las rutas en Swagger bajo "Sales"
+@ApiTags('Sales')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) { }
 
-  //  POST /sales
   @Post()
   @ApiOperation({
     summary: 'Crear una nueva venta',
@@ -86,7 +85,6 @@ export class SalesController {
     return this.salesService.createFromAuth(user, createSaleDto);
   }
 
-  // GET /sales
   @Get()
   @ApiOperation({
     summary: 'Obtener todas las ventas',
@@ -100,7 +98,6 @@ export class SalesController {
     return this.salesService.findAll();
   }
 
-  // GET /sales/:id
   @Get(':id')
   @ApiOperation({
     summary: 'Obtener una venta por ID',
@@ -125,7 +122,6 @@ export class SalesController {
     return this.salesService.findOne(+id);
   }
 
-  // PATCH /sales/:id
   @Patch(':id')
   @ApiOperation({
     summary: 'Actualizar una venta',
@@ -151,7 +147,6 @@ export class SalesController {
     return this.salesService.update(+id, updateSaleDto);
   }
 
-  // PATCH /sales/:id/estado-pago
   @Patch(':id/estado-pago')
   @ApiOperation({
     summary: 'Actualizar estado de pago de una venta',
@@ -171,7 +166,6 @@ export class SalesController {
     return this.salesService.updateEstadoPago(id, dto.payState);
   }
 
-  // PATCH /sales/:id/cancel
   @Patch(':id/cancel')
   @ApiOperation({
     summary: 'Cancelar una venta',
@@ -218,7 +212,6 @@ export class SalesController {
     return this.salesService.cancel(+id, observation);
   }
 
-  // DELETE /sales/:id
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

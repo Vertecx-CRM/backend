@@ -22,7 +22,7 @@ import { OrdersServices } from "../orders-services/entities/orders-services.enti
 import { ServicesService } from "../services/services.service";
 import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
 import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
-import { CustomersService } from "../customers/customers.service";
+import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
 export class RequestsService {
@@ -223,13 +223,13 @@ export class RequestsService {
   }
 
   private getCommonFields(dto: CreateRequestDto) {
-    const scheduledAt = DateUtils.toDateOrNull((dto as any).scheduledAt);
-    const scheduledEndAt = DateUtils.toDateOrNull((dto as any).scheduledEndAt);
+    const scheduledAt = DateUtils.toDateOrNull(dto.scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull(dto.scheduledEndAt);
     DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
 
-    const address = String((dto as any).address || "").trim().slice(0, 255);
-    const description = String((dto as any).description || "").trim();
-    const stateId = Number((dto as any)?.stateId ?? 5);
+    const address = String(dto.address || "").trim().slice(0, 255);
+    const description = String(dto.description || "").trim();
+    const stateId = Number(dto?.stateId ?? 5);
 
     return { address, description, stateId, scheduledAt, scheduledEndAt }
   }
@@ -242,8 +242,8 @@ export class RequestsService {
     const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
     const prevEnd = sr.scheduledEndAt ? sr.scheduledEndAt.getTime() : null;
 
-    const scheduledAt = DateUtils.toDateOrNull((dto as any)?.scheduledAt);
-    const scheduledEndAt = DateUtils.toDateOrNull((dto as any)?.scheduledEndAt);
+    const scheduledAt = DateUtils.toDateOrNull(dto?.scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull(dto?.scheduledEndAt);
 
     const nextStart = scheduledAt === undefined ? sr.scheduledAt : scheduledAt;
     const nextEnd =
@@ -254,6 +254,7 @@ export class RequestsService {
     const existingLinks = await this.linkRepo.find({
       where: { serviceRequestId: id } as any,
     });
+
     const currentTechs = Array.from(
       new Set(
         (existingLinks ?? [])
@@ -262,17 +263,13 @@ export class RequestsService {
       )
     );
     const nextTechs =
-      (dto as any)?.technicians !== undefined
-        ? NormalizationClass.normalizeTechnicians((dto as any)?.technicians)
+      dto?.technicians !== undefined
+        ? NormalizationClass.normalizeTechnicians(dto?.technicians)
         : currentTechs;
-    const stateIdInput = (dto as any)?.stateId;
-    const effectiveStateId =
-      stateIdInput != null ? Number(stateIdInput) : Number(sr.stateId);
-    if (!Number.isFinite(effectiveStateId) || effectiveStateId <= 0) {
-      throw new BadRequestException("stateId invalido");
-    }
+
+    const effectiveStateId = dto.stateId ?? sr.stateId;
     const effectiveState = await this.statesRepo.findOne({
-      where: { stateid: effectiveStateId } as any,
+      where: { stateid: effectiveStateId },
     });
     if (!effectiveState) throw new BadRequestException("stateId invalido");
 
@@ -285,51 +282,21 @@ export class RequestsService {
       );
     }
 
-    if (scheduledAt !== undefined) sr.scheduledAt = scheduledAt;
-    if (scheduledEndAt !== undefined) sr.scheduledEndAt = scheduledEndAt;
-
-    if ((dto as any)?.serviceType != null) {
-      sr.serviceType = String((dto as any).serviceType);
-    }
-
-    if ((dto as any)?.direccion != null) {
-      const dir = String((dto as any).direccion).trim();
-      if (dir.length < 3) throw new BadRequestException("DirecciÃ³n invÃ¡lida");
-      sr.direccion = dir.slice(0, 255);
-    }
-
-    if ((dto as any)?.description != null) {
-      const desc = String((dto as any).description).trim();
-      if (desc.length < 3) throw new BadRequestException("DescripciÃ³n invÃ¡lida");
-      sr.description = desc;
-    }
-
-    if ((dto as any)?.stateId != null) {
-      sr.stateId = effectiveStateId;
-    }
-
-    if ((dto as any)?.serviceId != null) {
-      const serviceId = Number((dto as any).serviceId);
-      if (!Number.isFinite(serviceId) || serviceId <= 0) {
-        throw new BadRequestException("serviceId invÃ¡lido");
-      }
-      sr.serviceId = serviceId;
-    }
-
-    if ((dto as any)?.clientId != null) {
-      const clientId = Number((dto as any).clientId);
-      if (!Number.isFinite(clientId) || clientId <= 0) {
-        throw new BadRequestException("clientId invÃ¡lido");
-      }
-      sr.clientId = clientId;
-    }
+    sr.scheduledAt = scheduledAt !== undefined ? scheduledAt : sr.scheduledAt;
+    sr.scheduledEndAt = scheduledEndAt !== undefined ? scheduledEndAt : sr.scheduledEndAt;
+    sr.serviceType = dto.serviceType ?? sr.serviceType;
+    sr.direccion = dto.address ?? sr.direccion;
+    sr.description = dto.description ?? sr.description;
+    sr.stateId = effectiveStateId;
+    sr.serviceId =  dto.serviceId && await this.servicesService.findOne(dto.serviceId) ? sr.serviceId : sr.serviceId;
+    sr.clientId = dto.clientId &&  await this.customersService.findOne(dto.clientId) ? sr.clientId : sr.serviceId;
 
     await this.srRepo.save(sr);
 
-    if ((dto as any)?.technicians !== undefined) {
-      const techs = NormalizationClass.normalizeTechnicians((dto as any)?.technicians);
+    if (dto.technicians !== undefined) {
+      const techs = NormalizationClass.normalizeTechnicians(dto?.technicians);
 
-      await this.linkRepo.delete({ serviceRequestId: id } as any);
+      await this.linkRepo.delete({ serviceRequestId: id });
 
       if (techs.length) {
         const linkRows = techs.map((tid) => ({
@@ -337,7 +304,7 @@ export class RequestsService {
           technicianId: tid,
         }));
 
-        await this.linkRepo.insert(linkRows as any);
+        await this.linkRepo.insert(linkRows);
       }
     }
 
@@ -348,9 +315,8 @@ export class RequestsService {
       prevStart !== (updated.scheduledAt ? updated.scheduledAt.getTime() : null) ||
       prevEnd !== (updated.scheduledEndAt ? updated.scheduledEndAt.getTime() : null);
 
-    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name)) {
+    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name))
       await this.notifyScheduled(updated);
-    }
 
     return updated;
   }

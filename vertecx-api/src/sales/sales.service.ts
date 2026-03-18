@@ -19,12 +19,6 @@ export class SalesService {
     @InjectRepository(Sales)
     private readonly salesRepo: Repository<Sales>,
 
-    @InjectRepository(Salesdetail)
-    private readonly detailsRepo: Repository<Salesdetail>,
-
-    @InjectRepository(Products)
-    private readonly productsRepo: Repository<Products>,
-
     @InjectRepository(Customers)
     private readonly customersRepo: Repository<Customers>,
 
@@ -46,12 +40,6 @@ export class SalesService {
   }
 
   async create(dto: CreateSaleDto) {
-    if (!dto.details || dto.details.length === 0) {
-      throw new BadRequestException(
-        'Debe incluir al menos un producto/servicio.',
-      );
-    }
-
     return await this.dataSource.transaction(async (manager) => {
       // 1. Validar productos, stock y calcular subtotal + descuentos por línea
       let subtotal = 0;
@@ -69,11 +57,9 @@ export class SalesService {
         }
 
         const currentStock = product.productstock ?? 0;
-        if (currentStock < d.quantity) {
-          throw new BadRequestException(
+        if (currentStock < d.quantity) throw new BadRequestException(
             `Stock insuficiente para el producto ${product.productname}. Disponible: ${currentStock}, solicitado: ${d.quantity}.`,
           );
-        }
 
         product.productstock = currentStock - d.quantity;
         await manager.save(Products, product);
@@ -94,10 +80,8 @@ export class SalesService {
         ((subtotal - discountByLines) * taxPercent) / 100,
       );
       const globalDiscount = dto.discountamount ?? 0;
-      const shippingAmount = Number(dto.shippingamount ?? 0);
-
+      const shippingAmount = dto.shippingamount ?? 0;
       const totalDiscount = discountByLines + globalDiscount;
-
       const totalamount = subtotal - totalDiscount + taxamount + shippingAmount;
 
       // 3. Crear venta
@@ -203,10 +187,10 @@ export class SalesService {
     });
 
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
+
     return this.withDireccionFromServiceRequest(sale);
   }
 
-  //  Actualizar venta
   async update(id: number, dto: UpdateSaleDto) {
     const sale = await this.salesRepo.findOne({ where: { saleid: id } });
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
@@ -215,9 +199,7 @@ export class SalesService {
     return await this.salesRepo.save(sale);
   }
 
-  /* ============================================================
-     CANCELAR VENTA (revierte stock + valida estado)
-  ============================================================ */
+  //Revierte stock + valida estado
   async cancel(id: number, observation?: string) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
@@ -274,10 +256,7 @@ export class SalesService {
     });
   }
 
-  /* ============================================================
-     ACTUALIZAR ESTADO DE PAGO
-     Si estadoPago = 'Pagada' → salestatus = 'Completed' automáticamente
-  ============================================================ */
+  //Si estadoPago = 'Pagada' → salestatus = 'Completed' automáticamente
   async updateEstadoPago(
     id: number,
     estadoPago: 'Abonada' | 'Pagada',
@@ -298,9 +277,7 @@ export class SalesService {
     return await this.salesRepo.save(sale);
   }
 
-  /* ============================================================
-     ELIMINAR VENTA (solo si está cancelada)
-  ============================================================ */
+  //Solo si está cancelada
   async remove(id: number) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },

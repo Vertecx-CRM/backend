@@ -10,7 +10,6 @@ import { Quotes } from './entities/quotes.entity';
 import { QuoteDetail } from './entities/quotedetail.entity';
 
 import { CreateQuoteDto } from './dto/create-quote.dto';
-import { UpdateQuoteDto } from './dto/update-quote.dto';
 import { SalesService } from 'src/sales/sales.service';
 import { CreateSaleDto } from 'src/sales/dto/create-sale.dto';
 
@@ -19,7 +18,7 @@ import { Customers } from 'src/customers/entities/customers.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
-import { Products } from 'src/products/entities/products.entity';
+import { ProductsService } from '../products/products.service';
 
 @Injectable()
 export class QuotesService {
@@ -45,8 +44,7 @@ export class QuotesService {
     @InjectRepository(OrdersServices)
     private readonly ordersServicesRepo: Repository<OrdersServices>,
 
-    @InjectRepository(Products)
-    private readonly productsRepo: Repository<Products>,
+    private readonly productsService: ProductsService,
     private readonly salesService: SalesService,
   ) {}
 
@@ -149,52 +147,32 @@ export class QuotesService {
       },
     });
 
-    if (!serviceRequest) {
-      throw new BadRequestException(
+    if (!serviceRequest) throw new BadRequestException(
         `ServiceRequest ${dto.serviceRequestId} no existe`,
       );
-    }
 
     const customerId = serviceRequest.clientId;
 
     const technicianMap = serviceRequest.techniciansMap?.[0];
-    if (!technicianMap) {
+    if (!technicianMap)
       throw new BadRequestException(
         `La solicitud ${dto.serviceRequestId} no tiene técnico asignado`,
       );
-    }
 
     const technicianId = technicianMap.technicianId;
 
     const detailsCalculated = await Promise.all(
       dto.details.map(async (d) => {
-        const quantity = Number(d.quantity);
-        if (quantity <= 0) {
-          throw new BadRequestException('Cantidad inválida');
-        }
-
+        const quantity = d.quantity;
         let unitprice: number;
 
         // PRODUCTO EXISTENTE → PRECIO REAL DE VENTA
-        if (d.productId) {
-          const product = await this.productsRepo.findOne({
-            where: { productid: d.productId },
-          });
-
-          if (!product) 
-            throw new BadRequestException(`Producto ${d.productId} no existe`);
-          
-
-          unitprice = Number(product.productpriceofsale);
-        }
+        const product = d.productId ? await this.productsService.findOne(d.productId) : undefined;
+        unitprice = product.productpriceofsale ?? null;
 
         //  PRODUCTO MANUAL
-        else {
-          if (d.unitPrice == null ) throw new BadRequestException(
-              'Precio inválido para producto manual',
-            );
-          unitprice = Number(d.unitPrice);
-        }
+        if (!d.unitPrice)
+          unitprice = d.unitPrice;
 
         const subtotal = Number((unitprice * quantity).toFixed(2));
 
