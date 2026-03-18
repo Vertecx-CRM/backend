@@ -10,8 +10,8 @@ import { Salesdetail } from './entities/salesdetail.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Products } from 'src/products/entities/products.entity';
-import { Customers } from 'src/customers/entities/customers.entity';
 import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
+import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
 export class SalesService {
@@ -19,8 +19,7 @@ export class SalesService {
     @InjectRepository(Sales)
     private readonly salesRepo: Repository<Sales>,
 
-    @InjectRepository(Customers)
-    private readonly customersRepo: Repository<Customers>,
+    private readonly customersService: CustomersService,
 
     private readonly dataSource: DataSource,
   ) { }
@@ -142,23 +141,15 @@ export class SalesService {
 
   async createFromAuth(user: any, dto: Omit<CreateSaleDto, 'customerid'>) {
     const userId = resolveUserIdFromAuth(user);
-    const customer = await this.customersRepo.findOne({
-      where: { userid: userId },
-    });
-
-    if (!customer) {
-      throw new BadRequestException(
-        'El usuario autenticado no tiene un cliente asociado.',
-      );
-    }
+    const customer = await this.customersService.findOneByUserId(userId);
 
     return this.create({
       ...dto,
-      customerid: Number(customer.customerid),
+      customerid: customer.customerid,
     });
   }
 
-  //  Obtener todas las ventas (para el DataTable)
+  //  Para el DataTable
   async findAll() {
     const list = await this.salesRepo.find({
       relations: [
@@ -170,10 +161,11 @@ export class SalesService {
       ],
       order: { saleid: 'DESC' },
     });
+
     return list.map((sale) => this.withDireccionFromServiceRequest(sale));
   }
 
-  //  Obtener venta por ID (para ViewSale)
+  // Para ViewSale
   async findOne(id: number) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
@@ -199,7 +191,7 @@ export class SalesService {
     return await this.salesRepo.save(sale);
   }
 
-  //Revierte stock + valida estado
+  // Revierte stock + valida estado
   async cancel(id: number, observation?: string) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
@@ -208,28 +200,20 @@ export class SalesService {
 
     if (!sale) throw new NotFoundException('Venta no encontrada.');
 
-    if (sale.salestatus === 'Cancelled') {
-      throw new BadRequestException('La venta ya está anulada.');
-    }
+    if (sale.salestatus === 'Cancelled') throw new BadRequestException('La venta ya está anulada.');
 
-    if (sale.salestatus !== 'Pending' && sale.salestatus !== 'Completed') {
-      throw new BadRequestException(
+    if (sale.salestatus !== 'Pending' && sale.salestatus !== 'Completed') throw new BadRequestException(
         'Solo se pueden anular ventas en estado Pending o Completed.',
       );
-    }
 
-    // ✅ No permitir anular si tiene pago registrado
-    if (sale.estadoPago === 'Pagada') {
-      throw new BadRequestException(
+    // No permitir anular si tiene pago registrado
+    if (sale.estadoPago === 'Pagada') throw new BadRequestException(
         'No se puede anular una venta que ya fue pagada.',
       );
-    }
 
-    if (sale.estadoPago === 'Abonada') {
-      throw new BadRequestException(
+    if (sale.estadoPago === 'Abonada') throw new BadRequestException(
         'No se puede anular una venta con abono registrado. Revise el pago antes de anular.',
       );
-    }
 
     return await this.dataSource.transaction(async (manager) => {
       // Reintegrar stock
@@ -263,35 +247,25 @@ export class SalesService {
   ) {
     const sale = await this.salesRepo.findOne({ where: { saleid: id } });
 
-    if (!sale) {
+    if (!sale)
       throw new NotFoundException(`Venta ${id} no encontrada.`);
-    }
 
     sale.estadoPago = estadoPago;
 
     // Cambio automático de estado al marcar como pagada
-    if (estadoPago === 'Pagada') {
-      sale.salestatus = 'Completed';
-    }
+    sale.salestatus = estadoPago === 'Pagada' ?  'Completed' : sale.salestatus;
 
     return await this.salesRepo.save(sale);
   }
 
   //Solo si está cancelada
   async remove(id: number) {
-    const sale = await this.salesRepo.findOne({
-      where: { saleid: id },
-    });
+    const sale = await this.findOne(id);
 
-    if (!sale) {
-      throw new NotFoundException('Venta no encontrada.');
-    }
-
-    if (sale.salestatus !== 'Cancelled') {
+    if (sale.salestatus !== 'Cancelled')
       throw new BadRequestException(
         'Solo se pueden eliminar ventas que ya estén anuladas.',
       );
-    }
 
     await this.salesRepo.remove(sale);
 
