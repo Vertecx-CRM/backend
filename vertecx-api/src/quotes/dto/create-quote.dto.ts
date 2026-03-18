@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayNotEmpty,
   IsArray,
   IsInt,
   IsNotEmpty,
@@ -47,6 +48,7 @@ export class CreateQuoteDto {
 
   @ApiProperty({ type: [CreateQuoteDetailDto] })
   @IsArray()
+  @ArrayNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => CreateQuoteDetailDto)
   details: CreateQuoteDetailDto[];
