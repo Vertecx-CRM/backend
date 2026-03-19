@@ -1,16 +1,20 @@
 import {
-  IsInt,
-  Min,
+  IsArray,
   IsDateString,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
   MinLength,
+  ValidateNested,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
+import { RequestAvailabilityOptionDto } from "./request-availability-option.dto";
 
-export class CreateRequestDto{
+export class CreateRequestDto {
   @ApiPropertyOptional({ example: "2025-11-12T10:00:00.000Z" })
   @IsOptional()
   @IsDateString()
@@ -34,10 +38,20 @@ export class CreateRequestDto{
   @MaxLength(255)
   address: string;
 
-  @ApiProperty({ example: "Equipo no enciende; posible daño en fuente" })
+  @ApiProperty({ example: "Equipo no enciende; posible dano en fuente" })
   @IsString()
   @MinLength(3)
   description: string;
+
+  @ApiPropertyOptional({
+    type: [RequestAvailabilityOptionDto],
+    description: "Opciones de disponibilidad propuestas por el cliente",
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RequestAvailabilityOptionDto)
+  availabilityOptions?: RequestAvailabilityOptionDto[];
 
   @ApiProperty({ example: 12 })
   @IsInt()

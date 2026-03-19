@@ -23,6 +23,11 @@ import { ServicesService } from "../services/services.service";
 import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
 import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 import { CustomersService } from "../customers/customers.service";
+import {
+  composeRequestDescriptionWithAvailability,
+  normalizeRequestAvailabilityOptions,
+  parseRequestDescriptionWithAvailability,
+} from "./utils/request-availability";
 
 @Injectable()
 export class RequestsService {
@@ -78,6 +83,29 @@ export class RequestsService {
     }
   }
 
+  private decorateRequest<T extends ServiceRequest>(sr: T) {
+    const parsed = parseRequestDescriptionWithAvailability(sr?.description ?? "");
+    return Object.assign(sr, {
+      description: parsed.descriptionPlain,
+      descriptionPlain: parsed.descriptionPlain,
+      clientAvailabilityOptions: parsed.availabilityOptions,
+    });
+  }
+
+  private async findOneEntity(id: number) {
+    const sr = await this.srRepo.findOne({
+      where: { serviceRequestId: id },
+      relations: {
+        state: true,
+        service: true,
+        customer: { users: true },
+        techniciansMap: { technician: { users: true } },
+      },
+    });
+    if (!sr) throw new NotFoundException("Solicitud no encontrada");
+    return sr;
+  }
+
   async findAll(query: RequestQueryDto) {
     const { clientId, stateId, fromScheduleDate, serviceTypeId, serviceId } = query;
     const scheduledAt = !DateUtils.toDateOrNull(fromScheduleDate) ? undefined : MoreThanOrEqual(DateUtils.toDateOrNull(fromScheduleDate))
@@ -102,21 +130,12 @@ export class RequestsService {
     if (!result.length)
       throw new NotFoundException('Solicitudes no encontradas')
 
-    return result;
+    return result.map((item) => this.decorateRequest(item));
   }
 
   async findOne(id: number) {
-    const sr = await this.srRepo.findOne({
-      where: { serviceRequestId: id },
-      relations: {
-        state: true,
-        service: true,
-        customer: { users: true },
-        techniciansMap: { technician: { users: true } },
-      },
-    });
-    if (!sr) throw new NotFoundException("Solicitud no encontrada");
-    return sr;
+    const sr = await this.findOneEntity(id);
+    return this.decorateRequest(sr);
   }
 
   async findAllStates() {
@@ -124,7 +143,13 @@ export class RequestsService {
   }
 
   async createByAdmin(dto: CreateAdminRequestDto) {
-    const { address, description, stateId, scheduledAt, scheduledEndAt } = this.getCommonFields(dto);
+    const {
+      address,
+      descriptionStored,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    } = this.getCommonFields(dto);
     const { clientId, technicians, serviceId, serviceType } = dto;
 
     await this.customersService.findOne(clientId);
@@ -153,7 +178,7 @@ export class RequestsService {
       scheduledEndAt: scheduledEndAt ?? null,
       serviceType,
       direccion: address,
-      description,
+      description: descriptionStored,
       stateId: normalizedStateId,
       serviceId,
       clientId,
@@ -170,9 +195,9 @@ export class RequestsService {
       await this.linkRepo.insert(linkRows as any);
     }
 
-    const full = await this.findOne(sr.serviceRequestId);
+    const full = await this.findOneEntity(sr.serviceRequestId);
     await this.notifyScheduled(full);
-    return full;
+    return this.decorateRequest(full);
   }
 
   async create(user: any, dto: CreateRequestDto) {
@@ -194,7 +219,13 @@ export class RequestsService {
         "No se pudo resolver el clientId del cliente asociado"
       );
 
-    const { address, description, stateId, scheduledAt, scheduledEndAt } = this.getCommonFields(dto);
+    const {
+      address,
+      descriptionStored,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    } = this.getCommonFields(dto);
 
     await this.validateService(serviceId);
 
@@ -203,16 +234,16 @@ export class RequestsService {
       scheduledEndAt: scheduledEndAt ?? null,
       serviceType: dto.serviceType,
       direccion: address,
-      description,
+      description: descriptionStored,
       stateId,
       serviceId,
       clientId,
     });
 
     const sr = await this.srRepo.save(entity);
-    const full = await this.findOne(sr.serviceRequestId);
+    const full = await this.findOneEntity(sr.serviceRequestId);
     await this.notifyScheduled(full);
-    return full;
+    return this.decorateRequest(full);
   }
 
   async validateService(id: number) {
@@ -229,14 +260,30 @@ export class RequestsService {
 
     const address = String((dto as any).address || "").trim().slice(0, 255);
     const description = String((dto as any).description || "").trim();
+    const availabilityOptions = normalizeRequestAvailabilityOptions(
+      (dto as any).availabilityOptions
+    );
+    const descriptionStored = composeRequestDescriptionWithAvailability(
+      description,
+      availabilityOptions
+    );
     const stateId = Number((dto as any)?.stateId ?? 5);
 
-    return { address, description, stateId, scheduledAt, scheduledEndAt }
+    return {
+      address,
+      description,
+      descriptionStored,
+      availabilityOptions,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    };
   }
 
   async update(id: number, dto: UpdateServiceRequestDto) {
     const sr = await this.srRepo.findOne({ where: { serviceRequestId: id } });
     if (!sr) throw new NotFoundException("Solicitud no encontrada");
+    const existingMeta = parseRequestDescriptionWithAvailability(sr.description ?? "");
 
     const prevStateId = sr.stateId;
     const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
@@ -301,7 +348,24 @@ export class RequestsService {
     if ((dto as any)?.description != null) {
       const desc = String((dto as any).description).trim();
       if (desc.length < 3) throw new BadRequestException("Descripcion invalida");
-      sr.description = desc;
+    }
+
+    const shouldUpdateDescription =
+      (dto as any)?.description != null || (dto as any)?.availabilityOptions !== undefined;
+    if (shouldUpdateDescription) {
+      const nextDescription =
+        (dto as any)?.description != null
+          ? String((dto as any).description).trim()
+          : existingMeta.descriptionPlain;
+      const nextAvailabilityOptions =
+        (dto as any)?.availabilityOptions !== undefined
+          ? normalizeRequestAvailabilityOptions((dto as any).availabilityOptions)
+          : existingMeta.availabilityOptions;
+
+      sr.description = composeRequestDescriptionWithAvailability(
+        nextDescription,
+        nextAvailabilityOptions
+      );
     }
 
     if ((dto as any)?.stateId != null) {
@@ -343,7 +407,7 @@ export class RequestsService {
       }
     }
 
-    const updated = await this.findOne(id);
+    const updated = await this.findOneEntity(id);
 
     const scheduleChanged =
       prevStateId !== updated.stateId ||
@@ -354,7 +418,7 @@ export class RequestsService {
       await this.notifyScheduled(updated);
     }
 
-    return updated;
+    return this.decorateRequest(updated);
   }
 
   async remove(id: number) {
