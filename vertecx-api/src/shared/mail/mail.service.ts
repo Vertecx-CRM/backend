@@ -243,8 +243,12 @@ export class MailService {
       `,
       };
       // ... resto de tu lógica de envío
+      await this.transporter.sendMail(mailOptions);
     } catch (error) {
       console.error('Error enviando mail:', error);
+      throw new InternalServerErrorException(
+        'No se pudo enviar el correo de recuperación.',
+      );
     }
   }
 
