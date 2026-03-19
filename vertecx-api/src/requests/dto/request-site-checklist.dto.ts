@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsArray, IsIn, IsOptional, IsString, IsUrl, MaxLength } from "class-validator";
 
 export class RequestSiteChecklistDto {
   @ApiPropertyOptional({ example: "Fachada principal del segundo piso" })
@@ -52,4 +52,15 @@ export class RequestSiteChecklistDto {
   @IsString()
   @MaxLength(1000)
   evidenceNotes?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: [
+      "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUrl({}, { each: true })
+  evidenceImages?: string[];
 }
