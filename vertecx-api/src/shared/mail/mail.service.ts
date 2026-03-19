@@ -301,4 +301,105 @@ export class MailService {
       );
     }
   }
+
+  async sendQuoteCreated(
+    email: string,
+    name: string,
+    quote: any,
+    audience: 'cliente' | 'admin',
+    technicianName?: string,
+  ) {
+    try {
+      const safeName = String(name ?? '').trim() || 'cliente';
+      const safeAudience = audience === 'admin' ? 'admin' : 'cliente';
+      const quoteId = Number(quote?.quotesid ?? 0) || 'N/A';
+      const requestId = Number(
+        quote?.serviceRequest?.serviceRequestId ?? quote?.serviceRequestId ?? 0,
+      ) || 'N/A';
+      const total = Number(quote?.total ?? 0);
+      const formattedTotal = total.toLocaleString('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+      });
+      const details = Array.isArray(quote?.details) ? quote.details : [];
+      const detailLines = details
+        .map((detail: any) => {
+          const description = String(detail?.description ?? '').trim() || 'Item';
+          const quantity = Math.max(1, Math.round(Number(detail?.quantity ?? 1)));
+          const subtotal = Number(detail?.subtotal ?? 0).toLocaleString('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            maximumFractionDigits: 0,
+          });
+          return `<li>${description} x ${quantity} - ${subtotal}</li>`;
+        })
+        .join('');
+
+      const subject =
+        safeAudience === 'admin'
+          ? `Nueva cotizacion #${quoteId} registrada`
+          : `Tu cotizacion #${quoteId} fue creada`;
+
+      const headerCopy =
+        safeAudience === 'admin'
+          ? 'Se genero una nueva cotizacion desde una solicitud de servicio.'
+          : 'Tu cotizacion fue registrada correctamente y queda pendiente de tu revision.';
+
+      const techCopy = technicianName
+        ? `<p><strong>Tecnico relacionado:</strong> ${technicianName}</p>`
+        : '';
+
+      const mailOptions = {
+        from: `"Soporte SistemaPC" <${process.env.MAIL_USER}>`,
+        to: email,
+        subject,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; background: #f9f9f9; border-radius: 10px; border: 1px solid #ddd; overflow: hidden;">
+            <div style="background-color: #b20000; color: white; padding: 20px; text-align: center;">
+              <h2 style="margin: 0;">Cotizacion creada</h2>
+            </div>
+
+            <div style="padding: 24px; color: #333; line-height: 1.6;">
+              <p>Hola <b>${safeName}</b>,</p>
+              <p>${headerCopy}</p>
+
+              <div style="margin: 18px 0; padding: 16px; background: #fff; border: 1px solid #eee; border-radius: 8px;">
+                <p style="margin: 0 0 8px 0;"><strong>Cotizacion:</strong> #${quoteId}</p>
+                <p style="margin: 0 0 8px 0;"><strong>Solicitud de servicio:</strong> #${requestId}</p>
+                <p style="margin: 0 0 8px 0;"><strong>Total estimado:</strong> ${formattedTotal}</p>
+                ${techCopy}
+              </div>
+
+              ${
+                detailLines
+                  ? `<div style="margin-top: 18px;">
+                      <p style="margin: 0 0 8px 0;"><strong>Detalle:</strong></p>
+                      <ul style="margin: 0; padding-left: 18px;">${detailLines}</ul>
+                    </div>`
+                  : ''
+              }
+
+              ${
+                safeAudience === 'cliente'
+                  ? '<p style="margin-top: 18px;">Desde tu panel podras aceptarla o cancelarla antes de la aprobacion administrativa.</p>'
+                  : '<p style="margin-top: 18px;">Recuerda que la cotizacion requiere aceptacion del cliente antes de aprobarla.</p>'
+              }
+            </div>
+
+            <div style="background: #b20000; color: white; text-align: center; padding: 14px;">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} SistemaPC | Soporte tecnico</p>
+            </div>
+          </div>
+        `,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error enviando correo de cotizacion:', error);
+      throw new InternalServerErrorException(
+        'No se pudo enviar el correo de cotizacion.',
+      );
+    }
+  }
 }

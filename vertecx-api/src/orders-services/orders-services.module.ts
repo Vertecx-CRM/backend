@@ -16,6 +16,7 @@ import { Customers } from 'src/customers/entities/customers.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Users } from 'src/users/entities/users.entity';
 import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
+import { QuotesModule } from 'src/quotes/quotes.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
       Users,
       ServiceRequest,
     ]),
+    QuotesModule,
   ],
   controllers: [OrdersServicesController],
   providers: [OrdersServicesService],

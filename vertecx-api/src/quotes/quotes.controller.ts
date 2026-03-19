@@ -10,17 +10,18 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { QuotesService } from './quotes.service';
-import { CreateQuoteDto } from './dto/create-quote.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { QuotesService } from './quotes.service';
+import { CreateQuoteDto } from './dto/create-quote.dto';
 
 @Controller('quotes')
 export class QuotesController {
   constructor(private readonly quotesService: QuotesService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear cotización con detalle' })
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Crear cotizacion con detalle' })
   create(@Body() dto: CreateQuoteDto) {
     return this.quotesService.create(dto);
   }
@@ -38,11 +39,13 @@ export class QuotesController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string) {
     return this.quotesService.remove(+id);
   }
 
   @Patch(':id/cancel')
+  @UseGuards(JwtAuthGuard)
   cancel(
     @Param('id', ParseIntPipe) id: number,
     @Body('observation') observation?: string,
@@ -51,6 +54,7 @@ export class QuotesController {
   }
 
   @Patch(':id/approve')
+  @UseGuards(JwtAuthGuard)
   approve(
     @Param('id', ParseIntPipe) id: number,
     @Body('observation') observation?: string,
@@ -58,8 +62,28 @@ export class QuotesController {
     return this.quotesService.approve(id, observation);
   }
 
+  @Patch(':id/accept-client')
+  @UseGuards(JwtAuthGuard)
+  acceptClient(
+    @Req() { user }: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body('observation') observation?: string,
+  ) {
+    return this.quotesService.acceptForClient(user, id, observation);
+  }
+
+  @Patch(':id/link-order')
+  @UseGuards(JwtAuthGuard)
+  linkOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('ordersServicesId', ParseIntPipe) ordersServicesId: number,
+  ) {
+    return this.quotesService.linkOrder(id, ordersServicesId);
+  }
+
   @Patch(':id/complete')
-  @ApiOperation({ summary: 'Completar cotización y generar venta asociada' })
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Completar cotizacion y generar venta asociada' })
   complete(@Param('id', ParseIntPipe) id: number) {
     return this.quotesService.complete(id);
   }
@@ -69,7 +93,8 @@ export class QuotesController {
   cancelClient(
     @Req() { user }: any,
     @Param('id', ParseIntPipe) id: number,
+    @Body('observation') observation?: string,
   ) {
-    return this.quotesService.cancelForClient(user, id);
+    return this.quotesService.cancelForClient(user, id, observation);
   }
 }

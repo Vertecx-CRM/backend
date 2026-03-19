@@ -23,6 +23,7 @@ import { States } from "src/shared/entities/states.entity";
 import { Users } from "src/users/entities/users.entity";
 import { MailService } from "src/shared/mail/mail.service";
 import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
+import { QuotesService } from "src/quotes/quotes.service";
 
 import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
 import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
@@ -87,7 +88,8 @@ export class OrdersServicesService {
     private readonly usersRepo: Repository<Users>,
     @InjectRepository(ServiceRequest)
     private readonly serviceRequestRepo: Repository<ServiceRequest>,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    private readonly quotesService: QuotesService
   ) {}
 
   private asMoneyInt(v: any) {
@@ -1339,6 +1341,14 @@ export class OrdersServicesService {
     await this.ordersRepo.save(order);
 
     const updated = await this.validateOrder(id);
+    try {
+      await this.quotesService.completeFromOrder(id);
+    } catch (error: any) {
+      console.error(
+        "No se pudo generar la venta automaticamente desde la orden finalizada:",
+        error?.message ?? error
+      );
+    }
     return this.present(updated);
   }
 
