@@ -11,9 +11,10 @@ import {
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateRequestDto{
-  @ApiProperty({ example: "2025-11-12T10:00:00.000Z" })
+  @ApiPropertyOptional({ example: "2025-11-12T10:00:00.000Z" })
+  @IsOptional()
   @IsDateString()
-  scheduledAt: string;
+  scheduledAt?: string;
 
   @ApiPropertyOptional({ example: "2025-11-12T11:00:00.000Z" })
   @IsOptional()
