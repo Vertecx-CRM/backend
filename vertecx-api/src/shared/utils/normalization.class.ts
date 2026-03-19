@@ -22,4 +22,9 @@ export class NormalizationClass {
       .toLowerCase()
       .trim();
   }
+
+  static normalizeNumber(n: number) {
+    console.log(n * 1.00)
+    return Number(n).toFixed(2)
+  }
 }

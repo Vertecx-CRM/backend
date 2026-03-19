@@ -43,7 +43,7 @@ export class CreateSaleDto {
 
   @ApiPropertyOptional({
     description:
-      'Costo de envio aplicado a la venta. Si no se envÃ­a, puede asumirse 0.',
+      'Costo de envio aplicado a la venta. Si no se envia, puede asumirse 0.',
     example: 20000,
     nullable: true,
   })

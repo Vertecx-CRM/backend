@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   Req,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -25,6 +26,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { SalesQueryDto } from './dto/sales-query.dto';
 
 @ApiTags('Sales')
 @Controller('sales')
@@ -94,8 +96,8 @@ export class SalesController {
     status: 200,
     description: 'Listado de ventas retornado exitosamente.',
   })
-  findAll() {
-    return this.salesService.findAll();
+  findAll(@Query() query: SalesQueryDto) {
+    return this.salesService.findAll(query);
   }
 
   @Get(':id')

@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In, MoreThanOrEqual } from 'typeorm';
 import { Sales } from './entities/sales.entity';
 import { Salesdetail } from './entities/salesdetail.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -12,6 +12,8 @@ import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Products } from 'src/products/entities/products.entity';
 import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
 import { CustomersService } from '../customers/customers.service';
+import { SalesQueryDto } from './dto/sales-query.dto';
+import { NormalizationClass } from '../shared/utils/normalization.class';
 
 @Injectable()
 export class SalesService {
@@ -150,7 +152,20 @@ export class SalesService {
   }
 
   //  Para el DataTable
-  async findAll() {
+  async findAll(query: SalesQueryDto) {
+    const { 
+      minDiscountAmount,
+      minTotalAmount,
+      saleDate,
+      customerId,
+      saleCode,
+      paymentMethod,
+      saleStatus,
+      productsIds
+    } = query;
+
+    console.log(NormalizationClass.normalizeNumber(14))
+
     const list = await this.salesRepo.find({
       relations: [
         'customer',
@@ -159,8 +174,23 @@ export class SalesService {
         'salesdetail.products',
         'salesdetail.serviceRequest',
       ],
+      where: {
+        discountamount: minDiscountAmount && MoreThanOrEqual(minDiscountAmount),
+        totalamount: minTotalAmount && MoreThanOrEqual(minTotalAmount),
+        saledate: saleDate ? new Date(saleDate) : undefined,
+        customerid: customerId,
+        salecode: saleCode,
+        paymentmethod: paymentMethod,
+        salestatus: saleStatus,
+        salesdetail: {
+          productid: productsIds && productsIds.length ? In(productsIds) : undefined
+        }
+      },
       order: { saleid: 'DESC' },
     });
+
+    if (!list.length)
+      throw new NotFoundException("No hay ventas registradas con los argumentos dados")
 
     return list.map((sale) => this.withDireccionFromServiceRequest(sale));
   }
@@ -193,12 +223,7 @@ export class SalesService {
 
   // Revierte stock + valida estado
   async cancel(id: number, observation?: string) {
-    const sale = await this.salesRepo.findOne({
-      where: { saleid: id },
-      relations: ['salesdetail'],
-    });
-
-    if (!sale) throw new NotFoundException('Venta no encontrada.');
+    const sale = await this.findOne(id);
 
     if (sale.salestatus === 'Cancelled') throw new BadRequestException('La venta ya está anulada.');
 
