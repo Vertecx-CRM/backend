@@ -28,6 +28,7 @@ import {
   normalizeRequestAvailabilityOptions,
   parseRequestDescriptionWithAvailability,
 } from "./utils/request-availability";
+import { getRequestScheduleContextLabel } from "./utils/request-flow";
 
 @Injectable()
 export class RequestsService {
@@ -58,11 +59,16 @@ export class RequestsService {
       if (!sr.scheduledAt) return;
 
       const when = DateUtils.buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
+      const scheduleContext = getRequestScheduleContextLabel(sr?.serviceType);
+      const technicianScheduleContext =
+        scheduleContext === "asesoria tecnica previa a instalacion"
+          ? "asesoria tecnica asignada"
+          : "visita asignada";
 
       const customerEmail = sr.customer?.users?.email;
       if (customerEmail) {
         const name = [sr.customer?.users?.name, sr.customer?.users?.lastname].filter(Boolean).join(" ").trim();
-        await this.mailService.sendAppointmentScheduled(customerEmail, name, "solicitud de servicio", when);
+        await this.mailService.sendAppointmentScheduled(customerEmail, name, scheduleContext, when);
       }
 
       const techEmails = (sr.techniciansMap ?? [])
@@ -74,7 +80,7 @@ export class RequestsService {
 
       await Promise.all(
         techEmails.map((t) =>
-          this.mailService.sendAppointmentScheduled(t.email, t.name, "visita asignada", when)
+          this.mailService.sendAppointmentScheduled(t.email, t.name, technicianScheduleContext, when)
         )
       );
     } catch (error) {

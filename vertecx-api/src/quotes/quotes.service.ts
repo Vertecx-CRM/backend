@@ -792,6 +792,19 @@ export class QuotesService {
       );
     }
 
+    const meta = this.extractObservationMeta(quote.observation);
+    if (!meta.clientAccepted) {
+      throw new BadRequestException(
+        'La cotizacion debe ser aceptada por el cliente antes de crear la orden.',
+      );
+    }
+
+    if (quote.statesid !== QUOTE_APPROVED_STATE_ID) {
+      throw new BadRequestException(
+        'La cotizacion debe estar aprobada antes de vincularse a una orden.',
+      );
+    }
+
     await this.ensureRefs({ ordersservicesid: ordersServicesId });
 
     await this.quotesRepo.update(

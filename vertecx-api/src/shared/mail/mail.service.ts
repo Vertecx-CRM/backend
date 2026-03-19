@@ -340,11 +340,23 @@ export class MailService {
         safeAudience === 'admin'
           ? `Nueva cotizacion #${quoteId} registrada`
           : `Tu cotizacion #${quoteId} fue creada`;
+      const rawServiceType = String(
+        quote?.serviceRequest?.serviceType ?? quote?.serviceType ?? '',
+      )
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      const isInstallationFlow = rawServiceType.includes('instal');
 
       const headerCopy =
         safeAudience === 'admin'
-          ? 'Se genero una nueva cotizacion desde una solicitud de servicio.'
-          : 'Tu cotizacion fue registrada correctamente y queda pendiente de tu revision.';
+          ? isInstallationFlow
+            ? 'Se genero una nueva cotizacion desde una asesoria tecnica previa a instalacion.'
+            : 'Se genero una nueva cotizacion desde una solicitud de servicio.'
+          : isInstallationFlow
+            ? 'Tu cotizacion fue registrada correctamente tras la asesoria tecnica previa y queda pendiente de tu revision.'
+            : 'Tu cotizacion fue registrada correctamente y queda pendiente de tu revision.';
 
       const techCopy = technicianName
         ? `<p><strong>Tecnico relacionado:</strong> ${technicianName}</p>`
@@ -366,7 +378,7 @@ export class MailService {
 
               <div style="margin: 18px 0; padding: 16px; background: #fff; border: 1px solid #eee; border-radius: 8px;">
                 <p style="margin: 0 0 8px 0;"><strong>Cotizacion:</strong> #${quoteId}</p>
-                <p style="margin: 0 0 8px 0;"><strong>Solicitud de servicio:</strong> #${requestId}</p>
+                <p style="margin: 0 0 8px 0;"><strong>${isInstallationFlow ? 'Asesoria tecnica previa' : 'Solicitud de servicio'}:</strong> #${requestId}</p>
                 <p style="margin: 0 0 8px 0;"><strong>Total estimado:</strong> ${formattedTotal}</p>
                 ${techCopy}
               </div>
