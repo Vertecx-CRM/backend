@@ -25,10 +25,15 @@ import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
 import { CustomersService } from "../customers/customers.service";
 import {
   composeRequestDescriptionWithAvailability,
+  normalizeRequestFlowMetadata,
   normalizeRequestAvailabilityOptions,
   parseRequestDescriptionWithAvailability,
 } from "./utils/request-availability";
-import { getRequestScheduleContextLabel } from "./utils/request-flow";
+import {
+  getRequestScheduleContextLabel,
+  isInstallationRequestFlow,
+  normalizeRequestMode,
+} from "./utils/request-flow";
 
 @Injectable()
 export class RequestsService {
@@ -59,10 +64,20 @@ export class RequestsService {
       if (!sr.scheduledAt) return;
 
       const when = DateUtils.buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
-      const scheduleContext = getRequestScheduleContextLabel(sr?.serviceType);
+      const parsed = parseRequestDescriptionWithAvailability(sr?.description ?? "");
+      const flowMetadata = this.normalizeFlowMetadataForRequest(
+        sr?.serviceType,
+        parsed.flowMetadata,
+      );
+      const scheduleContext = getRequestScheduleContextLabel(
+        sr?.serviceType,
+        flowMetadata?.requestMode,
+      );
       const technicianScheduleContext =
         scheduleContext === "asesoria tecnica previa a instalacion"
           ? "asesoria tecnica asignada"
+          : scheduleContext === "instalacion programada"
+            ? "instalacion asignada"
           : "visita asignada";
 
       const customerEmail = sr.customer?.users?.email;
@@ -89,12 +104,45 @@ export class RequestsService {
     }
   }
 
+  private normalizeFlowMetadataForRequest(
+    serviceType?: string | null,
+    flowMetadata?: ReturnType<typeof normalizeRequestFlowMetadata>
+  ) {
+    if (!isInstallationRequestFlow(serviceType)) return null;
+
+    const normalized = normalizeRequestFlowMetadata(flowMetadata ?? {}) ?? {};
+
+    const requestMode =
+      normalizeRequestMode(normalized.requestMode) || "ASSESSMENT";
+    const technicalReviewStatus =
+      requestMode === "DIRECT_INSTALLATION"
+        ? normalized.technicalReviewStatus ?? "PENDING_REVIEW"
+        : "NOT_APPLICABLE";
+
+    return normalizeRequestFlowMetadata({
+      ...normalized,
+      requestMode,
+      technicalReviewStatus,
+    });
+  }
+
   private decorateRequest<T extends ServiceRequest>(sr: T) {
     const parsed = parseRequestDescriptionWithAvailability(sr?.description ?? "");
+    const flowMetadata = this.normalizeFlowMetadataForRequest(
+      sr?.serviceType,
+      parsed.flowMetadata,
+    );
     return Object.assign(sr, {
       description: parsed.descriptionPlain,
       descriptionPlain: parsed.descriptionPlain,
       clientAvailabilityOptions: parsed.availabilityOptions,
+      requestMode: flowMetadata?.requestMode ?? null,
+      technicalReviewStatus: flowMetadata?.technicalReviewStatus ?? null,
+      alreadyHasMaterials: flowMetadata?.alreadyHasMaterials ?? false,
+      linkedSaleId: flowMetadata?.linkedSaleId ?? null,
+      linkedSaleCode: flowMetadata?.linkedSaleCode ?? null,
+      purchasedMaterials: flowMetadata?.purchasedMaterials ?? [],
+      siteChecklist: flowMetadata?.siteChecklist ?? null,
     });
   }
 
@@ -269,9 +317,19 @@ export class RequestsService {
     const availabilityOptions = normalizeRequestAvailabilityOptions(
       (dto as any).availabilityOptions
     );
+    const flowMetadata = this.normalizeFlowMetadataForRequest((dto as any)?.serviceType, {
+      requestMode: (dto as any)?.requestMode,
+      technicalReviewStatus: (dto as any)?.technicalReviewStatus,
+      alreadyHasMaterials: (dto as any)?.alreadyHasMaterials,
+      linkedSaleId: (dto as any)?.linkedSaleId,
+      linkedSaleCode: (dto as any)?.linkedSaleCode,
+      purchasedMaterials: (dto as any)?.purchasedMaterials,
+      siteChecklist: (dto as any)?.siteChecklist,
+    });
     const descriptionStored = composeRequestDescriptionWithAvailability(
       description,
-      availabilityOptions
+      availabilityOptions,
+      flowMetadata
     );
     const stateId = Number((dto as any)?.stateId ?? 5);
 
@@ -280,6 +338,7 @@ export class RequestsService {
       description,
       descriptionStored,
       availabilityOptions,
+      flowMetadata,
       stateId,
       scheduledAt,
       scheduledEndAt,
@@ -290,6 +349,10 @@ export class RequestsService {
     const sr = await this.srRepo.findOne({ where: { serviceRequestId: id } });
     if (!sr) throw new NotFoundException("Solicitud no encontrada");
     const existingMeta = parseRequestDescriptionWithAvailability(sr.description ?? "");
+    const existingFlowMetadata = this.normalizeFlowMetadataForRequest(
+      sr.serviceType,
+      existingMeta.flowMetadata,
+    );
 
     const prevStateId = sr.stateId;
     const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
@@ -345,6 +408,10 @@ export class RequestsService {
       sr.serviceType = String((dto as any).serviceType);
     }
 
+    const effectiveServiceType = String(
+      (dto as any)?.serviceType ?? sr.serviceType
+    );
+
     const nextAddressInput =
       (dto as any)?.address ?? (dto as any)?.direccion;
 
@@ -359,8 +426,23 @@ export class RequestsService {
       if (desc.length < 3) throw new BadRequestException("Descripcion invalida");
     }
 
+    const flowMetadataKeys = [
+      "requestMode",
+      "technicalReviewStatus",
+      "alreadyHasMaterials",
+      "linkedSaleId",
+      "linkedSaleCode",
+      "purchasedMaterials",
+      "siteChecklist",
+    ];
+    const shouldUpdateFlowMetadata = flowMetadataKeys.some((key) =>
+      Object.prototype.hasOwnProperty.call(dto ?? {}, key)
+    );
     const shouldUpdateDescription =
-      (dto as any)?.description != null || (dto as any)?.availabilityOptions !== undefined;
+      (dto as any)?.description != null ||
+      (dto as any)?.availabilityOptions !== undefined ||
+      shouldUpdateFlowMetadata ||
+      (dto as any)?.serviceType != null;
     if (shouldUpdateDescription) {
       const nextDescription =
         (dto as any)?.description != null
@@ -370,10 +452,40 @@ export class RequestsService {
         (dto as any)?.availabilityOptions !== undefined
           ? normalizeRequestAvailabilityOptions((dto as any).availabilityOptions)
           : existingMeta.availabilityOptions;
+      const nextFlowMetadata = shouldUpdateFlowMetadata
+        ? this.normalizeFlowMetadataForRequest(effectiveServiceType, {
+            ...(existingFlowMetadata ?? {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "requestMode")
+              ? { requestMode: (dto as any)?.requestMode }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "technicalReviewStatus")
+              ? { technicalReviewStatus: (dto as any)?.technicalReviewStatus }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "alreadyHasMaterials")
+              ? { alreadyHasMaterials: (dto as any)?.alreadyHasMaterials }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "linkedSaleId")
+              ? { linkedSaleId: (dto as any)?.linkedSaleId }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "linkedSaleCode")
+              ? { linkedSaleCode: (dto as any)?.linkedSaleCode }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "purchasedMaterials")
+              ? { purchasedMaterials: (dto as any)?.purchasedMaterials }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "siteChecklist")
+              ? { siteChecklist: (dto as any)?.siteChecklist }
+              : {}),
+          })
+        : this.normalizeFlowMetadataForRequest(
+            effectiveServiceType,
+            existingFlowMetadata,
+          );
 
       sr.description = composeRequestDescriptionWithAvailability(
         nextDescription,
-        nextAvailabilityOptions
+        nextAvailabilityOptions,
+        nextFlowMetadata
       );
     }
 

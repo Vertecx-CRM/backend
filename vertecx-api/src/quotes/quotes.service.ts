@@ -20,6 +20,8 @@ import { States } from 'src/shared/entities/states.entity';
 import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
 import { Products } from 'src/products/entities/products.entity';
 import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
+import { parseRequestDescriptionWithAvailability } from 'src/requests/utils/request-availability';
+import { isInstallationRequestFlow, normalizeRequestMode } from 'src/requests/utils/request-flow';
 
 const QUOTE_APPROVED_STATE_ID = 3;
 const QUOTE_CLIENT_CANCELED_STATE_ID = 4;
@@ -173,6 +175,36 @@ export class QuotesService {
     if (!quote) return quote;
 
     const meta = this.extractObservationMeta((quote as any)?.observation);
+    const serviceRequest = (quote as any)?.serviceRequest;
+    const requestParsed = serviceRequest
+      ? parseRequestDescriptionWithAvailability(serviceRequest.description ?? "")
+      : null;
+    const normalizedRequestMode =
+      requestParsed && isInstallationRequestFlow(serviceRequest?.serviceType)
+        ? normalizeRequestMode(requestParsed.flowMetadata?.requestMode) || 'ASSESSMENT'
+        : requestParsed?.flowMetadata?.requestMode ?? null;
+
+    if (serviceRequest && requestParsed) {
+      Object.assign(serviceRequest, {
+        description: requestParsed.descriptionPlain,
+        descriptionPlain: requestParsed.descriptionPlain,
+        clientAvailabilityOptions: requestParsed.availabilityOptions,
+        requestMode: normalizedRequestMode,
+        technicalReviewStatus:
+          normalizedRequestMode === 'DIRECT_INSTALLATION'
+            ? requestParsed.flowMetadata?.technicalReviewStatus ?? 'PENDING_REVIEW'
+            : isInstallationRequestFlow(serviceRequest?.serviceType)
+              ? 'NOT_APPLICABLE'
+              : null,
+        alreadyHasMaterials:
+          requestParsed.flowMetadata?.alreadyHasMaterials ?? false,
+        linkedSaleId: requestParsed.flowMetadata?.linkedSaleId ?? null,
+        linkedSaleCode: requestParsed.flowMetadata?.linkedSaleCode ?? null,
+        purchasedMaterials: requestParsed.flowMetadata?.purchasedMaterials ?? [],
+        siteChecklist: requestParsed.flowMetadata?.siteChecklist ?? null,
+      });
+    }
+
     return Object.assign(quote as any, {
       observation: meta.observationPlain,
       observationPlain: meta.observationPlain,

@@ -14,9 +14,33 @@ export function isInstallationRequestFlow(value?: string | null) {
   return normalizeRequestServiceType(value) === "INSTALACION";
 }
 
-export function getRequestScheduleContextLabel(value?: string | null) {
-  if (isInstallationRequestFlow(value)) {
+export function normalizeRequestMode(value?: string | null) {
+  const normalized = String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return "";
+  if (normalized.includes("direct")) return "DIRECT_INSTALLATION";
+  if (normalized.includes("asesor")) return "ASSESSMENT";
+  return normalized.toUpperCase();
+}
+
+export function isDirectInstallationRequest(value?: string | null) {
+  return normalizeRequestMode(value) === "DIRECT_INSTALLATION";
+}
+
+export function getRequestScheduleContextLabel(
+  serviceType?: string | null,
+  requestMode?: string | null
+) {
+  if (isInstallationRequestFlow(serviceType) && !isDirectInstallationRequest(requestMode)) {
     return "asesoria tecnica previa a instalacion";
+  }
+
+  if (isInstallationRequestFlow(serviceType) && isDirectInstallationRequest(requestMode)) {
+    return "instalacion programada";
   }
 
   return "solicitud de servicio";
