@@ -164,8 +164,6 @@ export class SalesService {
       productsIds
     } = query;
 
-    console.log(NormalizationClass.normalizeNumber(14))
-
     const list = await this.salesRepo.find({
       relations: [
         'customer',

@@ -7,14 +7,12 @@ export class RequestQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @IsPositive()
   clientId?: number;
 
   @ApiPropertyOptional({ example: 32 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @IsPositive()
   serviceTypeId?: number;
 
   @ApiPropertyOptional({ example: 32 })
@@ -33,6 +31,5 @@ export class RequestQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @IsPositive()
   stateId?: number;
 }

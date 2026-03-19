@@ -289,7 +289,7 @@ export class RequestsService {
     sr.description = dto.description ?? sr.description;
     sr.stateId = effectiveStateId;
     sr.serviceId =  dto.serviceId && await this.servicesService.findOne(dto.serviceId) ? sr.serviceId : sr.serviceId;
-    sr.clientId = dto.clientId &&  await this.customersService.findOne(dto.clientId) ? sr.clientId : sr.serviceId;
+    sr.clientId = dto.clientId &&  await this.customersService.findOne(dto.clientId) ? sr.clientId : sr.clientId;
 
     await this.srRepo.save(sr);
 
@@ -356,7 +356,7 @@ export class RequestsService {
     }
 
     const requests = await reqQb.getMany();
-    
+
     if (!requests.length)
       throw new NotFoundException('Technicians not found')
 

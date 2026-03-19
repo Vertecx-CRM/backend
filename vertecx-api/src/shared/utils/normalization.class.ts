@@ -9,7 +9,7 @@ export class NormalizationClass {
       .filter((n: number) => Number.isFinite(n) && n > 0);
 
     const result = Array.from(new Set(ids));
-    
+
     if (!result.length) throw new BadRequestException("Tecnicos vacios");
 
     return result
@@ -21,10 +21,5 @@ export class NormalizationClass {
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .trim();
-  }
-
-  static normalizeNumber(n: number) {
-    console.log(n * 1.00)
-    return Number(n).toFixed(2)
   }
 }
