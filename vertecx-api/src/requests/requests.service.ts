@@ -294,13 +294,13 @@ export class RequestsService {
 
     if ((dto as any)?.direccion != null) {
       const dir = String((dto as any).direccion).trim();
-      if (dir.length < 3) throw new BadRequestException("DirecciÃ³n invÃ¡lida");
+      if (dir.length < 3) throw new BadRequestException("Direccion invalida");
       sr.direccion = dir.slice(0, 255);
     }
 
     if ((dto as any)?.description != null) {
       const desc = String((dto as any).description).trim();
-      if (desc.length < 3) throw new BadRequestException("DescripciÃ³n invÃ¡lida");
+      if (desc.length < 3) throw new BadRequestException("Descripcion invalida");
       sr.description = desc;
     }
 
@@ -311,7 +311,7 @@ export class RequestsService {
     if ((dto as any)?.serviceId != null) {
       const serviceId = Number((dto as any).serviceId);
       if (!Number.isFinite(serviceId) || serviceId <= 0) {
-        throw new BadRequestException("serviceId invÃ¡lido");
+        throw new BadRequestException("serviceId invalido");
       }
       sr.serviceId = serviceId;
     }
@@ -319,9 +319,11 @@ export class RequestsService {
     if ((dto as any)?.clientId != null) {
       const clientId = Number((dto as any).clientId);
       if (!Number.isFinite(clientId) || clientId <= 0) {
-        throw new BadRequestException("clientId invÃ¡lido");
+        throw new BadRequestException("clientId invalido");
       }
-      sr.clientId = clientId;
+      if (clientId !== Number(sr.clientId)) {
+        throw new BadRequestException("No se permite cambiar el cliente de la solicitud");
+      }
     }
 
     await this.srRepo.save(sr);
