@@ -7,10 +7,13 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { QuotesService } from './quotes.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { ApiOperation } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('quotes')
 export class QuotesController {
@@ -23,13 +26,15 @@ export class QuotesController {
   }
 
   @Get()
-  findAll() {
-    return this.quotesService.findAll();
+  @UseGuards(JwtAuthGuard)
+  findAll(@Req() { user }: any) {
+    return this.quotesService.findAllForUser(user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.quotesService.findOne(+id);
+  @UseGuards(JwtAuthGuard)
+  findOne(@Req() { user }: any, @Param('id') id: string) {
+    return this.quotesService.findOneForUser(user, +id);
   }
 
   @Delete(':id')
@@ -60,9 +65,11 @@ export class QuotesController {
   }
 
   @Patch(':id/cancel-client')
+  @UseGuards(JwtAuthGuard)
   cancelClient(
+    @Req() { user }: any,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.quotesService.cancelForClient(id);
+    return this.quotesService.cancelForClient(user, id);
   }
 }

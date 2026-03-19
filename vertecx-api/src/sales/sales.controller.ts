@@ -88,6 +88,7 @@ export class SalesController {
 
   // GET /sales
   @Get()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Obtener todas las ventas',
     description: 'Retorna una lista de todas las ventas con sus detalles.',
@@ -96,12 +97,13 @@ export class SalesController {
     status: 200,
     description: 'Listado de ventas retornado exitosamente.',
   })
-  findAll() {
-    return this.salesService.findAll();
+  findAll(@Req() { user }: any) {
+    return this.salesService.findAllForUser(user);
   }
 
   // GET /sales/:id
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Obtener una venta por ID',
     description:
@@ -121,8 +123,8 @@ export class SalesController {
     status: 404,
     description: 'Venta no encontrada.',
   })
-  findOne(@Param('id') id: string) {
-    return this.salesService.findOne(+id);
+  findOne(@Req() { user }: any, @Param('id') id: string) {
+    return this.salesService.findOneForUser(user, +id);
   }
 
   // PATCH /sales/:id

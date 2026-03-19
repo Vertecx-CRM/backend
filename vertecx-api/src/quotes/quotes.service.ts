@@ -2,9 +2,10 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 
 import { Quotes } from './entities/quotes.entity';
 import { QuoteDetail } from './entities/quotedetail.entity';
@@ -20,6 +21,7 @@ import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { OrdersServices } from 'src/orders-services/entities/orders-services.entity';
 import { Products } from 'src/products/entities/products.entity';
+import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
 
 @Injectable()
 export class QuotesService {
@@ -51,6 +53,26 @@ export class QuotesService {
   ) {}
 
   private completedStateIdCache: number | null = null;
+
+  private normalizeRoleName(role?: string | null) {
+    return String(role ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  private getScopedWhereForUser(user: any): FindOptionsWhere<Quotes> | undefined {
+    if (this.normalizeRoleName(user?.rolename) !== 'cliente') {
+      return undefined;
+    }
+
+    return {
+      customer: {
+        userid: resolveUserIdFromAuth(user),
+      } as any,
+    };
+  }
 
   private async ensureRefs(dto: {
     serviceRequestId?: number;
@@ -255,9 +277,41 @@ export class QuotesService {
     });
   }
 
+  async findAllForUser(user: any) {
+    return this.quotesRepo.find({
+      where: this.getScopedWhereForUser(user),
+      relations: {
+        state: true,
+        customer: { users: true } as any,
+        technician: { users: true } as any,
+        details: true,
+      },
+      order: { createdat: 'DESC' },
+    });
+  }
+
   async findOne(id: number) {
     const quote = await this.quotesRepo.findOne({
       where: { quotesid: id },
+      relations: {
+        serviceRequest: true,
+        ordersservices: true,
+        state: true,
+        customer: { users: true } as any,
+        technician: { users: true } as any,
+        details: true,
+      },
+    });
+
+    if (!quote) throw new NotFoundException(`Quote ${id} no existe`);
+
+    return quote;
+  }
+
+  async findOneForUser(user: any, id: number) {
+    const scopedWhere = this.getScopedWhereForUser(user);
+    const quote = await this.quotesRepo.findOne({
+      where: scopedWhere ? { quotesid: id, ...scopedWhere } : { quotesid: id },
       relations: {
         serviceRequest: true,
         ordersservices: true,
@@ -346,9 +400,18 @@ export class QuotesService {
     return this.findOne(id);
   }
 
-  async cancelForClient(id: number, observation?: string) {
+  async cancelForClient(user: any, id: number, observation?: string) {
+    if (this.normalizeRoleName(user?.rolename) !== 'cliente') {
+      throw new ForbiddenException(
+        'Solo los clientes pueden cancelar sus propias cotizaciones.',
+      );
+    }
+
+    await this.findOneForUser(user, id);
+
+    const scopedWhere = this.getScopedWhereForUser(user);
     const quote = await this.quotesRepo.findOne({
-      where: { quotesid: id },
+      where: scopedWhere ? { quotesid: id, ...scopedWhere } : { quotesid: id },
     });
     if (!quote) {
       throw new NotFoundException('Cotización no encontrada');
@@ -374,7 +437,7 @@ export class QuotesService {
 
     await this.quotesRepo.update({ quotesid: id }, updateData);
 
-    return this.findOne(id);
+    return this.findOneForUser(user, id);
   }
 
   async complete(id: number) {

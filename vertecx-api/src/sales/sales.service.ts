@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
 import { Sales } from './entities/sales.entity';
 import { Salesdetail } from './entities/salesdetail.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -30,6 +30,26 @@ export class SalesService {
 
     private readonly dataSource: DataSource,
   ) { }
+
+  private normalizeRoleName(role?: string | null) {
+    return String(role ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  private getScopedWhereForUser(user: any): FindOptionsWhere<Sales> | undefined {
+    if (this.normalizeRoleName(user?.rolename) !== 'cliente') {
+      return undefined;
+    }
+
+    return {
+      customer: {
+        userid: resolveUserIdFromAuth(user),
+      } as any,
+    };
+  }
 
   private withDireccionFromServiceRequest<T extends Sales | null>(sale: T) {
     if (!sale) return sale;
@@ -189,10 +209,43 @@ export class SalesService {
     return list.map((sale) => this.withDireccionFromServiceRequest(sale));
   }
 
+  async findAllForUser(user: any) {
+    const list = await this.salesRepo.find({
+      where: this.getScopedWhereForUser(user),
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
+      order: { saleid: 'DESC' },
+    });
+
+    return list.map((sale) => this.withDireccionFromServiceRequest(sale));
+  }
+
   //  Obtener venta por ID (para ViewSale)
   async findOne(id: number) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
+    });
+
+    if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
+    return this.withDireccionFromServiceRequest(sale);
+  }
+
+  async findOneForUser(user: any, id: number) {
+    const scopedWhere = this.getScopedWhereForUser(user);
+    const sale = await this.salesRepo.findOne({
+      where: scopedWhere ? { saleid: id, ...scopedWhere } : { saleid: id },
       relations: [
         'customer',
         'customer.users',
