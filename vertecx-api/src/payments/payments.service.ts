@@ -137,6 +137,45 @@ export class PaymentsService {
     };
   }
 
+  async syncTransactionForCheckout(
+    saleId: number,
+    transactionId: string,
+    reference: string,
+  ) {
+    const referenceSaleId = this.extractSaleId(reference);
+    if (!referenceSaleId || Number(referenceSaleId) !== Number(saleId)) {
+      throw new BadRequestException(
+        'La referencia del checkout no corresponde a la venta solicitada.',
+      );
+    }
+
+    const transaction = await this.fetchTransaction(transactionId);
+    const transactionReference = String(transaction?.reference ?? '').trim();
+    const transactionSaleId = this.extractSaleId(transactionReference);
+
+    if (!transactionSaleId || Number(transactionSaleId) !== Number(saleId)) {
+      throw new BadRequestException(
+        'La transaccion consultada no corresponde a la venta solicitada.',
+      );
+    }
+
+    const updatedSale = await this.applyTransactionToSale(transaction, saleId);
+
+    return {
+      saleId,
+      saleCode: updatedSale?.salecode ?? null,
+      reference: transactionReference,
+      transactionId: String(transaction?.id ?? transactionId),
+      transactionStatus: String(transaction?.status ?? 'UNKNOWN'),
+      transactionStatusMessage: String(transaction?.status_message ?? ''),
+      paymentMethod: this.mapPaymentMethod(transaction),
+      amountInCents: Number(transaction?.amount_in_cents ?? 0),
+      currency: String(transaction?.currency ?? 'COP'),
+      paymentState: updatedSale?.estadoPago ?? null,
+      saleStatus: updatedSale?.salestatus ?? null,
+    };
+  }
+
   async handleWompiEvent(payload: WompiEventPayload, checksumHeader?: string) {
     if (payload?.event !== 'transaction.updated') {
       return { ok: true, ignored: true };

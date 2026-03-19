@@ -39,6 +39,12 @@ export class SalesService {
       .trim();
   }
 
+  private extractSaleIdFromReference(reference: string | null | undefined) {
+    const match = /^VERTECX-SALE-(\d+)-\d+$/i.exec(String(reference ?? '').trim());
+    const id = Number(match?.[1] ?? 0);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }
+
   private getScopedWhereForUser(user: any): FindOptionsWhere<Sales> | undefined {
     if (this.normalizeRoleName(user?.rolename) !== 'cliente') {
       return undefined;
@@ -257,6 +263,17 @@ export class SalesService {
 
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
     return this.withDireccionFromServiceRequest(sale);
+  }
+
+  async findOneForCheckout(id: number, reference: string) {
+    const referenceSaleId = this.extractSaleIdFromReference(reference);
+    if (!referenceSaleId || Number(referenceSaleId) !== Number(id)) {
+      throw new BadRequestException(
+        'La referencia del checkout no corresponde a la venta solicitada.',
+      );
+    }
+
+    return this.findOne(id);
   }
 
   //  Actualizar venta

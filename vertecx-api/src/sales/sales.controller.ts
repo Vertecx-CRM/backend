@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -125,6 +126,29 @@ export class SalesController {
   })
   findOne(@Req() { user }: any, @Param('id') id: string) {
     return this.salesService.findOneForUser(user, +id);
+  }
+
+  @Get(':id/checkout-summary')
+  @ApiOperation({
+    summary: 'Obtener el resumen de una venta para el retorno del checkout',
+    description:
+      'Retorna la venta asociada al checkout cuando la referencia de Wompi coincide con la venta.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID de la venta a consultar',
+    type: Number,
+    example: 124,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Venta encontrada y validada para el checkout.',
+  })
+  getCheckoutSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('reference') reference: string,
+  ) {
+    return this.salesService.findOneForCheckout(id, reference);
   }
 
   // PATCH /sales/:id

@@ -55,6 +55,28 @@ export class PaymentsController {
     return this.paymentsService.syncTransactionWithSale(user, saleId, transactionId);
   }
 
+  @Get('wompi/public/transactions/:transactionId')
+  @ApiOperation({
+    summary:
+      'Consultar una transaccion de Wompi para el retorno publico del checkout',
+  })
+  @ApiParam({ name: 'transactionId', type: String, example: '123456-7890' })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado de la transaccion consultado para el checkout.',
+  })
+  getTransactionForCheckout(
+    @Param('transactionId') transactionId: string,
+    @Query('saleId', ParseIntPipe) saleId: number,
+    @Query('reference') reference: string,
+  ) {
+    return this.paymentsService.syncTransactionForCheckout(
+      saleId,
+      transactionId,
+      reference,
+    );
+  }
+
   @Post('wompi/events')
   @HttpCode(200)
   @ApiOperation({
