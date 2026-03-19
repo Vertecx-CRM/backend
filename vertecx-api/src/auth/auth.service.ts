@@ -152,6 +152,19 @@ export class AuthService {
     });
   }
 
+  private getFrontendBaseUrl() {
+    const raw =
+      process.env.FRONTEND_URL ||
+      'https://vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net';
+
+    const normalized = raw.trim().replace(/\/+$/, '');
+    if (/^https?:\/\//i.test(normalized)) {
+      return normalized;
+    }
+
+    return `https://${normalized}`;
+  }
+
   private issueTokensFromPayload(userPayload: any) {
     const { exp, iat, ...clean } = userPayload;
     const access_token = this.signAccess(clean);
@@ -281,8 +294,10 @@ export class AuthService {
     }
 
     const token = this.signResetToken(user);
-    const baseUrl = process.env.FRONTEND_URL || 'vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net';
-    const resetLink = `${baseUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
+    const baseUrl = this.getFrontendBaseUrl();
+    const resetUrl = new URL('/auth/reset-password', `${baseUrl}/`);
+    resetUrl.searchParams.set('token', token);
+    const resetLink = resetUrl.toString();
 
     await this.mailService.sendPasswordReset(user.email, user.name, resetLink);
   }
