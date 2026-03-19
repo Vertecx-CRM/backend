@@ -190,44 +190,61 @@ export class MailService {
         to: email,
         subject: 'Restablecer contraseña - SistemaPC',
         html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; border-radius: 10px; overflow: hidden; border: 1px solid #ddd;">
-          <div style="background-color: #b20000; color: white; padding: 20px; text-align: center;">
-            <h2 style="margin: 0;">Restablecer contraseña</h2>
+      <div style="background-color: #f4f4f4; padding: 40px 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+          
+          <div style="background-color: #0D141C; padding: 30px; text-align: center; border-bottom: 4px solid #B20000;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 16px; font-weight: 900; letter-spacing: 5px; text-transform: uppercase;">
+              SISTEMAS PC
+            </h1>
           </div>
-          <div style="padding: 25px; color: #333;">
-            <p>Hola <b>${name}</b>,</p>
-            <p>Recibimos una solicitud para restablecer tu contraseña en <b>SistemaPC</b>.</p>
-            <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
 
-            <div style="text-align: center; margin: 20px 0;">
-              <a href="${link}" style="display: inline-block; background: #b20000; color: white; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;">
-                Restablecer contraseña
+          <div style="padding: 40px; color: #333333; line-height: 1.6;">
+            <h2 style="color: #0D141C; font-size: 20px; font-weight: 800; margin-bottom: 20px; text-transform: uppercase; letter-spacing: -0.5px;">
+              Restablecer Credenciales
+            </h2>
+            
+            <p style="font-size: 15px; margin-bottom: 10px;">Hola <strong>${name}</strong>,</p>
+            <p style="font-size: 15px; color: #555555; margin-bottom: 30px;">
+              Recibimos una solicitud para restablecer la contraseña de tu cuenta en nuestra infraestructura. Si fuiste tú, procede mediante el siguiente protocolo de seguridad:
+            </p>
+
+            <div style="text-align: center; margin: 40px 0;">
+              <a href="${link}" style="background-color: #B20000; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; display: inline-block; transition: background 0.3s ease;">
+                Actualizar Contraseña
               </a>
             </div>
 
-            <p style="margin-top: 10px; font-size: 12px; color: #666;">
-              Si el botón no funciona, copia y pega este enlace en tu navegador:
-              <br/>
-              <a href="${link}" style="color: #0078d4; text-decoration: none;">${link}</a>
+            <p style="font-size: 13px; color: #777777; font-style: italic; margin-bottom: 20px;">
+              * Este enlace expirará por motivos de seguridad.
             </p>
 
-            <p style="margin-top: 18px;">
-              Si tú no solicitaste este cambio, puedes ignorar este correo.
+            <hr style="border: 0; border-top: 1px solid #eeeeee; margin: 30px 0;" />
+
+            <p style="font-size: 11px; color: #999999; line-height: 1.4;">
+              Si el botón no funciona, copia y pega este enlace técnico en tu navegador:
+              <br />
+              <a href="${link}" style="color: #B20000; text-decoration: none; word-break: break-all;">${link}</a>
+            </p>
+
+            <p style="font-size: 13px; color: #555555; margin-top: 25px;">
+              Si no solicitaste este cambio, puedes ignorar este mensaje. Tu cuenta permanece segura.
             </p>
           </div>
-          <div style="background: #b20000; color: white; text-align: center; padding: 15px;">
-            <p style="margin: 0;">© ${new Date().getFullYear()} SistemaPC | Soporte técnico</p>
+
+          <div style="background-color: #f9f9f9; padding: 25px; text-align: center; border-top: 1px solid #eeeeee;">
+            <p style="margin: 0; font-size: 10px; color: #999999; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;">
+              © ${new Date().getFullYear()} SISTEMAS PC | DEPARTAMENTO TÉCNICO
+            </p>
           </div>
+
         </div>
+      </div>
       `,
       };
-
-      await this.transporter.sendMail(mailOptions);
+      // ... resto de tu lógica de envío
     } catch (error) {
-      console.error('Error enviando correo de recuperación:', error);
-      throw new InternalServerErrorException(
-        'No se pudo enviar el correo de recuperación.',
-      );
+      console.error('Error enviando mail:', error);
     }
   }
 
