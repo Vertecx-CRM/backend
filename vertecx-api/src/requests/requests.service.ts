@@ -339,8 +339,11 @@ export class RequestsService {
       sr.serviceType = String((dto as any).serviceType);
     }
 
-    if ((dto as any)?.direccion != null) {
-      const dir = String((dto as any).direccion).trim();
+    const nextAddressInput =
+      (dto as any)?.address ?? (dto as any)?.direccion;
+
+    if (nextAddressInput != null) {
+      const dir = String(nextAddressInput).trim();
       if (dir.length < 3) throw new BadRequestException("Direccion invalida");
       sr.direccion = dir.slice(0, 255);
     }
