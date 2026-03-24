@@ -63,7 +63,7 @@ export class MailService {
               </div>
 
               <div style="text-align: center; margin-top: 35px;">
-                <a href="${process.env.FRONTEND_URL}/auth/loginlogin" 
+                <a href="${process.env.FRONTEND_URL}auth/login" 
                    style="background-color: ${brandBlack}; color: #ffffff; padding: 15px 35px; text-decoration: none; font-size: 12px; font-weight: 900; letter-spacing: 2px; display: inline-block; border-radius: 0px;">
                   ACCEDER AL PORTAL
                 </a>
