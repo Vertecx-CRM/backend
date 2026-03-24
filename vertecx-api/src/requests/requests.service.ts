@@ -577,9 +577,6 @@ export class RequestsService {
     }
 
     const requests = await reqQb.getMany();
-    
-    if (!requests.length)
-      throw new NotFoundException('Technicians not found')
 
     for (const sr of requests) {
       if (isCanceledState(sr?.state?.name)) continue;
