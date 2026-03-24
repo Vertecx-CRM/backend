@@ -3,67 +3,69 @@ import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 
 export interface MailOptions {
-    to: string;
-    subject: string;
-    html: string;
-    text?: string;
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 @Injectable()
 export class MailService {
-    private readonly logger = new Logger(MailService.name);
-    private transporter: Transporter;
+  private readonly logger = new Logger(MailService.name);
+  private transporter: Transporter;
 
-    constructor() {
-        this.transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.MAIL_USER,
-                pass: process.env.MAIL_PASS, // Contraseña de aplicación Gmail
-            },
-        });
+  constructor() {
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS, // Contraseña de aplicación Gmail
+      },
+    });
+  }
+
+  async sendMail(options: MailOptions): Promise<boolean> {
+    try {
+      const info = await this.transporter.sendMail({
+        from: `"Vertecx" <${process.env.MAIL_USER}>`,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+      });
+
+      this.logger.log(`Correo enviado a ${options.to} — ID: ${info.messageId}`);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Error enviando correo a ${options.to}: ${error.message}`,
+      );
+      throw error;
     }
+  }
 
-    async sendMail(options: MailOptions): Promise<boolean> {
-        try {
-            const info = await this.transporter.sendMail({
-                from: `"Vertecx" <${process.env.MAIL_USER}>`,
-                to: options.to,
-                subject: options.subject,
-                text: options.text,
-                html: options.html,
-            });
-
-            this.logger.log(`Correo enviado a ${options.to} — ID: ${info.messageId}`);
-            return true;
-        } catch (error) {
-            this.logger.error(`Error enviando correo a ${options.to}: ${error.message}`);
-            throw error;
-        }
-    }
-
-    // ─── Template HTML para Orden de Compra ────────────────────────────────────
-    buildOrderEmailHtml(data: {
-        numeroOrden: string;
-        supplierName: string;
-        fecha?: string;
-        productos: { producto: string; cantidad: number; precioUnitario: number }[];
-        total: number;
-        descripcion?: string;
-    }): string {
-        const itemsRows = data.productos
-            .map(
-                (p) => `
+  // ─── Template HTML para Orden de Compra ────────────────────────────────────
+  buildOrderEmailHtml(data: {
+    numeroOrden: string;
+    supplierName: string;
+    fecha?: string;
+    productos: { producto: string; cantidad: number; precioUnitario: number }[];
+    total: number;
+    descripcion?: string;
+  }): string {
+    const itemsRows = data.productos
+      .map(
+        (p) => `
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${p.producto}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">${p.cantidad}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:right;">$${p.precioUnitario.toLocaleString('es-CO')}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;">$${(p.cantidad * p.precioUnitario).toLocaleString('es-CO')}</td>
         </tr>`,
-            )
-            .join('');
+      )
+      .join('');
 
-        return `
+    return `
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -146,16 +148,17 @@ export class MailService {
             </td>
           </tr>
 
-          ${data.descripcion
-                ? `<tr>
+          ${
+            data.descripcion
+              ? `<tr>
               <td style="padding:0 32px 24px;">
                 <div style="background:#fff7ed;border-left:3px solid #f97316;padding:12px 16px;border-radius:4px;">
                   <p style="margin:0;font-size:13px;color:#555;"><strong>Observaciones:</strong> ${data.descripcion}</p>
                 </div>
               </td>
             </tr>`
-                : ''
-            }
+              : ''
+          }
 
           <!-- Footer -->
           <tr>
@@ -174,5 +177,5 @@ export class MailService {
 </body>
 </html>
     `.trim();
-    }
+  }
 }
