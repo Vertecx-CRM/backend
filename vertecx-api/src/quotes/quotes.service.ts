@@ -276,6 +276,32 @@ export class QuotesService {
     }
   }
 
+  private async notifyQuoteAccepted(quote: any) {
+    try {
+      const adminEmail = String(process.env.MAIL_USER ?? '').trim();
+      if (!adminEmail) return;
+
+      await this.mailService.sendQuoteAccepted(
+        adminEmail,
+        'equipo administrativo',
+        quote,
+        [
+          quote?.customer?.users?.name,
+          quote?.customer?.users?.lastname,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim(),
+        quote?.observationPlain ?? quote?.observation ?? null,
+      );
+    } catch (error) {
+      console.error(
+        'No se pudo enviar el correo de aceptacion de cotizacion:',
+        (error as any)?.message ?? error,
+      );
+    }
+  }
+
   private async ensureRefs(dto: {
     serviceRequestId?: number;
     customerid?: number;
@@ -770,10 +796,6 @@ export class QuotesService {
       throw new NotFoundException('Cotizacion no encontrada');
     }
 
-    if (quote.statesid === QUOTE_APPROVED_STATE_ID) {
-      throw new BadRequestException('La cotizacion ya fue aprobada.');
-    }
-
     if (
       this.isCanceledLike(quote.statesid) ||
       this.isCompletedState(quote.statesid)
@@ -784,26 +806,31 @@ export class QuotesService {
     }
 
     const meta = this.extractObservationMeta(quote.observation);
-    if (meta.clientAccepted) {
+    if (meta.clientAccepted && quote.statesid === QUOTE_APPROVED_STATE_ID) {
       return this.findOneForUser(user, id);
     }
+
+    const acceptedAt = meta.clientAcceptedAt ?? new Date().toISOString();
 
     await this.quotesRepo.update(
       { quotesid: id },
       {
+        statesid: QUOTE_APPROVED_STATE_ID,
         updatedat: new Date(),
         observation: this.buildObservation(
           observation ?? meta.observationPlain,
           {
             ...meta,
             clientAccepted: true,
-            clientAcceptedAt: new Date().toISOString(),
+            clientAcceptedAt: acceptedAt,
           },
         ),
       },
     );
 
-    return this.findOneForUser(user, id);
+    const acceptedQuote = await this.findOneForUser(user, id);
+    await this.notifyQuoteAccepted(acceptedQuote);
+    return acceptedQuote;
   }
 
   async linkOrder(id: number, ordersServicesId: number) {

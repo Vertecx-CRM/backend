@@ -394,8 +394,8 @@ export class MailService {
 
               ${
                 safeAudience === 'cliente'
-                  ? '<p style="margin-top: 18px;">Desde tu panel podras aceptarla o cancelarla antes de la aprobacion administrativa.</p>'
-                  : '<p style="margin-top: 18px;">Recuerda que la cotizacion requiere aceptacion del cliente antes de aprobarla.</p>'
+                  ? '<p style="margin-top: 18px;">Desde tu panel podras aceptarla o cancelarla. Cuando la aceptes notificaremos al administrador para continuar con la orden de servicio.</p>'
+                  : '<p style="margin-top: 18px;">Cuando el cliente la acepte te avisaremos por correo y quedara lista para crear la orden de servicio.</p>'
               }
             </div>
 
@@ -411,6 +411,95 @@ export class MailService {
       console.error('Error enviando correo de cotizacion:', error);
       throw new InternalServerErrorException(
         'No se pudo enviar el correo de cotizacion.',
+      );
+    }
+  }
+
+  async sendQuoteAccepted(
+    email: string,
+    name: string,
+    quote: any,
+    acceptedByName?: string,
+    observation?: string | null,
+  ) {
+    try {
+      const safeName = String(name ?? '').trim() || 'equipo administrativo';
+      const quoteId = Number(quote?.quotesid ?? 0) || 'N/A';
+      const requestId = Number(
+        quote?.serviceRequest?.serviceRequestId ?? quote?.serviceRequestId ?? 0,
+      ) || 'N/A';
+      const total = Number(quote?.total ?? 0);
+      const formattedTotal = total.toLocaleString('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+      });
+      const customerName =
+        String(acceptedByName ?? '').trim() ||
+        [
+          quote?.customer?.users?.name,
+          quote?.customer?.users?.lastname,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim() ||
+        'El cliente';
+      const acceptedAtRaw = String(
+        quote?.clientAcceptedAt ?? quote?.updatedat ?? '',
+      ).trim();
+      const acceptedAt = acceptedAtRaw
+        ? new Date(acceptedAtRaw).toLocaleString('es-CO')
+        : 'Fecha no disponible';
+      const cleanObservation = String(
+        observation ?? quote?.observationPlain ?? quote?.observation ?? '',
+      ).trim();
+
+      const mailOptions = {
+        from: `"Soporte SistemaPC" <${process.env.MAIL_USER}>`,
+        to: email,
+        subject: `Cotizacion #${quoteId} aceptada por el cliente`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: auto; background: #f9f9f9; border-radius: 10px; border: 1px solid #ddd; overflow: hidden;">
+            <div style="background-color: #166534; color: white; padding: 20px; text-align: center;">
+              <h2 style="margin: 0;">Cotizacion aceptada</h2>
+            </div>
+
+            <div style="padding: 24px; color: #333; line-height: 1.6;">
+              <p>Hola <b>${safeName}</b>,</p>
+              <p>El cliente ya acepto la cotizacion y quedo aprobada para continuar con la orden de servicio.</p>
+
+              <div style="margin: 18px 0; padding: 16px; background: #fff; border: 1px solid #eee; border-radius: 8px;">
+                <p style="margin: 0 0 8px 0;"><strong>Cotizacion:</strong> #${quoteId}</p>
+                <p style="margin: 0 0 8px 0;"><strong>Solicitud de servicio:</strong> #${requestId}</p>
+                <p style="margin: 0 0 8px 0;"><strong>Cliente:</strong> ${customerName}</p>
+                <p style="margin: 0 0 8px 0;"><strong>Total estimado:</strong> ${formattedTotal}</p>
+                <p style="margin: 0;"><strong>Fecha de aceptacion:</strong> ${acceptedAt}</p>
+              </div>
+
+              ${
+                cleanObservation
+                  ? `<div style="margin-top: 18px;">
+                      <p style="margin: 0 0 8px 0;"><strong>Observacion del cliente:</strong></p>
+                      <div style="padding: 14px; background: #fff; border: 1px solid #eee; border-radius: 8px; white-space: pre-wrap;">${cleanObservation}</div>
+                    </div>`
+                  : ''
+              }
+
+              <p style="margin-top: 18px;">Ya puedes crear la orden de servicio para programar las citas tecnicas y la entrega de productos.</p>
+            </div>
+
+            <div style="background: #166534; color: white; text-align: center; padding: 14px;">
+              <p style="margin: 0;">&copy; ${new Date().getFullYear()} SistemaPC | Soporte tecnico</p>
+            </div>
+          </div>
+        `,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error enviando correo de aceptacion de cotizacion:', error);
+      throw new InternalServerErrorException(
+        'No se pudo enviar el correo de aceptacion de cotizacion.',
       );
     }
   }
