@@ -10,6 +10,7 @@ import { OrdersServicesHistory } from './entities/orders-services-history.entity
 import { OrdersServicesWarranty } from './entities/orders-services-warranty.entity';
 
 import { Products } from 'src/products/entities/products.entity';
+import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
 import { Services } from 'src/services/entities/services.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
@@ -27,6 +28,7 @@ import { QuotesModule } from 'src/quotes/quotes.module';
       OrdersServicesHistory,
       OrdersServicesWarranty,
       Products,
+      ProductCategory,
       Services,
       Technicians,
       Customers,

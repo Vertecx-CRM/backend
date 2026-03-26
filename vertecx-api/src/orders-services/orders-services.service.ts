@@ -24,6 +24,7 @@ import { Users } from "src/users/entities/users.entity";
 import { MailService } from "src/shared/mail/mail.service";
 import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
 import { QuotesService } from "src/quotes/quotes.service";
+import { ProductCategory } from "src/products-categories/entities/product-category.entity";
 
 import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
 import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
@@ -40,12 +41,44 @@ import { UpdateProductLineDto } from "./dto/update-product-line.dto";
 import { UpdateServiceLineDto } from "./dto/update-service-line.dto";
 import { UpsertProductsDto } from "./dto/upsert-products.dto";
 import { UpsertServicesDto } from "./dto/upsert-services.dto";
+import {
+  computeOrderProductPlan,
+  getOrderInventoryCategoryScope,
+  isOrderBackorderAllowed,
+  normalizeInventoryCategoryText,
+  type OrderInventoryCategoryScope,
+  type OrderProductAvailability,
+} from "./utils/order-materials";
 
 type ActorUserId = number | null | undefined;
+type ResolvedOrderProduct = {
+  product: Products;
+  scope: OrderInventoryCategoryScope;
+  manualEntry: boolean;
+  specification: string | null;
+};
+type PreparedOrderProductLine = ResolvedOrderProduct & {
+  cantidad: number;
+  subtotal: number;
+  availability: OrderProductAvailability;
+  stockCoveredQuantity: number;
+  backorderQuantity: number;
+};
+
+const INTERNAL_PRODUCT_PLACEHOLDER_IMAGE = "https://via.placeholder.com/150";
+const INTERNAL_PRODUCT_MIN_PRICE = 0.01;
+const INTERNAL_SCOPE_TO_CATEGORY_NAME: Record<
+  Exclude<OrderInventoryCategoryScope, "sellable">,
+  string
+> = {
+  service_material: "Materiales de servicio",
+  tool: "Herramientas",
+};
 
 const ORDER_RELATIONS = [
   "products",
   "products.product",
+  "products.product.category",
   "services",
   "services.service",
   "services.service.typeofservice",
@@ -76,6 +109,8 @@ export class OrdersServicesService {
     private readonly warrantyRepo: Repository<OrdersServicesWarranty>,
     @InjectRepository(Products)
     private readonly productsRepo: Repository<Products>,
+    @InjectRepository(ProductCategory)
+    private readonly productCategoriesRepo: Repository<ProductCategory>,
     @InjectRepository(Services)
     private readonly servicesRepo: Repository<Services>,
     @InjectRepository(Technicians)
@@ -114,6 +149,203 @@ export class OrdersServicesService {
     const iva = this.asMoneyInt((base * 19) / 100);
     const total = base + iva;
     return { base, iva, total };
+  }
+
+  private normalizeProductName(raw: unknown) {
+    return String(raw ?? "").trim().slice(0, 100);
+  }
+
+  private normalizeSpecification(raw: unknown) {
+    const specification = String(raw ?? "").trim();
+    if (!specification) return null;
+    return specification.slice(0, 500);
+  }
+
+  private async resolveScopeCategory(
+    repo: Repository<ProductCategory>,
+    scope: Exclude<OrderInventoryCategoryScope, "sellable">
+  ) {
+    const categoryName = INTERNAL_SCOPE_TO_CATEGORY_NAME[scope];
+    const category = await repo.findOne({
+      where: { name: ILike(categoryName) } as any,
+    });
+    if (!category) {
+      throw new BadRequestException(
+        `No existe la categoria de inventario para ${categoryName}.`
+      );
+    }
+    return category;
+  }
+
+  private async ensureOrderProduct(
+    em: EntityManager,
+    item: AddProductDto
+  ): Promise<ResolvedOrderProduct> {
+    const productsRepo = em.getRepository(Products);
+    const categoriesRepo = em.getRepository(ProductCategory);
+
+    const specification = this.normalizeSpecification((item as any).specification);
+    const requestedName = this.normalizeProductName((item as any).nombre);
+
+    if (item.productid) {
+      const product = await productsRepo.findOne({
+        where: { productid: item.productid } as any,
+        relations: ["category"] as any,
+      });
+      if (!product) {
+        throw new BadRequestException(`Producto no existe: ${item.productid}`);
+      }
+      const scope = getOrderInventoryCategoryScope(product.category?.name);
+      return {
+        product,
+        scope,
+        manualEntry: !!(item as any).manualentry,
+        specification,
+      };
+    }
+
+    const manualScope = (item.categoryScope ?? "sellable") as OrderInventoryCategoryScope;
+    if (!requestedName) {
+      throw new BadRequestException("nombre es obligatorio para materiales bajo pedido.");
+    }
+    if (!isOrderBackorderAllowed(manualScope)) {
+      throw new BadRequestException(
+        "Solo los materiales de servicio y las herramientas pueden registrarse manualmente bajo pedido."
+      );
+    }
+
+    const category = await this.resolveScopeCategory(
+      categoriesRepo,
+      manualScope as Exclude<OrderInventoryCategoryScope, "sellable">
+    );
+
+    const existing = await productsRepo.findOne({
+      where: {
+        categoryid: category.id,
+        productname: ILike(requestedName),
+      } as any,
+      relations: ["category"] as any,
+    });
+
+    if (existing) {
+      return {
+        product: existing,
+        scope: manualScope,
+        manualEntry: true,
+        specification,
+      };
+    }
+
+    const created = await productsRepo.save(
+      productsRepo.create({
+        categoryid: category.id,
+        category,
+        isactive: true,
+        productpriceofsale: INTERNAL_PRODUCT_MIN_PRICE,
+        productpriceofsupplier: 0,
+        productstock: 0,
+        productname: requestedName,
+        productdescription:
+          specification ??
+          `Creado desde orden de servicio como ${
+            manualScope === "tool" ? "herramienta" : "material de servicio"
+          } bajo pedido.`,
+        productcode: null,
+        purchaseorderid: null,
+        suppliercategory: category.name,
+        image: INTERNAL_PRODUCT_PLACEHOLDER_IMAGE,
+        images: [INTERNAL_PRODUCT_PLACEHOLDER_IMAGE],
+      })
+    );
+
+    return {
+      product: created,
+      scope: manualScope,
+      manualEntry: true,
+      specification,
+    };
+  }
+
+  private prepareOrderProductLine(
+    resolved: ResolvedOrderProduct,
+    item: AddProductDto
+  ): PreparedOrderProductLine {
+    const cantidad = Math.max(1, Math.round(Number(item.cantidad || 0)));
+    const unit = Number(resolved.product.productpriceofsale ?? 0);
+    if (!Number.isFinite(unit) || unit < 0) {
+      throw new BadRequestException("Precio de producto inválido");
+    }
+
+    const productCategoryName = resolved.product.category?.name ?? null;
+    const scope = resolved.scope ?? getOrderInventoryCategoryScope(productCategoryName);
+    const currentStock = Math.max(0, Math.round(Number(resolved.product.productstock ?? 0)));
+    const plan = computeOrderProductPlan({
+      requestedQuantity: cantidad,
+      stock: currentStock,
+      scope,
+      manualEntry: resolved.manualEntry,
+      forcedAvailability: item.availability ?? null,
+    });
+
+    if (!isOrderBackorderAllowed(scope)) {
+      if (cantidad > currentStock) {
+        throw new BadRequestException(
+          `La cantidad de "${resolved.product.productname}" supera el stock disponible (${currentStock}).`
+        );
+      }
+      if (currentStock <= 0) {
+        throw new BadRequestException(
+          `El producto "${resolved.product.productname}" no tiene stock disponible en inventario.`
+        );
+      }
+    }
+
+    const stockCoveredQuantity =
+      item.stockcoveredquantity != null
+        ? Math.max(0, Math.min(cantidad, Math.round(Number(item.stockcoveredquantity))))
+        : plan.stockCoveredQuantity;
+    const backorderQuantity =
+      item.backorderquantity != null
+        ? Math.max(0, Math.min(cantidad, Math.round(Number(item.backorderquantity))))
+        : plan.backorderQuantity;
+    const normalizedBackorder =
+      stockCoveredQuantity + backorderQuantity === cantidad
+        ? backorderQuantity
+        : Math.max(0, cantidad - stockCoveredQuantity);
+    const availability =
+      item.availability === "SOLICITAR" || normalizedBackorder > 0 || resolved.manualEntry
+        ? "SOLICITAR"
+        : plan.availability;
+
+    const subtotal = this.asMoneyInt(unit * cantidad);
+
+    return {
+      ...resolved,
+      cantidad,
+      subtotal,
+      availability,
+      stockCoveredQuantity,
+      backorderQuantity: normalizedBackorder,
+    };
+  }
+
+  private async savePreparedOrderProductLine(
+    ospRepo: Repository<OrdersServicesProducts>,
+    orderId: number,
+    line: PreparedOrderProductLine,
+    current?: OrdersServicesProducts | null
+  ) {
+    const target = current ?? ospRepo.create();
+    target.order = { ordersservicesid: orderId } as any;
+    target.product = line.product;
+    target.cantidad = line.cantidad;
+    target.availability = line.availability;
+    target.stockcoveredquantity = line.stockCoveredQuantity;
+    target.backorderquantity = line.backorderQuantity;
+    target.specification = line.specification;
+    target.manualentry = line.manualEntry;
+    target.subtotal = line.subtotal;
+    return await ospRepo.save(target);
   }
 
   private normalizeStateName(name?: string | null) {
@@ -450,8 +682,7 @@ export class OrdersServicesService {
     const ospRepo = em.getRepository(OrdersServicesProducts);
     const ossRepo = em.getRepository(OrdersServicesServices);
     const historyRepo = em.getRepository(OrdersServicesHistory);
-    const productsRepo = em.getRepository(Products);
-    const servicesRepo = em.getRepository(Services);
+      const servicesRepo = em.getRepository(Services);
     const techRepo = em.getRepository(Technicians);
     const clientsRepo = em.getRepository(Customers);
     const statesRepo = em.getRepository(States);
@@ -518,29 +749,22 @@ export class OrdersServicesService {
     let subProducts = 0;
 
     for (const item of items) {
-      if (seenProducts.has(item.productid))
+      const resolved = await this.ensureOrderProduct(em, item);
+      const productId = Number(resolved.product?.productid);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new BadRequestException("Producto inválido en la orden");
+      }
+      if (seenProducts.has(productId)) {
         throw new BadRequestException("Hay productos repetidos en la orden");
-      seenProducts.add(item.productid);
+      }
+      seenProducts.add(productId);
 
-      const product = await productsRepo.findOne({
-        where: { productid: item.productid } as any,
-      });
-      if (!product) throw new BadRequestException("Producto no existe");
-
-      const unit = Number(product.productpriceofsale ?? 0);
-      if (!Number.isFinite(unit) || unit < 0)
-        throw new BadRequestException("Precio de producto invÃ¡lido");
-
-      const subtotal = this.asMoneyInt(unit * item.cantidad);
-      subProducts += subtotal;
-
-      await ospRepo.save(
-        ospRepo.create({
-          order: { ordersservicesid: order.ordersservicesid } as any,
-          product,
-          cantidad: item.cantidad,
-          subtotal,
-        })
+      const line = this.prepareOrderProductLine(resolved, item);
+      subProducts += line.subtotal;
+      await this.savePreparedOrderProductLine(
+        ospRepo,
+        order.ordersservicesid,
+        line
       );
     }
 
@@ -905,40 +1129,28 @@ export class OrdersServicesService {
     await this.ordersRepo.manager.transaction(async (em) => {
       const ordersRepo = em.getRepository(OrdersServices);
       const ospRepo = em.getRepository(OrdersServicesProducts);
-      const productsRepo = em.getRepository(Products);
 
       const order = await ordersRepo.findOne({
         where: { ordersservicesid: id } as any,
       });
       if (!order) throw new NotFoundException("Orden no encontrada");
 
+      const resolved = await this.ensureOrderProduct(em, dto);
+      const productId = Number(resolved.product?.productid);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new BadRequestException("Producto inválido");
+      }
+
       const exists = await ospRepo.findOne({
         where: {
           order: { ordersservicesid: id } as any,
-          product: { productid: dto.productid } as any,
+          product: { productid: productId } as any,
         } as any,
       });
-      if (exists) throw new BadRequestException("Ese producto ya estÃ¡ agregado");
+      if (exists) throw new BadRequestException("Ese producto ya está agregado");
 
-      const product = await productsRepo.findOne({
-        where: { productid: dto.productid } as any,
-      });
-      if (!product) throw new BadRequestException("Producto no existe");
-
-      const unit = Number(product.productpriceofsale ?? 0);
-      if (!Number.isFinite(unit) || unit < 0)
-        throw new BadRequestException("Precio de producto invÃ¡lido");
-
-      const subtotal = this.asMoneyInt(unit * dto.cantidad);
-
-      await ospRepo.save(
-        ospRepo.create({
-          order: { ordersservicesid: id } as any,
-          product,
-          cantidad: dto.cantidad,
-          subtotal,
-        })
-      );
+      const line = this.prepareOrderProductLine(resolved, dto);
+      await this.savePreparedOrderProductLine(ospRepo, id, line);
 
       await this.recalcAndPersistTotal(em, id);
     });
@@ -951,21 +1163,29 @@ export class OrdersServicesService {
     const replace = dto.replace !== undefined ? !!dto.replace : true;
     const items = Array.isArray(dto.items) ? dto.items : [];
 
-    const seen = new Set<number>();
+    const seenKeys = new Set<string>();
     for (const it of items) {
-      const pid = Number(it.productid);
-      if (!Number.isFinite(pid) || pid <= 0) throw new BadRequestException("productid invÃ¡lido");
-      if (seen.has(pid)) throw new BadRequestException("Hay productos repetidos en la lista");
-      seen.add(pid);
-
       const c = Number(it.cantidad);
       if (!Number.isFinite(c) || c <= 0) throw new BadRequestException("cantidad invÃ¡lida");
+
+      const pid = Number(it.productid);
+      const name = this.normalizeProductName((it as any).nombre);
+      if ((!Number.isFinite(pid) || pid <= 0) && !name) {
+        throw new BadRequestException("Cada línea debe tener productid o nombre");
+      }
+
+      const scope = String((it as any).categoryScope ?? "").trim();
+      const key =
+        Number.isFinite(pid) && pid > 0
+          ? `id:${pid}`
+          : `name:${normalizeInventoryCategoryText(scope)}:${normalizeInventoryCategoryText(name)}`;
+      if (seenKeys.has(key)) throw new BadRequestException("Hay productos repetidos en la lista");
+      seenKeys.add(key);
     }
 
     await this.ordersRepo.manager.transaction(async (em) => {
       const ordersRepo = em.getRepository(OrdersServices);
       const ospRepo = em.getRepository(OrdersServicesProducts);
-      const productsRepo = em.getRepository(Products);
 
       const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
       if (!order) throw new NotFoundException("Orden no encontrada");
@@ -981,35 +1201,23 @@ export class OrdersServicesService {
         if (pid) byProductId.set(pid, row);
       }
 
+      const keep = new Set<number>();
+
       for (const it of items) {
-        const product = await productsRepo.findOne({ where: { productid: it.productid } as any });
-        if (!product) throw new BadRequestException(`Producto no existe: ${it.productid}`);
-
-        const unit = Number(product.productpriceofsale ?? 0);
-        if (!Number.isFinite(unit) || unit < 0) throw new BadRequestException("Precio de producto invÃ¡lido");
-
-        const cantidad = Number(it.cantidad);
-        const subtotal = this.asMoneyInt(unit * cantidad);
-
-        const current = byProductId.get(it.productid);
-        if (current) {
-          current.cantidad = cantidad;
-          current.subtotal = subtotal;
-          await ospRepo.save(current);
-        } else {
-          await ospRepo.save(
-            ospRepo.create({
-              order: { ordersservicesid: id } as any,
-              product,
-              cantidad,
-              subtotal,
-            })
-          );
+        const resolved = await this.ensureOrderProduct(em, it);
+        const productId = Number(resolved.product?.productid);
+        if (!Number.isFinite(productId) || productId <= 0) {
+          throw new BadRequestException("Producto inválido en la orden");
         }
+
+        keep.add(productId);
+
+        const line = this.prepareOrderProductLine(resolved, it);
+        const current = byProductId.get(productId) ?? null;
+        await this.savePreparedOrderProductLine(ospRepo, id, line, current);
       }
 
       if (replace) {
-        const keep = new Set(items.map((x) => x.productid));
         const toDelete = existing.filter((row) => {
           const pid = Number((row as any)?.product?.productid);
           return pid && !keep.has(pid);
@@ -1028,7 +1236,6 @@ export class OrdersServicesService {
     await this.ordersRepo.manager.transaction(async (em) => {
       const ordersRepo = em.getRepository(OrdersServices);
       const ospRepo = em.getRepository(OrdersServicesProducts);
-      const productsRepo = em.getRepository(Products);
 
       const order = await ordersRepo.findOne({
         where: { ordersservicesid: id } as any,
@@ -1040,24 +1247,30 @@ export class OrdersServicesService {
           order: { ordersservicesid: id } as any,
           product: { productid: productId } as any,
         } as any,
-        relations: ["product"] as any,
+        relations: ["product", "product.category"] as any,
       });
       if (!row) throw new NotFoundException("Producto no estÃ¡ en la orden");
 
-      const product = row.product
-        ? row.product
-        : await productsRepo.findOne({ where: { productid: productId } as any });
-      if (!product) throw new BadRequestException("Producto no existe");
+      const resolved: ResolvedOrderProduct = {
+        product: row.product,
+        scope: getOrderInventoryCategoryScope(row.product?.category?.name),
+        manualEntry: dto.manualentry !== undefined ? !!dto.manualentry : !!row.manualentry,
+        specification:
+          this.normalizeSpecification(dto.specification) ??
+          this.normalizeSpecification(row.specification),
+      };
 
-      const unit = Number(product.productpriceofsale ?? 0);
-      if (!Number.isFinite(unit) || unit < 0)
-        throw new BadRequestException("Precio de producto invÃ¡lido");
+      const line = this.prepareOrderProductLine(resolved, {
+        productid: productId,
+        cantidad: dto.cantidad,
+        availability: dto.availability,
+        stockcoveredquantity: dto.stockcoveredquantity,
+        backorderquantity: dto.backorderquantity,
+        specification: dto.specification,
+        manualentry: dto.manualentry,
+      });
 
-      const cantidad = Number(dto.cantidad);
-      row.cantidad = cantidad;
-      row.subtotal = this.asMoneyInt(unit * cantidad);
-
-      await ospRepo.save(row);
+      await this.savePreparedOrderProductLine(ospRepo, id, line, row);
       await this.recalcAndPersistTotal(em, id);
     });
 
@@ -1447,6 +1660,7 @@ export class OrdersServicesService {
       .createQueryBuilder("o")
       .leftJoinAndSelect("o.products", "osp")
       .leftJoinAndSelect("osp.product", "p")
+      .leftJoinAndSelect("p.category", "pc")
       .leftJoinAndSelect("o.services", "oss")
       .leftJoinAndSelect("oss.service", "s")
       .leftJoinAndSelect("s.typeofservice", "tos")
