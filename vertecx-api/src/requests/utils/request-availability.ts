@@ -29,6 +29,7 @@ export type RequestSiteChecklist = {
   materialsSummary?: string | null;
   additionalContext?: string | null;
   evidenceNotes?: string | null;
+  evidenceImages?: string[] | null;
 };
 
 export type RequestFlowMetadata = {
@@ -166,6 +167,12 @@ function normalizePurchasedMaterials(
 function normalizeSiteChecklist(input: unknown): RequestSiteChecklist | null {
   if (!input || typeof input !== "object") return null;
 
+  const evidenceImages = Array.isArray((input as any)?.evidenceImages)
+    ? (input as any).evidenceImages
+        .map((item: unknown) => trimOrNull(item))
+        .filter((item: string | null): item is string => !!item)
+    : [];
+
   const normalized: RequestSiteChecklist = {
     installationArea: trimOrNull((input as any)?.installationArea),
     installationHeight: trimOrNull((input as any)?.installationHeight),
@@ -176,6 +183,7 @@ function normalizeSiteChecklist(input: unknown): RequestSiteChecklist | null {
     materialsSummary: trimOrNull((input as any)?.materialsSummary),
     additionalContext: trimOrNull((input as any)?.additionalContext),
     evidenceNotes: trimOrNull((input as any)?.evidenceNotes),
+    ...(evidenceImages.length ? { evidenceImages } : {}),
   };
 
   const hasContent = Object.values(normalized).some((value) => value != null);
