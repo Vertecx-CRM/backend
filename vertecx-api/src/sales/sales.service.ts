@@ -4,12 +4,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
 import { Sales } from './entities/sales.entity';
 import { Salesdetail } from './entities/salesdetail.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Products } from 'src/products/entities/products.entity';
+import { Customers } from 'src/customers/entities/customers.entity';
+import { resolveUserIdFromAuth } from 'src/shared/utils/resolve-user-id';
 
 @Injectable()
 export class SalesService {
@@ -23,8 +25,51 @@ export class SalesService {
     @InjectRepository(Products)
     private readonly productsRepo: Repository<Products>,
 
+    @InjectRepository(Customers)
+    private readonly customersRepo: Repository<Customers>,
+
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
+
+  private normalizeRoleName(role?: string | null) {
+    return String(role ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  private extractSaleIdFromReference(reference: string | null | undefined) {
+    const match = /^VERTECX-SALE-(\d+)-\d+$/i.exec(String(reference ?? '').trim());
+    const id = Number(match?.[1] ?? 0);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }
+
+  private getScopedWhereForUser(user: any): FindOptionsWhere<Sales> | undefined {
+    if (this.normalizeRoleName(user?.rolename) !== 'cliente') {
+      return undefined;
+    }
+
+    return {
+      customer: {
+        userid: resolveUserIdFromAuth(user),
+      } as any,
+    };
+  }
+
+  private withDireccionFromServiceRequest<T extends Sales | null>(sale: T) {
+    if (!sale) return sale;
+    const detailList = Array.isArray((sale as any).salesdetail) ? (sale as any).salesdetail : [];
+    const withRequest = detailList.find((d: any) => {
+      const dir = String(d?.serviceRequest?.direccion ?? "").trim();
+      return dir.length > 0;
+    });
+    const direccion = String(withRequest?.serviceRequest?.direccion ?? "").trim();
+    return {
+      ...(sale as any),
+      direccion: direccion || undefined,
+    };
+  }
 
   async create(dto: CreateSaleDto) {
     if (!dto.details || dto.details.length === 0) {
@@ -34,7 +79,7 @@ export class SalesService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      // 1. Validar productos y calcular subtotal + descuentos por línea
+      // 1. Validar productos, stock y calcular subtotal + descuentos por línea
       let subtotal = 0;
       let discountByLines = 0;
 
@@ -48,6 +93,16 @@ export class SalesService {
             `Producto con ID ${d.productid} no encontrado.`,
           );
         }
+
+        const currentStock = product.productstock ?? 0;
+        if (currentStock < d.quantity) {
+          throw new BadRequestException(
+            `Stock insuficiente para el producto ${product.productname}. Disponible: ${currentStock}, solicitado: ${d.quantity}.`,
+          );
+        }
+
+        product.productstock = currentStock - d.quantity;
+        await manager.save(Products, product);
 
         const lineTotal = d.quantity * d.unitprice;
         const lineDiscount =
@@ -65,10 +120,11 @@ export class SalesService {
         ((subtotal - discountByLines) * taxPercent) / 100,
       );
       const globalDiscount = dto.discountamount ?? 0;
+      const shippingAmount = Number(dto.shippingamount ?? 0);
 
       const totalDiscount = discountByLines + globalDiscount;
 
-      const totalamount = subtotal - totalDiscount + taxamount;
+      const totalamount = subtotal - totalDiscount + taxamount + shippingAmount;
 
       // 3. Crear venta
       const sale = manager.create(Sales, {
@@ -106,37 +162,120 @@ export class SalesService {
           discountpercent: d.discountpercent ?? 0,
           discountamount: lineDiscount,
           notes: d.notes ?? null,
+          servicerequestid: d.servicerequestid ?? null,
         });
 
         await manager.save(Salesdetail, detail);
       }
 
       // 5. Devolver venta con relaciones para el detalle
-      return await manager.findOne(Sales, {
+      const fullSale = await manager.findOne(Sales, {
         where: { saleid: savedSale.saleid },
-        relations: ['customer', 'salesdetail', 'salesdetail.products'],
+        relations: [
+          'customer',
+          'salesdetail',
+          'salesdetail.products',
+          'salesdetail.serviceRequest',
+        ],
       });
+      return this.withDireccionFromServiceRequest(fullSale);
+    });
+  }
+
+  async createFromAuth(user: any, dto: Omit<CreateSaleDto, 'customerid'>) {
+    const userId = resolveUserIdFromAuth(user);
+    const customer = await this.customersRepo.findOne({
+      where: { userid: userId },
+    });
+
+    if (!customer) {
+      throw new BadRequestException(
+        'El usuario autenticado no tiene un cliente asociado.',
+      );
+    }
+
+    return this.create({
+      ...dto,
+      customerid: Number(customer.customerid),
     });
   }
 
   //  Obtener todas las ventas (para el DataTable)
   async findAll() {
-    return await this.salesRepo.find({
-      relations: ['customer', 'salesdetail', 'salesdetail.products'],
+    const list = await this.salesRepo.find({
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
       order: { saleid: 'DESC' },
     });
+    return list.map((sale) => this.withDireccionFromServiceRequest(sale));
+  }
+
+  async findAllForUser(user: any) {
+    const list = await this.salesRepo.find({
+      where: this.getScopedWhereForUser(user),
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
+      order: { saleid: 'DESC' },
+    });
+
+    return list.map((sale) => this.withDireccionFromServiceRequest(sale));
   }
 
   //  Obtener venta por ID (para ViewSale)
   async findOne(id: number) {
     const sale = await this.salesRepo.findOne({
       where: { saleid: id },
-      relations: ['customer', 'salesdetail', 'salesdetail.products'],
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
     });
 
     if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
-    return sale;
+    return this.withDireccionFromServiceRequest(sale);
   }
+
+  async findOneForUser(user: any, id: number) {
+    const scopedWhere = this.getScopedWhereForUser(user);
+    const sale = await this.salesRepo.findOne({
+      where: scopedWhere ? { saleid: id, ...scopedWhere } : { saleid: id },
+      relations: [
+        'customer',
+        'customer.users',
+        'salesdetail',
+        'salesdetail.products',
+        'salesdetail.serviceRequest',
+      ],
+    });
+
+    if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
+    return this.withDireccionFromServiceRequest(sale);
+  }
+
+  async findOneForCheckout(id: number, reference: string) {
+    const referenceSaleId = this.extractSaleIdFromReference(reference);
+    if (!referenceSaleId || Number(referenceSaleId) !== Number(id)) {
+      throw new BadRequestException(
+        'La referencia del checkout no corresponde a la venta solicitada.',
+      );
+    }
+
+    return this.findOne(id);
+  }
+
   //  Actualizar venta
   async update(id: number, dto: UpdateSaleDto) {
     const sale = await this.salesRepo.findOne({ where: { saleid: id } });
@@ -146,12 +285,110 @@ export class SalesService {
     return await this.salesRepo.save(sale);
   }
 
-  //  Eliminar venta (con detalles)
-  async remove(id: number) {
-    const sale = await this.salesRepo.findOne({ where: { saleid: id } });
-    if (!sale) throw new NotFoundException(`Venta ${id} no encontrada.`);
+  /* ============================================================
+     CANCELAR VENTA (revierte stock + valida estado)
+  ============================================================ */
+  async cancel(id: number, observation?: string) {
+    const sale = await this.salesRepo.findOne({
+      where: { saleid: id },
+      relations: ['salesdetail'],
+    });
 
-    await this.detailsRepo.delete({ saleid: id });
-    return await this.salesRepo.delete(id);
+    if (!sale) throw new NotFoundException('Venta no encontrada.');
+
+    if (sale.salestatus === 'Cancelled') {
+      throw new BadRequestException('La venta ya está anulada.');
+    }
+
+    if (sale.salestatus !== 'Pending' && sale.salestatus !== 'Completed') {
+      throw new BadRequestException(
+        'Solo se pueden anular ventas en estado Pending o Completed.',
+      );
+    }
+
+    // ✅ No permitir anular si tiene pago registrado
+    if (sale.estadoPago === 'Pagada') {
+      throw new BadRequestException(
+        'No se puede anular una venta que ya fue pagada.',
+      );
+    }
+
+    if (sale.estadoPago === 'Abonada') {
+      throw new BadRequestException(
+        'No se puede anular una venta con abono registrado. Revise el pago antes de anular.',
+      );
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      // Reintegrar stock
+      for (const detail of sale.salesdetail) {
+        await manager.increment(
+          Products,
+          { productid: detail.productid },
+          'productstock',
+          detail.quantity,
+        );
+      }
+
+      // Actualizar estado
+      await manager.update(
+        Sales,
+        { saleid: id },
+        {
+          salestatus: 'Cancelled',
+          notes: observation ?? sale.notes,
+        },
+      );
+
+      return manager.findOne(Sales, { where: { saleid: id } });
+    });
+  }
+
+  /* ============================================================
+     ACTUALIZAR ESTADO DE PAGO
+     Si estadoPago = 'Pagada' → salestatus = 'Completed' automáticamente
+  ============================================================ */
+  async updateEstadoPago(
+    id: number,
+    estadoPago: 'Abonada' | 'Pagada',
+  ) {
+    const sale = await this.salesRepo.findOne({ where: { saleid: id } });
+
+    if (!sale) {
+      throw new NotFoundException(`Venta ${id} no encontrada.`);
+    }
+
+    sale.estadoPago = estadoPago;
+
+    // Cambio automático de estado al marcar como pagada
+    if (estadoPago === 'Pagada') {
+      sale.salestatus = 'Completed';
+    }
+
+    return await this.salesRepo.save(sale);
+  }
+
+  /* ============================================================
+     ELIMINAR VENTA (solo si está cancelada)
+  ============================================================ */
+  async remove(id: number) {
+    const sale = await this.salesRepo.findOne({
+      where: { saleid: id },
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Venta no encontrada.');
+    }
+
+    if (sale.salestatus !== 'Cancelled') {
+      throw new BadRequestException(
+        'Solo se pueden eliminar ventas que ya estén anuladas.',
+      );
+    }
+
+    await this.salesRepo.remove(sale);
+
+    return { message: `Venta ${id} eliminada correctamente.` };
   }
 }
+

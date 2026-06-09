@@ -21,8 +21,6 @@ export class DashboardService {
     @InjectRepository(ServiceRequest) private serviceRequestsRepo: Repository<ServiceRequest>
   ) { }
 
-
-  //  VALIDACION DE AÑO
   private validateYear(year?: number): number | null {
     if (year === undefined || year === null || year === 0) return null;
 
@@ -32,9 +30,6 @@ export class DashboardService {
 
     return year;
   }
-
-
-  //  VENTAS POR MES
 
   async getSalesByMonth(year?: number) {
     const y = this.validateYear(year);
@@ -49,9 +44,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  TOTAL VENTAS
-
   async getTotalSales(year?: number) {
     const y = this.validateYear(year);
 
@@ -64,25 +56,23 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-
-  //  VENTAS DIARIAS POR MES
-
   async getDailySalesByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.salesRepo
+    const qb = this.salesRepo
       .createQueryBuilder("s")
       .select("EXTRACT(DAY FROM s.saledate)", "day")
       .addSelect("SUM(s.totalamount)", "total")
-      .where("EXTRACT(MONTH FROM s.saledate) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM s.saledate) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM s.saledate) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM s.saledate) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
 
-
-  // COMPRAS POR MES
   async getPurchasesByMonth(year?: number) {
     const y = this.validateYear(year);
 
@@ -96,8 +86,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  TOTAL COMPRAS
   async getTotalPurchases(year?: number) {
     const y = this.validateYear(year);
 
@@ -110,24 +98,23 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-  //  COMPRAS DIARIAS POR MES
-
   async getDailyPurchasesByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.purchasesRepo
+    const qb = this.purchasesRepo
       .createQueryBuilder("p")
       .select("EXTRACT(DAY FROM p.createdat)", "day")
       .addSelect("SUM(p.amount)", "total")
-      .where("EXTRACT(MONTH FROM p.createdat) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM p.createdat) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM p.createdat) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM p.createdat) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
 
- 
-  // PRODUCTOS POR CATEGORIA
   async getCategoryProducts(year?: number) {
     const y = this.validateYear(year);
 
@@ -141,8 +128,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-  //  ÓRDENES POR ESTADO
 
   async getOrdersByState(year?: number) {
     const y = this.validateYear(year);
@@ -158,9 +143,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  // TOTAL ÓRDENES
   async getTotalOrders(year?: number) {
     const y = this.validateYear(year);
 
@@ -173,8 +155,6 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-
-  // CLIENTES POR MES
   async getClientsByMonth(year?: number) {
     const y = this.validateYear(year);
 
@@ -189,9 +169,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  //  TOTAL CLIENTES
   async getTotalClients(year?: number) {
     const y = this.validateYear(year);
 
@@ -205,26 +182,24 @@ export class DashboardService {
     return { total: Number(result.total) || 0 };
   }
 
-
-
-  //  CLIENTES DIARIOS POR MES
   async getDailyClientsByMonth(month: number, year?: number) {
-    const y = this.validateYear(year);
-
-    return this.customerRepo
+    const qb = this.customerRepo
       .createQueryBuilder("c")
       .innerJoin("users", "u", "u.userid = c.userid")
       .select("EXTRACT(DAY FROM u.createat)", "day")
       .addSelect("COUNT(*)", "total")
-      .where("EXTRACT(MONTH FROM u.createat) = :month", { month })
-      .andWhere("(CAST(:year AS INT) IS NULL) OR EXTRACT(YEAR FROM u.createat) = :year", { year: y })
+      .where("EXTRACT(MONTH FROM u.createat) = :month", { month });
+
+    if (year) {
+      qb.andWhere("EXTRACT(YEAR FROM u.createat) = :year", { year });
+    }
+
+    return qb
       .groupBy("day")
       .orderBy("day")
       .getRawMany();
   }
 
-
-  //  SOLICITUDES POR ESTADO
   async getServiceRequestsByState(year?: number) {
     const y = year ?? null;
 
@@ -239,9 +214,6 @@ export class DashboardService {
       .getRawMany();
   }
 
-
-
-  //  TOTAL SOLICITUDES
   async getTotalServiceRequests(year?: number) {
     const y = this.validateYear(year);
 

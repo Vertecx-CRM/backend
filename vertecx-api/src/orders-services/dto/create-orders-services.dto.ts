@@ -3,33 +3,31 @@ import {
   IsArray,
   IsDateString,
   IsInt,
-  IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
   Min,
+  MinLength,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
-class CreateOrdersServicesProductItemDto {
-  @IsInt()
-  @Min(1)
-  productid: number;
-
-  @IsInt()
-  @Min(1)
-  cantidad: number;
-}
+import { AddProductDto } from './add-product.dto';
+import { AddServiceDto } from './add-service.dto';
 
 export class CreateOrdersServicesDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  description?: string;
 
   @IsInt()
   @Min(1)
   clientid: number;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(255)
+  direccion: string;
 
   @IsInt()
   @Min(1)
@@ -58,11 +56,22 @@ export class CreateOrdersServicesDto {
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => CreateOrdersServicesProductItemDto)
-  products: CreateOrdersServicesProductItemDto[];
+  @Type(() => AddProductDto)
+  products: AddProductDto[];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AddServiceDto)
+  services: AddServiceDto[];
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   files?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  viaticos?: number;
 }

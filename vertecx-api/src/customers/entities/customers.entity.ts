@@ -1,5 +1,4 @@
 import { Sales } from 'src/sales/entities/sales.entity';
-import { States } from 'src/shared/entities/states.entity';
 import { Users } from 'src/users/entities/users.entity';
 import {
   Entity,
@@ -24,10 +23,16 @@ export class Customers {
   @Column({ nullable: true })
   customerzipcode: string;
 
-  @ManyToOne(() => Users)
+  // 🔹 Relación con usuario (obligatoria)
+  @ManyToOne(() => Users, (user) => user.customers, {
+    eager: false,
+    nullable: false,
+    onDelete: 'CASCADE', // Si se elimina el usuario, se elimina el customer
+  })
   @JoinColumn({ name: 'userid' })
   users: Users;
 
+  // 🔹 Relación con ventas
   @OneToMany(() => Sales, (sale) => sale.customer)
   sales: Sales[];
 }

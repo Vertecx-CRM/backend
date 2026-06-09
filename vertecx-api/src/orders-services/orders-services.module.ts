@@ -1,26 +1,42 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { OrdersServicesService } from './orders-services.service';
+import { OrdersServicesController } from './orders-services.controller';
+
 import { OrdersServices } from './entities/orders-services.entity';
 import { OrdersServicesProducts } from './entities/orders-services-products.entity';
+import { OrdersServicesServices } from './entities/orders-services-services.entity';
 import { OrdersServicesHistory } from './entities/orders-services-history.entity';
+import { OrdersServicesWarranty } from './entities/orders-services-warranty.entity';
+
 import { Products } from 'src/products/entities/products.entity';
+import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
+import { Services } from 'src/services/entities/services.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 import { Customers } from 'src/customers/entities/customers.entity';
 import { States } from 'src/shared/entities/states.entity';
-import { OrdersServicesService } from './orders-services.service';
-import { OrdersServicesController } from './orders-services.controller';
+import { Users } from 'src/users/entities/users.entity';
+import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
+import { QuotesModule } from 'src/quotes/quotes.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       OrdersServices,
       OrdersServicesProducts,
+      OrdersServicesServices,
       OrdersServicesHistory,
+      OrdersServicesWarranty,
       Products,
+      ProductCategory,
+      Services,
       Technicians,
       Customers,
       States,
+      Users,
+      ServiceRequest,
     ]),
+    QuotesModule,
   ],
   controllers: [OrdersServicesController],
   providers: [OrdersServicesService],

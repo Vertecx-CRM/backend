@@ -1,149 +1,738 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, EntityManager, In, Repository } from 'typeorm';
+﻿import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Between, EntityManager, In, ILike, Repository } from "typeorm";
 
-import { OrdersServices } from './entities/orders-services.entity';
-import { OrdersServicesProducts } from './entities/orders-services-products.entity';
-import { OrdersServicesHistory, OrdersServicesHistoryAction } from './entities/orders-services-history.entity';
+import { OrdersServices } from "./entities/orders-services.entity";
+import { OrdersServicesProducts } from "./entities/orders-services-products.entity";
+import { OrdersServicesServices } from "./entities/orders-services-services.entity";
+import {
+  OrdersServicesHistory,
+  OrdersServicesHistoryType,
+} from "./entities/orders-services-history.entity";
+import { OrdersServicesWarranty } from "./entities/orders-services-warranty.entity";
 
-import { Products } from 'src/products/entities/products.entity';
-import { Technicians } from 'src/technicians/entities/technicians.entity';
-import { Customers } from 'src/customers/entities/customers.entity';
-import { States } from 'src/shared/entities/states.entity';
+import { Products } from "src/products/entities/products.entity";
+import { Services } from "src/services/entities/services.entity";
+import { Technicians } from "src/technicians/entities/technicians.entity";
+import { Customers } from "src/customers/entities/customers.entity";
+import { States } from "src/shared/entities/states.entity";
+import { Users } from "src/users/entities/users.entity";
+import { MailService } from "src/shared/mail/mail.service";
+import { ServiceRequest } from "src/requests/entities/servicerequest.entity";
+import { QuotesService } from "src/quotes/quotes.service";
+import { ProductCategory } from "src/products-categories/entities/product-category.entity";
 
-import { CreateOrdersServicesDto } from './dto/create-orders-services.dto';
-import { UpdateOrdersServicesDto } from './dto/update-orders-services.dto';
-import { AddProductDto } from './dto/add-product.dto';
-import { AssignTechniciansDto } from './dto/assign-technicians.dto';
-import { FinishOrderDto } from './dto/finish-order.dto';
-import { AddFileDto } from './dto/add-file.dto';
-import { RemoveFileDto } from './dto/remove-file.dto';
-import { ReprogramOrderDto } from './dto/reprogram-order.dto';
+import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
+import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
+import { AddProductDto } from "./dto/add-product.dto";
+import { AddServiceDto } from "./dto/add-service.dto";
+import { AssignTechniciansDto } from "./dto/assign-technicians.dto";
+import { FinishOrderDto } from "./dto/finish-order.dto";
+import { AddFileDto } from "./dto/add-file.dto";
+import { RemoveFileDto } from "./dto/remove-file.dto";
+import { ReprogramOrderDto } from "./dto/reprogram-order.dto";
+import { AddWorklogDto } from "./dto/add-worklog.dto";
+import { ReportWarrantyDto } from "./dto/report-warranty.dto";
+import { UpdateProductLineDto } from "./dto/update-product-line.dto";
+import { UpdateServiceLineDto } from "./dto/update-service-line.dto";
+import { UpsertProductsDto } from "./dto/upsert-products.dto";
+import { UpsertServicesDto } from "./dto/upsert-services.dto";
+import {
+  computeOrderProductPlan,
+  getOrderInventoryCategoryScope,
+  isOrderBackorderAllowed,
+  normalizeInventoryCategoryText,
+  type OrderInventoryCategoryScope,
+  type OrderProductAvailability,
+} from "./utils/order-materials";
 
 type ActorUserId = number | null | undefined;
+type ResolvedOrderProduct = {
+  product: Products;
+  scope: OrderInventoryCategoryScope;
+  manualEntry: boolean;
+  specification: string | null;
+};
+type PreparedOrderProductLine = ResolvedOrderProduct & {
+  cantidad: number;
+  subtotal: number;
+  availability: OrderProductAvailability;
+  stockCoveredQuantity: number;
+  backorderQuantity: number;
+};
 
-const ACTION_LABELS: Record<OrdersServicesHistoryAction, string> = {
-  CREATE: 'Orden creada',
-  UPDATE: 'Orden actualizada',
-  DELETE: 'Orden eliminada',
-  ADD_PRODUCT: 'Producto agregado',
-  REMOVE_PRODUCT: 'Producto eliminado',
-  ASSIGN_TECHNICIANS: 'Técnicos asignados',
-  FINISH: 'Orden finalizada',
-  ADD_FILE: 'Archivo agregado',
-  REMOVE_FILE: 'Archivo eliminado',
-  REPROGRAM: 'Orden reprogramada',
+const INTERNAL_PRODUCT_PLACEHOLDER_IMAGE = "https://via.placeholder.com/150";
+const INTERNAL_PRODUCT_MIN_PRICE = 0.01;
+const INTERNAL_SCOPE_TO_CATEGORY_NAME: Record<
+  Exclude<OrderInventoryCategoryScope, "sellable">,
+  string
+> = {
+  service_material: "Materiales de servicio",
+  tool: "Herramientas",
 };
 
 const ORDER_RELATIONS = [
-  'products',
-  'products.product',
-  'technicians',
-  'technicians.users',
-  'client',
-  'client.users',
-  'state',
-  'history',
+  "products",
+  "products.product",
+  "products.product.category",
+  "services",
+  "services.service",
+  "services.service.typeofservice",
+  "technicians",
+  "technicians.users",
+  "client",
+  "client.users",
+  "state",
+  "history",
+  "history.technician",
+  "history.technician.users",
+  "warrantyRecord",
+  "warrantyRecord.reportedBy",
 ] as const;
 
 @Injectable()
 export class OrdersServicesService {
   constructor(
-    @InjectRepository(OrdersServices) private readonly ordersRepo: Repository<OrdersServices>,
-    @InjectRepository(OrdersServicesProducts) private readonly ospRepo: Repository<OrdersServicesProducts>,
-    @InjectRepository(OrdersServicesHistory) private readonly historyRepo: Repository<OrdersServicesHistory>,
-    @InjectRepository(Products) private readonly productsRepo: Repository<Products>,
-    @InjectRepository(Technicians) private readonly techRepo: Repository<Technicians>,
-    @InjectRepository(Customers) private readonly clientsRepo: Repository<Customers>,
-    @InjectRepository(States) private readonly statesRepo: Repository<States>,
+    @InjectRepository(OrdersServices)
+    private readonly ordersRepo: Repository<OrdersServices>,
+    @InjectRepository(OrdersServicesProducts)
+    private readonly ospRepo: Repository<OrdersServicesProducts>,
+    @InjectRepository(OrdersServicesServices)
+    private readonly ossRepo: Repository<OrdersServicesServices>,
+    @InjectRepository(OrdersServicesHistory)
+    private readonly historyRepo: Repository<OrdersServicesHistory>,
+    @InjectRepository(OrdersServicesWarranty)
+    private readonly warrantyRepo: Repository<OrdersServicesWarranty>,
+    @InjectRepository(Products)
+    private readonly productsRepo: Repository<Products>,
+    @InjectRepository(ProductCategory)
+    private readonly productCategoriesRepo: Repository<ProductCategory>,
+    @InjectRepository(Services)
+    private readonly servicesRepo: Repository<Services>,
+    @InjectRepository(Technicians)
+    private readonly techRepo: Repository<Technicians>,
+    @InjectRepository(Customers)
+    private readonly clientsRepo: Repository<Customers>,
+    @InjectRepository(States)
+    private readonly statesRepo: Repository<States>,
+    @InjectRepository(Users)
+    private readonly usersRepo: Repository<Users>,
+    @InjectRepository(ServiceRequest)
+    private readonly serviceRequestRepo: Repository<ServiceRequest>,
+    private readonly mailService: MailService,
+    private readonly quotesService: QuotesService
   ) {}
+
+  private asMoneyInt(v: any) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.round(n));
+  }
+
+  private normalizeDireccion(raw: unknown) {
+    const direccion = String(raw ?? "").trim();
+    if (direccion.length < 3) {
+      throw new BadRequestException("Direccion invalida");
+    }
+    return direccion.slice(0, 255);
+  }
+
+  private computeTotals(subProducts: number, subServices: number, viaticos: number) {
+    const base =
+      this.asMoneyInt(subProducts) +
+      this.asMoneyInt(subServices) +
+      this.asMoneyInt(viaticos);
+    const iva = this.asMoneyInt((base * 19) / 100);
+    const total = base + iva;
+    return { base, iva, total };
+  }
+
+  private normalizeProductName(raw: unknown) {
+    return String(raw ?? "").trim().slice(0, 100);
+  }
+
+  private normalizeSpecification(raw: unknown) {
+    const specification = String(raw ?? "").trim();
+    if (!specification) return null;
+    return specification.slice(0, 500);
+  }
+
+  private async resolveScopeCategory(
+    repo: Repository<ProductCategory>,
+    scope: Exclude<OrderInventoryCategoryScope, "sellable">
+  ) {
+    const categoryName = INTERNAL_SCOPE_TO_CATEGORY_NAME[scope];
+    const category = await repo.findOne({
+      where: { name: ILike(categoryName) } as any,
+    });
+    if (!category) {
+      throw new BadRequestException(
+        `No existe la categoria de inventario para ${categoryName}.`
+      );
+    }
+    return category;
+  }
+
+  private async ensureOrderProduct(
+    em: EntityManager,
+    item: AddProductDto
+  ): Promise<ResolvedOrderProduct> {
+    const productsRepo = em.getRepository(Products);
+    const categoriesRepo = em.getRepository(ProductCategory);
+
+    const specification = this.normalizeSpecification((item as any).specification);
+    const requestedName = this.normalizeProductName((item as any).nombre);
+
+    if (item.productid) {
+      const product = await productsRepo.findOne({
+        where: { productid: item.productid } as any,
+        relations: ["category"] as any,
+      });
+      if (!product) {
+        throw new BadRequestException(`Producto no existe: ${item.productid}`);
+      }
+      const scope = getOrderInventoryCategoryScope(product.category?.name);
+      return {
+        product,
+        scope,
+        manualEntry: !!(item as any).manualentry,
+        specification,
+      };
+    }
+
+    const manualScope = (item.categoryScope ?? "sellable") as OrderInventoryCategoryScope;
+    if (!requestedName) {
+      throw new BadRequestException("nombre es obligatorio para materiales bajo pedido.");
+    }
+    if (!isOrderBackorderAllowed(manualScope)) {
+      throw new BadRequestException(
+        "Solo los materiales de servicio y las herramientas pueden registrarse manualmente bajo pedido."
+      );
+    }
+
+    const category = await this.resolveScopeCategory(
+      categoriesRepo,
+      manualScope as Exclude<OrderInventoryCategoryScope, "sellable">
+    );
+
+    const existing = await productsRepo.findOne({
+      where: {
+        categoryid: category.id,
+        productname: ILike(requestedName),
+      } as any,
+      relations: ["category"] as any,
+    });
+
+    if (existing) {
+      return {
+        product: existing,
+        scope: manualScope,
+        manualEntry: true,
+        specification,
+      };
+    }
+
+    const created = await productsRepo.save(
+      productsRepo.create({
+        categoryid: category.id,
+        category,
+        isactive: true,
+        productpriceofsale: INTERNAL_PRODUCT_MIN_PRICE,
+        productpriceofsupplier: 0,
+        productstock: 0,
+        productname: requestedName,
+        productdescription:
+          specification ??
+          `Creado desde orden de servicio como ${
+            manualScope === "tool" ? "herramienta" : "material de servicio"
+          } bajo pedido.`,
+        productcode: null,
+        purchaseorderid: null,
+        suppliercategory: category.name,
+        image: INTERNAL_PRODUCT_PLACEHOLDER_IMAGE,
+        images: [INTERNAL_PRODUCT_PLACEHOLDER_IMAGE],
+      })
+    );
+
+    return {
+      product: created,
+      scope: manualScope,
+      manualEntry: true,
+      specification,
+    };
+  }
+
+  private prepareOrderProductLine(
+    resolved: ResolvedOrderProduct,
+    item: AddProductDto
+  ): PreparedOrderProductLine {
+    const cantidad = Math.max(1, Math.round(Number(item.cantidad || 0)));
+    const unit = Number(resolved.product.productpriceofsale ?? 0);
+    if (!Number.isFinite(unit) || unit < 0) {
+      throw new BadRequestException("Precio de producto inválido");
+    }
+
+    const productCategoryName = resolved.product.category?.name ?? null;
+    const scope = resolved.scope ?? getOrderInventoryCategoryScope(productCategoryName);
+    const currentStock = Math.max(0, Math.round(Number(resolved.product.productstock ?? 0)));
+    const plan = computeOrderProductPlan({
+      requestedQuantity: cantidad,
+      stock: currentStock,
+      scope,
+      manualEntry: resolved.manualEntry,
+      forcedAvailability: item.availability ?? null,
+    });
+
+    if (!isOrderBackorderAllowed(scope)) {
+      if (cantidad > currentStock) {
+        throw new BadRequestException(
+          `La cantidad de "${resolved.product.productname}" supera el stock disponible (${currentStock}).`
+        );
+      }
+      if (currentStock <= 0) {
+        throw new BadRequestException(
+          `El producto "${resolved.product.productname}" no tiene stock disponible en inventario.`
+        );
+      }
+    }
+
+    const stockCoveredQuantity =
+      item.stockcoveredquantity != null
+        ? Math.max(0, Math.min(cantidad, Math.round(Number(item.stockcoveredquantity))))
+        : plan.stockCoveredQuantity;
+    const backorderQuantity =
+      item.backorderquantity != null
+        ? Math.max(0, Math.min(cantidad, Math.round(Number(item.backorderquantity))))
+        : plan.backorderQuantity;
+    const normalizedBackorder =
+      stockCoveredQuantity + backorderQuantity === cantidad
+        ? backorderQuantity
+        : Math.max(0, cantidad - stockCoveredQuantity);
+    const availability =
+      item.availability === "SOLICITAR" || normalizedBackorder > 0 || resolved.manualEntry
+        ? "SOLICITAR"
+        : plan.availability;
+
+    const subtotal = this.asMoneyInt(unit * cantidad);
+
+    return {
+      ...resolved,
+      cantidad,
+      subtotal,
+      availability,
+      stockCoveredQuantity,
+      backorderQuantity: normalizedBackorder,
+    };
+  }
+
+  private async savePreparedOrderProductLine(
+    ospRepo: Repository<OrdersServicesProducts>,
+    orderId: number,
+    line: PreparedOrderProductLine,
+    current?: OrdersServicesProducts | null
+  ) {
+    const target = current ?? ospRepo.create();
+    target.order = { ordersservicesid: orderId } as any;
+    target.product = line.product;
+    target.cantidad = line.cantidad;
+    target.availability = line.availability;
+    target.stockcoveredquantity = line.stockCoveredQuantity;
+    target.backorderquantity = line.backorderQuantity;
+    target.specification = line.specification;
+    target.manualentry = line.manualEntry;
+    target.subtotal = line.subtotal;
+    return await ospRepo.save(target);
+  }
+
+  private normalizeStateName(name?: string | null) {
+    return (name ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  private isScheduledState(name?: string | null) {
+    return this.normalizeStateName(name).includes("agend");
+  }
+
+  private orderScheduleLabel(order: OrdersServices) {
+    const start = [order.fechainicio, order.horainicio].filter(Boolean).join(" ");
+    const end = [order.fechafin, order.horafin].filter(Boolean).join(" ");
+    if (start && end) return `${start} - ${end}`.trim();
+    return start || end || "sin fecha definida";
+  }
+
+  private async notifyOrderScheduled(order: OrdersServices) {
+    try {
+      if (!this.isScheduledState(order.state?.name)) return;
+
+      const when = this.orderScheduleLabel(order);
+
+      const email = (order as any)?.client?.users?.email;
+      if (email) {
+        const name = [order?.client?.users?.name, order?.client?.users?.lastname]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        await this.mailService.sendAppointmentScheduled(email, name, "orden de servicio", when);
+      }
+
+      const techEmails = (order.technicians ?? [])
+        .map((t: any) => ({
+          email: t?.users?.email,
+          name: [t?.users?.name, t?.users?.lastname].filter(Boolean).join(" ").trim(),
+        }))
+        .filter((t: any) => t.email);
+
+      await Promise.all(
+        techEmails.map((t) =>
+          this.mailService.sendAppointmentScheduled(t.email, t.name, "orden asignada", when)
+        )
+      );
+    } catch (error) {
+      console.error("No se pudo enviar correo de agenda de orden:", error?.message ?? error);
+    }
+  }
+
+  private isAnulada(stateName?: string | null) {
+    const n = (stateName ?? "").toLowerCase();
+    return n.includes("anul") || n.includes("revoke");
+  }
+
+  private isCanceledState(name?: string | null) {
+    const n = this.normalizeStateName(name);
+    return n.includes("anul") || n.includes("cancel");
+  }
+
+  private parseTimeToParts(raw?: string | null) {
+    const txt = String(raw ?? "").trim();
+    const m = txt.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    const ss = Number(m[3] ?? "0");
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+    return { hh, mm, ss };
+  }
+
+  private toOrderDateTime(dateRaw?: Date | string | null, timeRaw?: string | null) {
+    if (!dateRaw || !timeRaw) return null;
+    const time = this.parseTimeToParts(timeRaw);
+    if (!time) return null;
+
+    const base = dateRaw instanceof Date ? dateRaw : new Date(String(dateRaw));
+    if (!Number.isFinite(base.getTime())) return null;
+
+    return new Date(
+      base.getFullYear(),
+      base.getMonth(),
+      base.getDate(),
+      time.hh,
+      time.mm,
+      time.ss,
+      0
+    );
+  }
+
+  private buildRange(start: Date | null, end: Date | null) {
+    if (!start) return null;
+    const safeEnd =
+      end && Number.isFinite(end.getTime()) && end.getTime() > start.getTime()
+        ? end
+        : new Date(start.getTime() + 60 * 60 * 1000);
+    return { start, end: safeEnd };
+  }
+
+  private hasOverlap(
+    aStart: Date,
+    aEnd: Date,
+    bStart: Date,
+    bEnd: Date
+  ) {
+    return Math.max(aStart.getTime(), bStart.getTime()) < Math.min(aEnd.getTime(), bEnd.getTime());
+  }
+
+  private async ensureTechniciansAvailability(
+    technicianIds: number[],
+    start: Date | null,
+    end: Date | null,
+    opts?: { excludeOrderId?: number; excludeRequestId?: number }
+  ) {
+    if (!technicianIds.length || !start) return;
+
+    const requested = new Set(technicianIds);
+    const target = this.buildRange(start, end);
+    if (!target) return;
+
+    const conflicts = new Set<number>();
+
+    const ordersQb = this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.state", "state")
+      .leftJoinAndSelect("o.technicians", "tech")
+      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeOrderId) {
+      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
+        excludeOrderId: opts.excludeOrderId,
+      });
+    }
+
+    const orders = await ordersQb.getMany();
+    for (const o of orders) {
+      if (this.isCanceledState(o?.state?.name)) continue;
+      const oStart = this.toOrderDateTime(o.fechainicio as any, o.horainicio);
+      const oEnd = this.toOrderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
+      const range = this.buildRange(oStart, oEnd);
+      if (!range) continue;
+      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const t of o.technicians ?? []) {
+        const id = Number((t as any)?.technicianid);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    const reqQb = this.serviceRequestRepo
+      .createQueryBuilder("sr")
+      .leftJoinAndSelect("sr.state", "state")
+      .leftJoinAndSelect("sr.techniciansMap", "tm")
+      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeRequestId) {
+      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
+        excludeRequestId: opts.excludeRequestId,
+      });
+    }
+
+    const requests = await reqQb.getMany();
+    for (const sr of requests) {
+      if (this.isCanceledState(sr?.state?.name)) continue;
+      const range = this.buildRange(sr.scheduledAt, sr.scheduledEndAt);
+      if (!range) continue;
+      if (!this.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const link of sr.techniciansMap ?? []) {
+        const id = Number((link as any)?.technicianId);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    if (conflicts.size > 0) {
+      const ids = Array.from(conflicts).sort((a, b) => a - b);
+      throw new BadRequestException(
+        `Los siguientes tÃ©cnicos ya estÃ¡n ocupados en ese horario: ${ids.join(", ")}`
+      );
+    }
+  }
+
+  private async getWarrantyState(kind: "garantia" | "garantia reportada") {
+    if (kind === "garantia reportada") {
+      const st = await this.statesRepo.findOne({
+        where: { name: ILike("%garan%report%") } as any,
+      });
+      if (!st)
+        throw new BadRequestException(
+          "No existe el estado 'Garantia reportada' en states."
+        );
+      return st;
+    }
+
+    const st = await this.statesRepo
+      .createQueryBuilder("s")
+      .where("LOWER(COALESCE(s.name,'')) LIKE :q", { q: "%garan%" })
+      .andWhere("LOWER(COALESCE(s.name,'')) NOT LIKE :r", { r: "%report%" })
+      .orderBy("s.stateid", "ASC")
+      .getOne();
+
+    if (!st)
+      throw new BadRequestException("No existe el estado 'Garantia' en states.");
+    return st;
+  }
+
+  private present(order: OrdersServices) {
+    const files = Array.isArray(order.files) ? order.files : [];
+    const products = order.products ?? [];
+    const services = order.services ?? [];
+    const technicians = order.technicians ?? [];
+    const history = order.history ?? [];
+    const viaticos = (order as any).viaticos ?? 0;
+    const total = (order as any).total ?? 0;
+
+    const wr = (order as any).warrantyRecord as OrdersServicesWarranty | undefined;
+    const u = wr?.reportedBy ?? null;
+    const reportedBy =
+      u ? [u.name, u.lastname].filter(Boolean).join(" ").trim() || null : null;
+
+    const warranty = wr
+      ? {
+          label: wr.label ?? "DaÃ±o dentro de garantÃ­a",
+          details: wr.details ?? "",
+          notifiedClient: !!wr.notifiedclient,
+          reportedBy,
+          reportedByUserId: u?.userid ?? null,
+          reportedAtISO: wr.reportedat ? wr.reportedat.toISOString() : null,
+        }
+      : null;
+
+    const out: any = {
+      ...order,
+      files,
+      products,
+      services,
+      technicians,
+      history,
+      viaticos,
+      total,
+      warranty,
+    };
+
+    delete out.warrantyRecord;
+    return out;
+  }
+
+  private presentMany(list: OrdersServices[]) {
+    return (Array.isArray(list) ? list : []).map((o) => this.present(o));
+  }
 
   private async validateOrder(id: number) {
     const order = await this.ordersRepo.findOne({
       where: { ordersservicesid: id } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
 
-    if (!order) throw new NotFoundException('Orden no encontrada');
+    if (!order) throw new NotFoundException("Orden no encontrada");
 
     order.files = Array.isArray(order.files) ? order.files : [];
     order.products = order.products ?? [];
+    order.services = order.services ?? [];
     order.technicians = order.technicians ?? [];
+    order.history = order.history ?? [];
+    order.viaticos = order.viaticos ?? 0;
     order.total = order.total ?? 0;
 
     return order;
   }
 
-  private snapshot(order: OrdersServices) {
-    return {
-      ordersservicesid: order.ordersservicesid,
-      description: order.description,
-      total: order.total,
-      files: order.files ?? [],
-      fechainicio: order.fechainicio,
-      fechafin: order.fechafin,
-      horainicio: order.horainicio,
-      horafin: order.horafin,
-      clientid: (order.client as any)?.customerid ?? null,
-      stateid: (order.state as any)?.stateid ?? null,
-      technicians: (order.technicians ?? []).map((t: any) => t.technicianid),
-      products: (order.products ?? []).map((p: any) => ({
-        productid: (p.product as any)?.productid,
-        cantidad: p.cantidad,
-        subtotal: p.subtotal,
-      })),
-    };
-  }
-
-  private async log(
+  private async logSystem(
     historyRepo: Repository<OrdersServicesHistory>,
-    order: OrdersServices,
-    action: OrdersServicesHistoryAction,
-    payload: any | null,
-    actoruserid: ActorUserId,
-    description?: string,
+    orderId: number,
+    message: string,
+    actoruserid: ActorUserId
   ) {
-    const actionlabel = ACTION_LABELS[action] ?? action;
     await historyRepo.save(
       historyRepo.create({
-        order,
-        action,
-        actionlabel,
-        description: description ?? null,
-        payload,
+        order: { ordersservicesid: orderId } as any,
+        type: "SYSTEM",
+        message,
+        technician: null,
         actoruserid: actoruserid ?? null,
-      }),
+        progresspercent: null,
+        attachments: null,
+      })
     );
   }
 
-  private async createCore(em: EntityManager, dto: CreateOrdersServicesDto, actoruserid?: ActorUserId): Promise<number> {
+  private async recalcAndPersistTotal(em: EntityManager, orderId: number) {
     const ordersRepo = em.getRepository(OrdersServices);
     const ospRepo = em.getRepository(OrdersServicesProducts);
+    const ossRepo = em.getRepository(OrdersServicesServices);
+
+    const order = await ordersRepo.findOne({
+      where: { ordersservicesid: orderId } as any,
+    });
+    if (!order) throw new NotFoundException("Orden no encontrada");
+
+    const prod = await ospRepo
+      .createQueryBuilder("osp")
+      .select("COALESCE(SUM(osp.subtotal),0)", "sum")
+      .where("osp.ordersservicesid = :orderId", { orderId })
+      .getRawOne<{ sum: string }>();
+
+    const serv = await ossRepo
+      .createQueryBuilder("oss")
+      .select("COALESCE(SUM(oss.subtotal),0)", "sum")
+      .where("oss.ordersservicesid = :orderId", { orderId })
+      .getRawOne<{ sum: string }>();
+
+    const subProducts = this.asMoneyInt(prod?.sum ?? 0);
+    const subServices = this.asMoneyInt(serv?.sum ?? 0);
+    const viaticos = this.asMoneyInt((order as any).viaticos ?? 0);
+
+    const { total } = this.computeTotals(subProducts, subServices, viaticos);
+    await ordersRepo.update(
+      { ordersservicesid: orderId } as any,
+      { total } as any
+    );
+    return total;
+  }
+
+  private async createCore(
+    em: EntityManager,
+    dto: CreateOrdersServicesDto,
+    actoruserid?: ActorUserId
+  ): Promise<number> {
+    const ordersRepo = em.getRepository(OrdersServices);
+    const ospRepo = em.getRepository(OrdersServicesProducts);
+    const ossRepo = em.getRepository(OrdersServicesServices);
     const historyRepo = em.getRepository(OrdersServicesHistory);
-    const productsRepo = em.getRepository(Products);
+      const servicesRepo = em.getRepository(Services);
     const techRepo = em.getRepository(Technicians);
     const clientsRepo = em.getRepository(Customers);
     const statesRepo = em.getRepository(States);
 
-    const client = await clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
-    if (!client) throw new BadRequestException('Cliente no existe');
+    const client = await clientsRepo.findOne({
+      where: { customerid: dto.clientid } as any,
+    });
+    if (!client) throw new BadRequestException("Cliente no existe");
 
-    const state = await statesRepo.findOne({ where: { stateid: dto.stateid } as any });
-    if (!state) throw new BadRequestException('Estado no existe');
+    const state = await statesRepo.findOne({
+      where: { stateid: dto.stateid } as any,
+    });
+    if (!state) throw new BadRequestException("Estado no existe");
 
     const techIds = dto.technicians ?? [];
-    if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
+    if (techIds.length === 0)
+      throw new BadRequestException("Debe asignar al menos un tÃ©cnico");
 
-    const technicians = await techRepo.find({ where: { technicianid: In(techIds) } as any });
-    if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+    const technicians = await techRepo.find({
+      where: { technicianid: In(techIds) } as any,
+    });
+    if (technicians.length !== techIds.length)
+      throw new BadRequestException("Uno o mÃ¡s tÃ©cnicos no existen");
+
+    const scheduleStart = this.toOrderDateTime(dto.fechainicio as any, dto.horainicio);
+    const scheduleEnd = this.toOrderDateTime((dto.fechafin ?? dto.fechainicio) as any, dto.horafin);
+    const scheduleRange = this.buildRange(scheduleStart, scheduleEnd);
+    if (!scheduleRange) {
+      throw new BadRequestException("Rango de fecha/hora invÃ¡lido para la orden");
+    }
+    if (!this.isCanceledState(state?.name)) {
+      await this.ensureTechniciansAvailability(
+        techIds,
+        scheduleRange.start,
+        scheduleRange.end
+      );
+    }
 
     const items = dto.products ?? [];
-    if (items.length === 0) throw new BadRequestException('Debe agregar al menos un producto');
+    if (items.length === 0)
+      throw new BadRequestException("Debe agregar al menos un producto");
+
+    const viaticos = this.asMoneyInt(dto.viaticos ?? 0);
+    const direccion = this.normalizeDireccion(dto.direccion);
 
     const order = ordersRepo.create({
-      description: dto.description,
+      description: String(dto.description ?? "").trim(),
+      direccion,
       total: 0,
+      viaticos,
       files: dto.files ?? [],
       client,
       state,
@@ -156,81 +745,189 @@ export class OrdersServicesService {
 
     await ordersRepo.save(order);
 
-    const seen = new Set<number>();
-    let total = 0;
+    const seenProducts = new Set<number>();
+    let subProducts = 0;
 
     for (const item of items) {
-      if (seen.has(item.productid)) throw new BadRequestException('Hay productos repetidos en la orden');
-      seen.add(item.productid);
+      const resolved = await this.ensureOrderProduct(em, item);
+      const productId = Number(resolved.product?.productid);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new BadRequestException("Producto inválido en la orden");
+      }
+      if (seenProducts.has(productId)) {
+        throw new BadRequestException("Hay productos repetidos en la orden");
+      }
+      seenProducts.add(productId);
 
-      const product = await productsRepo.findOne({ where: { productid: item.productid } as any });
-      if (!product) throw new BadRequestException('Producto no existe');
-
-      const subtotal = product.productpriceofsale * item.cantidad;
-      total += subtotal;
-
-      await ospRepo.save(
-        ospRepo.create({
-          order: { ordersservicesid: order.ordersservicesid } as any,
-          product,
-          cantidad: item.cantidad,
-          subtotal,
-        }),
+      const line = this.prepareOrderProductLine(resolved, item);
+      subProducts += line.subtotal;
+      await this.savePreparedOrderProductLine(
+        ospRepo,
+        order.ordersservicesid,
+        line
       );
     }
 
-    await ordersRepo.update({ ordersservicesid: order.ordersservicesid } as any, { total } as any);
+    const serviceItems = dto.services ?? [];
+    const seenServices = new Set<number>();
+    let subServices = 0;
 
-    const hydrated = await ordersRepo.findOne({
-      where: { ordersservicesid: order.ordersservicesid } as any,
-      relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
-    });
+    for (const item of serviceItems) {
+      if (seenServices.has(item.serviceid))
+        throw new BadRequestException("Hay servicios repetidos en la orden");
+      seenServices.add(item.serviceid);
 
-    await this.log(historyRepo, hydrated as any, 'CREATE', { created: this.snapshot(hydrated as any) }, actoruserid, 'Orden creada');
+      const service = await servicesRepo.findOne({
+        where: { serviceid: item.serviceid } as any,
+      });
+      if (!service) throw new BadRequestException("Servicio no existe");
+
+      const unitprice = this.asMoneyInt(
+        (item as any).unitprice ?? (item as any).precio
+      );
+      if (
+        unitprice === 0 &&
+        (item as any).unitprice === undefined &&
+        (item as any).precio === undefined
+      ) {
+        throw new BadRequestException(
+          "unitprice (o precio) es obligatorio para cada servicio"
+        );
+      }
+
+      const subtotal = this.asMoneyInt(unitprice * item.cantidad);
+      subServices += subtotal;
+
+      await ossRepo.save(
+        ossRepo.create({
+          order: { ordersservicesid: order.ordersservicesid } as any,
+          service,
+          cantidad: item.cantidad,
+          unitprice,
+          subtotal,
+        })
+      );
+    }
+
+    const { total } = this.computeTotals(subProducts, subServices, viaticos);
+    await ordersRepo.update(
+      { ordersservicesid: order.ordersservicesid } as any,
+      { total } as any
+    );
+
+    await this.logSystem(
+      historyRepo,
+      order.ordersservicesid,
+      "Orden creada",
+      actoruserid
+    );
 
     return order.ordersservicesid;
   }
 
   async create(dto: CreateOrdersServicesDto, actoruserid?: ActorUserId) {
-    const id = await this.ordersRepo.manager.transaction((em) => this.createCore(em, dto, actoruserid));
-    return this.validateOrder(id);
+    const id = await this.ordersRepo.manager.transaction((em) =>
+      this.createCore(em, dto, actoruserid)
+    );
+    const order = await this.validateOrder(id);
+    if (this.isScheduledState(order.state?.name)) {
+      await this.notifyOrderScheduled(order);
+    }
+    return this.present(order);
   }
 
-  findAll() {
-    return this.ordersRepo.find({
+  async findAll() {
+    const list = await this.ordersRepo.find({
       relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
+    return this.presentMany(list);
   }
 
   async findOne(id: number) {
-    return this.validateOrder(id);
+    const order = await this.validateOrder(id);
+    return this.present(order);
   }
 
-  async history(orderId: number) {
+  async history(orderId: number, type?: OrdersServicesHistoryType) {
     await this.validateOrder(orderId);
+    const where: any = { order: { ordersservicesid: orderId } };
+    if (type) where.type = type;
+
     return this.historyRepo.find({
-      where: { order: { ordersservicesid: orderId } as any } as any,
-      order: { createdat: 'DESC' } as any,
+      where,
+      relations: ["technician", "technician.users"] as any,
+      order: { createdat: "DESC" } as any,
+    });
+  }
+
+  async addWorklog(orderId: number, dto: AddWorklogDto, actoruserid?: ActorUserId) {
+    const order = await this.ordersRepo.findOne({
+      where: { ordersservicesid: orderId } as any,
+      relations: ["technicians"] as any,
+    });
+    if (!order) throw new NotFoundException("Orden no encontrada");
+
+    const technician = await this.techRepo.findOne({
+      where: { technicianid: dto.technicianid } as any,
+      relations: ["users"] as any,
+    });
+    if (!technician) throw new BadRequestException("TÃ©cnico no existe");
+
+    const assigned = (order.technicians ?? []).some(
+      (t: any) => t.technicianid === technician.technicianid
+    );
+    if (!assigned)
+      throw new BadRequestException("El tÃ©cnico no estÃ¡ asignado a esta orden");
+
+    const title = (dto.title ?? "").trim() || "Avance";
+    const note = (dto.note ?? "").trim();
+    if (!note) throw new BadRequestException("note es obligatorio");
+
+    const created = await this.historyRepo.save(
+      this.historyRepo.create({
+        order: { ordersservicesid: orderId } as any,
+        type: "TECH",
+        message: `${title}\n${note}`.trim(),
+        technician,
+        actoruserid: actoruserid ?? null,
+        progresspercent: (dto as any).progresspercent ?? null,
+        attachments: (dto as any).attachments ?? null,
+      })
+    );
+
+    return this.historyRepo.findOne({
+      where: { ordersserviceshistoryid: created.ordersserviceshistoryid } as any,
+      relations: ["technician", "technician.users"] as any,
     });
   }
 
   async update(id: number, dto: UpdateOrdersServicesDto, actoruserid?: ActorUserId) {
     const order = await this.validateOrder(id);
-    const before = this.snapshot(order);
+
+    const prevStateName = order.state?.name;
+    const prevScheduleKey = [order.fechainicio, order.fechafin, order.horainicio, order.horafin]
+      .map((v) => (v == null ? "" : String(v)))
+      .join("|");
+
+    let mustRecalc = false;
 
     if (dto.description !== undefined) order.description = dto.description;
+    if (dto.direccion !== undefined) order.direccion = this.normalizeDireccion(dto.direccion);
 
     if (dto.clientid !== undefined) {
-      const client = await this.clientsRepo.findOne({ where: { customerid: dto.clientid } as any });
-      if (!client) throw new BadRequestException('Cliente no existe');
+      const client = await this.clientsRepo.findOne({
+        where: { customerid: dto.clientid } as any,
+      });
+      if (!client) throw new BadRequestException("Cliente no existe");
       order.client = client;
     }
 
     if (dto.stateid !== undefined) {
-      const state = await this.statesRepo.findOne({ where: { stateid: dto.stateid } as any });
-      if (!state) throw new BadRequestException('Estado no existe');
+      const state = await this.statesRepo.findOne({
+        where: { stateid: dto.stateid } as any,
+      });
+      if (!state) throw new BadRequestException("Estado no existe");
       order.state = state;
     }
 
@@ -239,147 +936,653 @@ export class OrdersServicesService {
     if (dto.horainicio !== undefined) order.horainicio = dto.horainicio;
     if (dto.horafin !== undefined) order.horafin = dto.horafin;
 
+    if (dto.files !== undefined) order.files = dto.files ?? [];
+
+    if (dto.viaticos !== undefined) {
+      order.viaticos = this.asMoneyInt(dto.viaticos);
+      mustRecalc = true;
+    }
+
     if (dto.technicians !== undefined) {
       const techIds = dto.technicians ?? [];
-      if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
-
-      const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
-      if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
-
+      if (techIds.length === 0)
+        throw new BadRequestException("Debe asignar al menos un tÃ©cnico");
+      const technicians = await this.techRepo.find({
+        where: { technicianid: In(techIds) } as any,
+      });
+      if (technicians.length !== techIds.length)
+        throw new BadRequestException("Uno o mÃ¡s tÃ©cnicos no existen");
       order.technicians = technicians;
     }
 
-    if ((dto as any).files !== undefined) {
-      const next = (dto as any).files ?? [];
-      if (!Array.isArray(next)) throw new BadRequestException('files debe ser un arreglo de links');
-      order.files = next;
+    const nextTechIds = (order.technicians ?? [])
+      .map((t) => Number((t as any)?.technicianid))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    const nextStart = this.toOrderDateTime(order.fechainicio as any, order.horainicio);
+    const nextEnd = this.toOrderDateTime((order.fechafin ?? order.fechainicio) as any, order.horafin);
+    const nextRange = this.buildRange(nextStart, nextEnd);
+    if (!nextRange) {
+      throw new BadRequestException("Rango de fecha/hora invÃ¡lido para la orden");
+    }
+    if (!this.isCanceledState(order.state?.name)) {
+      await this.ensureTechniciansAvailability(
+        nextTechIds,
+        nextRange.start,
+        nextRange.end,
+        { excludeOrderId: id }
+      );
     }
 
     await this.ordersRepo.save(order);
 
-    const afterOrder = await this.validateOrder(id);
-    const after = this.snapshot(afterOrder);
+    if (mustRecalc) {
+      await this.ordersRepo.manager.transaction((em) =>
+        this.recalcAndPersistTotal(em, id)
+      );
+    }
 
-    await this.log(this.historyRepo, afterOrder, 'UPDATE', { before, after, patch: dto }, actoruserid, 'Orden actualizada');
+    await this.logSystem(this.historyRepo, id, "Orden actualizada", actoruserid);
 
-    return afterOrder;
+    const updated = await this.validateOrder(id);
+    const newScheduleKey = [updated.fechainicio, updated.fechafin, updated.horainicio, updated.horafin]
+      .map((v) => (v == null ? "" : String(v)))
+      .join("|");
+    const scheduleChanged =
+      prevScheduleKey !== newScheduleKey ||
+      this.normalizeStateName(prevStateName) !== this.normalizeStateName(updated.state?.name);
+    if (scheduleChanged && this.isScheduledState(updated.state?.name)) {
+      await this.notifyOrderScheduled(updated);
+    }
+    return this.present(updated);
   }
 
-  async remove(id: number, actoruserid?: ActorUserId) {
+  async remove(id: number) {
     const order = await this.validateOrder(id);
-    await this.log(this.historyRepo, order, 'DELETE', { deleted: this.snapshot(order) }, actoruserid, 'Orden eliminada');
-    return this.ordersRepo.remove(order);
+    await this.ordersRepo.remove(order);
+    return { deleted: true, id };
   }
 
-  async addProduct(orderId: number, dto: AddProductDto, actoruserid?: ActorUserId) {
-    const order = await this.validateOrder(orderId);
+  async markWarranty(orderId: number, actoruserid?: ActorUserId) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const warrantyRepo = em.getRepository(OrdersServicesWarranty);
+      const historyRepo = em.getRepository(OrdersServicesHistory);
 
-    const existing = (order.products ?? []).find((p) => (p.product as any).productid === dto.productid);
-    if (existing) throw new BadRequestException('El producto ya está agregado');
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: orderId } as any,
+        relations: ["state", "client", "client.users"] as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
 
-    const product = await this.productsRepo.findOne({ where: { productid: dto.productid } as any });
-    if (!product) throw new BadRequestException('Producto no existe');
+      if (this.isAnulada(order.state?.name))
+        throw new BadRequestException("No se puede marcar garantÃ­a en una orden anulada.");
 
-    const subtotal = product.productpriceofsale * dto.cantidad;
+      const warrantyState = await this.getWarrantyState("garantia");
 
-    await this.ospRepo.save(
-      this.ospRepo.create({
-        order: { ordersservicesid: orderId } as any,
-        product,
-        cantidad: dto.cantidad,
-        subtotal,
-      }),
-    );
+      let wr = await warrantyRepo.findOne({
+        where: { order: { ordersservicesid: orderId } as any } as any,
+        relations: ["reportedBy"] as any,
+      });
 
-    const newTotal = (order.total ?? 0) + subtotal;
-    await this.ordersRepo.update({ ordersservicesid: orderId } as any, { total: newTotal } as any);
+      if (!wr) {
+        wr = warrantyRepo.create({
+          order: { ordersservicesid: orderId } as any,
+          label: "DaÃ±o dentro de garantÃ­a",
+          details: null,
+          notifiedclient: false,
+          reportedBy: null,
+          reportedat: null,
+        });
+      } else {
+        wr.label = wr.label ?? "DaÃ±o dentro de garantÃ­a";
+      }
 
-    const hydrated = await this.validateOrder(orderId);
+      await warrantyRepo.save(wr);
 
-    await this.log(this.historyRepo, hydrated, 'ADD_PRODUCT', { productid: dto.productid, cantidad: dto.cantidad, subtotal, total: newTotal }, actoruserid, 'Producto agregado');
+      order.state = warrantyState;
+      await ordersRepo.save(order);
 
-    return hydrated;
-  }
-
-  async removeProduct(orderId: number, productId: number, actoruserid?: ActorUserId) {
-    const order = await this.validateOrder(orderId);
-
-    const osp = (order.products ?? []).find((p) => (p.product as any).productid === productId);
-    if (!osp) throw new BadRequestException('El producto no está en la orden');
-
-    await this.ospRepo.remove(osp);
-
-    const updatedProducts = await this.ospRepo.find({
-      where: { order: { ordersservicesid: orderId } as any } as any,
-      relations: ['product', 'order'] as any,
+      await this.logSystem(historyRepo, orderId, "GarantÃ­a marcada", actoruserid);
     });
 
-    const updatedTotal = updatedProducts.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
-    await this.ordersRepo.update({ ordersservicesid: orderId } as any, { total: updatedTotal } as any);
-
-    const hydrated = await this.validateOrder(orderId);
-
-    await this.log(this.historyRepo, hydrated, 'REMOVE_PRODUCT', { productid: productId, removedSubtotal: osp.subtotal, total: updatedTotal }, actoruserid, 'Producto eliminado');
-
-    return hydrated;
+    const updated = await this.validateOrder(orderId);
+    return this.present(updated);
   }
 
-  async assignTechnicians(orderId: number, dto: AssignTechniciansDto, actoruserid?: ActorUserId) {
-    const order = await this.validateOrder(orderId);
+  async reportWarranty(orderId: number, dto: ReportWarrantyDto, actoruserid?: ActorUserId) {
+    const details = (dto.details ?? "").trim();
+    if (!details) throw new BadRequestException("details es obligatorio");
+
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const warrantyRepo = em.getRepository(OrdersServicesWarranty);
+      const usersRepo = em.getRepository(Users);
+      const historyRepo = em.getRepository(OrdersServicesHistory);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: orderId } as any,
+        relations: ["state", "client", "client.users"] as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      if (this.isAnulada(order.state?.name))
+        throw new BadRequestException("No se puede reportar garantÃ­a en una orden anulada.");
+
+      const reportedState = await this.getWarrantyState("garantia reportada");
+
+      let reporterUserId =
+        dto.reportedByUserId ?? (actoruserid ? Number(actoruserid) : undefined);
+
+      if (!reporterUserId) {
+        reporterUserId = (order as any)?.client?.users?.userid
+          ? Number((order as any).client.users.userid)
+          : undefined;
+      }
+
+      let reporter: Users | null = null;
+      if (reporterUserId) {
+        reporter = await usersRepo.findOne({
+          where: { userid: reporterUserId } as any,
+        });
+        if (!reporter) throw new BadRequestException("reportedByUserId no existe");
+      }
+
+      let wr = await warrantyRepo.findOne({
+        where: { order: { ordersservicesid: orderId } as any } as any,
+        relations: ["reportedBy"] as any,
+      });
+
+      if (!wr) {
+        wr = warrantyRepo.create({
+          order: { ordersservicesid: orderId } as any,
+          label: null,
+          details: null,
+          notifiedclient: false,
+          reportedBy: null,
+          reportedat: null,
+        });
+      }
+
+      const label =
+        (dto.label ?? wr.label ?? "DaÃ±o dentro de garantÃ­a").trim() ||
+        "DaÃ±o dentro de garantÃ­a";
+
+      wr.label = label;
+      wr.details = details;
+      wr.notifiedclient = dto.notifiedClient ?? wr.notifiedclient ?? false;
+      wr.reportedBy = reporter;
+      wr.reportedat = wr.reportedat ?? new Date();
+
+      await warrantyRepo.save(wr);
+
+      order.state = reportedState;
+      await ordersRepo.save(order);
+
+      await this.logSystem(historyRepo, orderId, `GarantÃ­a reportada: ${label}`, actoruserid);
+    });
+
+    const updated = await this.validateOrder(orderId);
+    return this.present(updated);
+  }
+
+  async addProduct(id: number, dto: AddProductDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const resolved = await this.ensureOrderProduct(em, dto);
+      const productId = Number(resolved.product?.productid);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new BadRequestException("Producto inválido");
+      }
+
+      const exists = await ospRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          product: { productid: productId } as any,
+        } as any,
+      });
+      if (exists) throw new BadRequestException("Ese producto ya está agregado");
+
+      const line = this.prepareOrderProductLine(resolved, dto);
+      await this.savePreparedOrderProductLine(ospRepo, id, line);
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async upsertProducts(id: number, dto: UpsertProductsDto) {
+    const replace = dto.replace !== undefined ? !!dto.replace : true;
+    const items = Array.isArray(dto.items) ? dto.items : [];
+
+    const seenKeys = new Set<string>();
+    for (const it of items) {
+      const c = Number(it.cantidad);
+      if (!Number.isFinite(c) || c <= 0) throw new BadRequestException("cantidad invÃ¡lida");
+
+      const pid = Number(it.productid);
+      const name = this.normalizeProductName((it as any).nombre);
+      if ((!Number.isFinite(pid) || pid <= 0) && !name) {
+        throw new BadRequestException("Cada línea debe tener productid o nombre");
+      }
+
+      const scope = String((it as any).categoryScope ?? "").trim();
+      const key =
+        Number.isFinite(pid) && pid > 0
+          ? `id:${pid}`
+          : `name:${normalizeInventoryCategoryText(scope)}:${normalizeInventoryCategoryText(name)}`;
+      if (seenKeys.has(key)) throw new BadRequestException("Hay productos repetidos en la lista");
+      seenKeys.add(key);
+    }
+
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+
+      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const existing = await ospRepo.find({
+        where: { order: { ordersservicesid: id } as any } as any,
+        relations: ["product"] as any,
+      });
+
+      const byProductId = new Map<number, OrdersServicesProducts>();
+      for (const row of existing) {
+        const pid = Number((row as any)?.product?.productid);
+        if (pid) byProductId.set(pid, row);
+      }
+
+      const keep = new Set<number>();
+
+      for (const it of items) {
+        const resolved = await this.ensureOrderProduct(em, it);
+        const productId = Number(resolved.product?.productid);
+        if (!Number.isFinite(productId) || productId <= 0) {
+          throw new BadRequestException("Producto inválido en la orden");
+        }
+
+        keep.add(productId);
+
+        const line = this.prepareOrderProductLine(resolved, it);
+        const current = byProductId.get(productId) ?? null;
+        await this.savePreparedOrderProductLine(ospRepo, id, line, current);
+      }
+
+      if (replace) {
+        const toDelete = existing.filter((row) => {
+          const pid = Number((row as any)?.product?.productid);
+          return pid && !keep.has(pid);
+        });
+        if (toDelete.length) await ospRepo.remove(toDelete);
+      }
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async updateProductLine(id: number, productId: number, dto: UpdateProductLineDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ospRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          product: { productid: productId } as any,
+        } as any,
+        relations: ["product", "product.category"] as any,
+      });
+      if (!row) throw new NotFoundException("Producto no estÃ¡ en la orden");
+
+      const resolved: ResolvedOrderProduct = {
+        product: row.product,
+        scope: getOrderInventoryCategoryScope(row.product?.category?.name),
+        manualEntry: dto.manualentry !== undefined ? !!dto.manualentry : !!row.manualentry,
+        specification:
+          this.normalizeSpecification(dto.specification) ??
+          this.normalizeSpecification(row.specification),
+      };
+
+      const line = this.prepareOrderProductLine(resolved, {
+        productid: productId,
+        cantidad: dto.cantidad,
+        availability: dto.availability,
+        stockcoveredquantity: dto.stockcoveredquantity,
+        backorderquantity: dto.backorderquantity,
+        specification: dto.specification,
+        manualentry: dto.manualentry,
+      });
+
+      await this.savePreparedOrderProductLine(ospRepo, id, line, row);
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async removeProduct(id: number, productId: number) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ospRepo = em.getRepository(OrdersServicesProducts);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ospRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          product: { productid: productId } as any,
+        } as any,
+        relations: ["product"] as any,
+      });
+      if (!row) throw new NotFoundException("Producto no estÃ¡ en la orden");
+
+      await ospRepo.remove(row);
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async addService(id: number, dto: AddServiceDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+      const servicesRepo = em.getRepository(Services);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const exists = await ossRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          service: { serviceid: dto.serviceid } as any,
+        } as any,
+      });
+      if (exists) throw new BadRequestException("Ese servicio ya estÃ¡ agregado");
+
+      const service = await servicesRepo.findOne({
+        where: { serviceid: dto.serviceid } as any,
+      });
+      if (!service) throw new BadRequestException("Servicio no existe");
+
+      const unitprice = this.asMoneyInt((dto as any).unitprice ?? (dto as any).precio);
+      if (unitprice === 0 && ((dto as any).unitprice === undefined && (dto as any).precio === undefined)) {
+        throw new BadRequestException("unitprice (o precio) es obligatorio");
+      }
+
+      const subtotal = this.asMoneyInt(unitprice * dto.cantidad);
+
+      await ossRepo.save(
+        ossRepo.create({
+          order: { ordersservicesid: id } as any,
+          service,
+          cantidad: dto.cantidad,
+          unitprice,
+          subtotal,
+        })
+      );
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async upsertServices(id: number, dto: UpsertServicesDto) {
+    const replace = dto.replace !== undefined ? !!dto.replace : true;
+    const items = Array.isArray(dto.items) ? dto.items : [];
+
+    const seen = new Set<number>();
+    for (const it of items) {
+      const sid = Number(it.serviceid);
+      if (!Number.isFinite(sid) || sid <= 0) throw new BadRequestException("serviceid invÃ¡lido");
+      if (seen.has(sid)) throw new BadRequestException("Hay servicios repetidos en la lista");
+      seen.add(sid);
+
+      const c = Number(it.cantidad);
+      if (!Number.isFinite(c) || c <= 0) throw new BadRequestException("cantidad invÃ¡lida");
+
+      const u = Number(it.unitprice);
+      if (!Number.isFinite(u) || u < 0) throw new BadRequestException("unitprice invÃ¡lido");
+    }
+
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+      const servicesRepo = em.getRepository(Services);
+
+      const order = await ordersRepo.findOne({ where: { ordersservicesid: id } as any });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const existing = await ossRepo.find({
+        where: { order: { ordersservicesid: id } as any } as any,
+        relations: ["service"] as any,
+      });
+
+      const byServiceId = new Map<number, OrdersServicesServices>();
+      for (const row of existing) {
+        const sid = Number((row as any)?.service?.serviceid);
+        if (sid) byServiceId.set(sid, row);
+      }
+
+      for (const it of items) {
+        const service = await servicesRepo.findOne({ where: { serviceid: it.serviceid } as any });
+        if (!service) throw new BadRequestException(`Servicio no existe: ${it.serviceid}`);
+
+        const cantidad = Number(it.cantidad);
+        const unitprice = this.asMoneyInt(it.unitprice);
+        const subtotal = this.asMoneyInt(unitprice * cantidad);
+
+        const current = byServiceId.get(it.serviceid);
+        if (current) {
+          current.cantidad = cantidad;
+          (current as any).unitprice = unitprice;
+          (current as any).subtotal = subtotal;
+          await ossRepo.save(current);
+        } else {
+          await ossRepo.save(
+            ossRepo.create({
+              order: { ordersservicesid: id } as any,
+              service,
+              cantidad,
+              unitprice,
+              subtotal,
+            })
+          );
+        }
+      }
+
+      if (replace) {
+        const keep = new Set(items.map((x) => x.serviceid));
+        const toDelete = existing.filter((row) => {
+          const sid = Number((row as any)?.service?.serviceid);
+          return sid && !keep.has(sid);
+        });
+        if (toDelete.length) await ossRepo.remove(toDelete);
+      }
+
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async updateServiceLine(id: number, serviceId: number, dto: UpdateServiceLineDto) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+      const servicesRepo = em.getRepository(Services);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ossRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          service: { serviceid: serviceId } as any,
+        } as any,
+        relations: ["service"] as any,
+      });
+      if (!row) throw new NotFoundException("Servicio no estÃ¡ en la orden");
+
+      const service = row.service
+        ? row.service
+        : await servicesRepo.findOne({ where: { serviceid: serviceId } as any });
+      if (!service) throw new BadRequestException("Servicio no existe");
+
+      const cantidad = Number(dto.cantidad);
+      const unitprice =
+        dto.unitprice !== undefined && dto.unitprice !== null
+          ? this.asMoneyInt(dto.unitprice)
+          : this.asMoneyInt((row as any).unitprice ?? (service as any).servicepriceofsale ?? 0);
+
+      row.cantidad = cantidad;
+      (row as any).unitprice = unitprice;
+      (row as any).subtotal = this.asMoneyInt(unitprice * cantidad);
+
+      await ossRepo.save(row);
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async removeService(id: number, serviceId: number) {
+    await this.ordersRepo.manager.transaction(async (em) => {
+      const ordersRepo = em.getRepository(OrdersServices);
+      const ossRepo = em.getRepository(OrdersServicesServices);
+
+      const order = await ordersRepo.findOne({
+        where: { ordersservicesid: id } as any,
+      });
+      if (!order) throw new NotFoundException("Orden no encontrada");
+
+      const row = await ossRepo.findOne({
+        where: {
+          order: { ordersservicesid: id } as any,
+          service: { serviceid: serviceId } as any,
+        } as any,
+        relations: ["service"] as any,
+      });
+      if (!row) throw new NotFoundException("Servicio no estÃ¡ en la orden");
+
+      await ossRepo.remove(row);
+      await this.recalcAndPersistTotal(em, id);
+    });
+
+    const order = await this.validateOrder(id);
+    return this.present(order);
+  }
+
+  async assignTechnicians(id: number, dto: AssignTechniciansDto) {
+    const order = await this.validateOrder(id);
 
     const techIds = dto.technicians ?? [];
-    if (techIds.length === 0) throw new BadRequestException('Debe asignar al menos un técnico');
+    if (techIds.length === 0)
+      throw new BadRequestException("Debe asignar al menos un tÃ©cnico");
 
-    const technicians = await this.techRepo.find({ where: { technicianid: In(techIds) } as any });
-    if (technicians.length !== techIds.length) throw new BadRequestException('Uno o más técnicos no existen');
+    const technicians = await this.techRepo.find({
+      where: { technicianid: In(techIds) } as any,
+    });
+    if (technicians.length !== techIds.length)
+      throw new BadRequestException("Uno o mÃ¡s tÃ©cnicos no existen");
 
+    const start = this.toOrderDateTime(order.fechainicio as any, order.horainicio);
+    const end = this.toOrderDateTime((order.fechafin ?? order.fechainicio) as any, order.horafin);
+    const range = this.buildRange(start, end);
+    if (!range) {
+      throw new BadRequestException("La orden no tiene un rango de fecha/hora válido");
+    }
+    await this.ensureTechniciansAvailability(
+      techIds,
+      range.start,
+      range.end,
+      { excludeOrderId: id }
+    );
     order.technicians = technicians;
     await this.ordersRepo.save(order);
 
-    const hydrated = await this.validateOrder(orderId);
-
-    await this.log(this.historyRepo, hydrated, 'ASSIGN_TECHNICIANS', { technicians: techIds }, actoruserid, 'Técnicos asignados');
-
-    return hydrated;
+    const updated = await this.validateOrder(id);
+    return this.present(updated);
   }
 
-  async finishOrder(id: number, dto: FinishOrderDto, actoruserid?: ActorUserId) {
+  async finishOrder(id: number, dto: FinishOrderDto) {
     const order = await this.validateOrder(id);
 
-    if ((order.products ?? []).length === 0) throw new BadRequestException('No puede finalizar sin productos');
-    if (!order.technicians || order.technicians.length === 0) throw new BadRequestException('No puede finalizar sin técnicos');
+    if ((order.products ?? []).length === 0)
+      throw new BadRequestException("No puede finalizar sin productos");
+    if (!order.technicians || order.technicians.length === 0)
+      throw new BadRequestException("No puede finalizar sin tÃ©cnicos");
 
     order.horafin = dto.horafin;
     order.fechafin = dto.fechafin as any;
 
-    const finishedState = await this.statesRepo.findOne({ where: { name: 'Finished' } as any });
+    const finishedState = await this.statesRepo.findOne({
+      where: { name: "Finished" } as any,
+    });
     if (finishedState) order.state = finishedState;
 
     await this.ordersRepo.save(order);
 
-    const hydrated = await this.validateOrder(id);
-
-    await this.log(
-      this.historyRepo,
-      hydrated,
-      'FINISH',
-      { fechafin: dto.fechafin, horafin: dto.horafin, stateid: finishedState ? (finishedState as any).stateid : null },
-      actoruserid,
-      'Orden finalizada',
-    );
-
-    return hydrated;
+    const updated = await this.validateOrder(id);
+    try {
+      await this.quotesService.completeFromOrder(id);
+    } catch (error: any) {
+      console.error(
+        "No se pudo generar la venta automaticamente desde la orden finalizada:",
+        error?.message ?? error
+      );
+    }
+    return this.present(updated);
   }
 
-  async reprogram(id: number, dto: ReprogramOrderDto, actoruserid?: ActorUserId) {
+  async reprogram(id: number, dto: ReprogramOrderDto) {
     const order = await this.validateOrder(id);
 
-    const beforeSchedule = {
-      fechainicio: order.fechainicio,
-      fechafin: order.fechafin,
-      horainicio: order.horainicio,
-      horafin: order.horafin,
-    };
+    const nextStart = this.toOrderDateTime(dto.fechainicio as any, dto.horainicio);
+    const nextEnd = this.toOrderDateTime((dto.fechafin ?? dto.fechainicio) as any, dto.horafin);
+    const nextRange = this.buildRange(nextStart, nextEnd);
+    if (!nextRange) {
+      throw new BadRequestException("Rango de fecha/hora inválido para reprogramar");
+    }
+    const techIds = (order.technicians ?? [])
+      .map((t) => Number((t as any)?.technicianid))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    await this.ensureTechniciansAvailability(
+      techIds,
+      nextRange.start,
+      nextRange.end,
+      { excludeOrderId: id }
+    );
 
     order.fechainicio = dto.fechainicio as any;
     order.fechafin = dto.fechafin as any;
@@ -388,24 +1591,11 @@ export class OrdersServicesService {
 
     await this.ordersRepo.save(order);
 
-    const hydrated = await this.validateOrder(id);
-
-    const payload = {
-      from: beforeSchedule,
-      to: {
-        fechainicio: hydrated.fechainicio,
-        fechafin: hydrated.fechafin,
-        horainicio: hydrated.horainicio,
-        horafin: hydrated.horafin,
-      },
-      reason: dto.reason ?? null,
-    };
-
-    const description = dto.reason ? `Orden reprogramada: ${dto.reason}` : 'Orden reprogramada';
-
-    await this.log(this.historyRepo, hydrated, 'REPROGRAM', payload, actoruserid, description);
-
-    return hydrated;
+    const updated = await this.validateOrder(id);
+    if (this.isScheduledState(updated.state?.name)) {
+      await this.notifyOrderScheduled(updated);
+    }
+    return this.present(updated);
   }
 
   async getFiles(orderId: number) {
@@ -416,103 +1606,111 @@ export class OrdersServicesService {
   async getFileByIndex(orderId: number, index: number) {
     const order = await this.validateOrder(orderId);
     const files = order.files ?? [];
-    if (index < 0 || index >= files.length) throw new NotFoundException('Archivo no encontrado');
+    if (index < 0 || index >= files.length)
+      throw new NotFoundException("Archivo no encontrado");
     return { url: files[index] };
   }
 
-  async addFile(orderId: number, dto: AddFileDto, actoruserid?: ActorUserId) {
+  async addFile(orderId: number, dto: AddFileDto) {
     const order = await this.validateOrder(orderId);
     const files = order.files ?? [];
     const url = dto.url?.trim();
 
-    if (!url) throw new BadRequestException('url es obligatorio');
-    if (files.includes(url)) throw new BadRequestException('Ese link ya está agregado');
+    if (!url) throw new BadRequestException("url es obligatorio");
+    if (files.includes(url))
+      throw new BadRequestException("Ese link ya estÃ¡ agregado");
 
     order.files = [...files, url];
     await this.ordersRepo.save(order);
 
-    const hydrated = await this.validateOrder(orderId);
-
-    await this.log(this.historyRepo, hydrated, 'ADD_FILE', { url, count: hydrated.files.length }, actoruserid, 'Archivo agregado');
-
-    return hydrated;
+    const updated = await this.validateOrder(orderId);
+    return this.present(updated);
   }
 
-  async removeFileByIndex(orderId: number, index: number, actoruserid?: ActorUserId) {
+  async removeFileByIndex(orderId: number, index: number) {
     const order = await this.validateOrder(orderId);
-    const files = [...(order.files ?? [])];
-
-    if (index < 0 || index >= files.length) throw new NotFoundException('Archivo no encontrado');
-
-    const removed = files.splice(index, 1)[0];
-    order.files = files;
-
-    await this.ordersRepo.save(order);
-
-    const hydrated = await this.validateOrder(orderId);
-
-    await this.log(this.historyRepo, hydrated, 'REMOVE_FILE', { url: removed, index, count: hydrated.files.length }, actoruserid, 'Archivo eliminado');
-
-    return hydrated;
-  }
-
-  async removeFile(orderId: number, dto: RemoveFileDto, actoruserid?: ActorUserId) {
-    const order = await this.validateOrder(orderId);
-    const url = dto.url?.trim();
-    if (!url) throw new BadRequestException('url es obligatorio');
-
     const files = order.files ?? [];
-    const idx = files.indexOf(url);
-    if (idx === -1) throw new NotFoundException('Archivo no encontrado');
+    if (index < 0 || index >= files.length)
+      throw new NotFoundException("Archivo no encontrado");
 
-    order.files = files.filter((u) => u !== url);
-
+    order.files = files.filter((_, i) => i !== index);
     await this.ordersRepo.save(order);
 
-    const hydrated = await this.validateOrder(orderId);
-
-    await this.log(this.historyRepo, hydrated, 'REMOVE_FILE', { url, index: idx, count: hydrated.files.length }, actoruserid, 'Archivo eliminado');
-
-    return hydrated;
+    const updated = await this.validateOrder(orderId);
+    return this.present(updated);
   }
 
-  findByClient(clientId: number) {
-    return this.ordersRepo.find({
+  async removeFile(orderId: number, dto: RemoveFileDto) {
+    const order = await this.validateOrder(orderId);
+    const files = order.files ?? [];
+    const url = dto.url?.trim();
+
+    if (!url) throw new BadRequestException("url es obligatorio");
+    if (!files.includes(url)) throw new NotFoundException("Archivo no encontrado");
+
+    order.files = files.filter((f) => f !== url);
+    await this.ordersRepo.save(order);
+
+    const updated = await this.validateOrder(orderId);
+    return this.present(updated);
+  }
+
+  async findByTechnician(technicianId: number) {
+    const list = await this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.products", "osp")
+      .leftJoinAndSelect("osp.product", "p")
+      .leftJoinAndSelect("p.category", "pc")
+      .leftJoinAndSelect("o.services", "oss")
+      .leftJoinAndSelect("oss.service", "s")
+      .leftJoinAndSelect("s.typeofservice", "tos")
+      .leftJoinAndSelect("o.technicians", "t")
+      .leftJoinAndSelect("t.users", "tu")
+      .leftJoinAndSelect("o.client", "c")
+      .leftJoinAndSelect("c.users", "cu")
+      .leftJoinAndSelect("o.state", "st")
+      .leftJoinAndSelect("o.history", "h")
+      .leftJoinAndSelect("h.technician", "ht")
+      .leftJoinAndSelect("ht.users", "htu")
+      .leftJoinAndSelect("o.warrantyRecord", "wr")
+      .leftJoinAndSelect("wr.reportedBy", "wru")
+      .where("t.technicianid = :technicianId", { technicianId })
+      .orderBy("o.ordersservicesid", "ASC")
+      .addOrderBy("h.createdat", "DESC")
+      .getMany();
+
+    return this.presentMany(list);
+  }
+
+  async findByClient(clientId: number) {
+    const list = await this.ordersRepo.find({
       where: { client: { customerid: clientId } as any } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
+
+    return this.presentMany(list);
   }
 
-  findByState(stateId: number) {
-    return this.ordersRepo.find({
+  async findByState(stateId: number) {
+    const list = await this.ordersRepo.find({
       where: { state: { stateid: stateId } as any } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
+
+    return this.presentMany(list);
   }
 
-  findByDateRange(from: string, to: string) {
-    return this.ordersRepo.find({
+  async findByDateRange(from: string, to: string) {
+    const list = await this.ordersRepo.find({
       where: { fechainicio: Between(from as any, to as any) } as any,
       relations: [...ORDER_RELATIONS] as any,
-      order: { history: { createdat: 'DESC' } } as any,
+      order: { ordersservicesid: "ASC", history: { createdat: "DESC" } } as any,
     });
-  }
 
-  findByTechnician(technicianId: number) {
-    return this.ordersRepo
-      .createQueryBuilder('o')
-      .leftJoinAndSelect('o.technicians', 't')
-      .leftJoinAndSelect('t.user', 'tuser')
-      .leftJoinAndSelect('o.client', 'client')
-      .leftJoinAndSelect('client.user', 'cuser')
-      .leftJoinAndSelect('o.state', 'state')
-      .leftJoinAndSelect('o.products', 'p')
-      .leftJoinAndSelect('p.product', 'product')
-      .leftJoinAndSelect('o.history', 'h')
-      .where('t.technicianid = :id', { id: technicianId })
-      .orderBy('h.createdat', 'DESC')
-      .getMany();
+    return this.presentMany(list);
   }
 }
+
+

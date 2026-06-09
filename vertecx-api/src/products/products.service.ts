@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
 import { Products } from './entities/products.entity';
-import { Ordersproducts } from './entities/ordersproducts.entity';
-import { PurchaseProduct } from 'src/shared/entities/purchase-product.entity';
 import { ProductCategory } from 'src/products-categories/entities/product-category.entity';
 
 import { CreateProductDto } from './dto/create-product.dto';
@@ -19,38 +17,74 @@ export class ProductsService {
     @InjectRepository(ProductCategory)
     private readonly productCategoriesRepo: Repository<ProductCategory>,
 
-    @InjectRepository(PurchaseProduct)
-    private readonly purchaseProductsRepo: Repository<PurchaseProduct>,
-
-    @InjectRepository(Ordersproducts)
-    private readonly ordersProductsRepo: Repository<Ordersproducts>,
-
     private readonly dataSource: DataSource,
   ) {}
 
   private async ensureCategoryExists(categoryid: number) {
-    const category = await this.productCategoriesRepo.findOne({
+    const exists = await this.productCategoriesRepo.exist({
       where: { id: categoryid } as any,
     });
 
-    if (!category) {
-      throw new BadRequestException(`La categoría (${categoryid}) no existe en categories.`);
+    if (!exists) {
+      throw new BadRequestException(
+        `La categoría (${categoryid}) no existe en categories.`,
+      );
     }
-    return category;
+    return true;
+  }
+
+  private normalizeImages(input: {
+    image?: string | null;
+    images?: string[] | null;
+  }): { image: string; images: string[] } {
+    const normalizedArr = (input.images ?? [])
+      .map((x) => String(x ?? '').trim())
+      .filter(Boolean);
+
+    const normalizedImage = String(input.image ?? '').trim();
+
+    let finalImages: string[] = [];
+
+    if (normalizedArr.length > 0) {
+      finalImages = normalizedArr;
+    } else if (normalizedImage) {
+      finalImages = [normalizedImage];
+    }
+
+    if (finalImages.length === 0) {
+      throw new BadRequestException('Debes enviar al menos una imagen.');
+    }
+    if (finalImages.length > 6) {
+      throw new BadRequestException('Máximo 6 imágenes por producto.');
+    }
+
+    finalImages = Array.from(new Set(finalImages));
+
+    if (finalImages.length > 6) {
+      throw new BadRequestException('Máximo 6 imágenes por producto.');
+    }
+
+    return { image: finalImages[0], images: finalImages };
   }
 
   async create(dto: CreateProductDto) {
     await this.ensureCategoryExists(dto.categoryid);
+
+    const imgs = this.normalizeImages({ image: dto.image, images: dto.images });
 
     const entity = this.productsRepo.create({
       productname: dto.productname.trim(),
       productdescription: dto.productdescription ?? null,
       categoryid: dto.categoryid,
       suppliercategory: dto.suppliercategory.trim(),
-      image: dto.image.trim(),
+
+      image: imgs.image,
+      images: imgs.images,
+
       productcode: dto.productcode ?? null,
-      productpriceofsale: dto.productpriceofsale ?? null,
-      productpriceofsupplier: dto.productpriceofsupplier,
+
+      productpriceofsale: null,
+      productpriceofsupplier: 0,
       isactive: dto.isactive ?? true,
     });
 
@@ -58,64 +92,156 @@ export class ProductsService {
   }
 
   async findAll(status: 'active' | 'inactive' | 'all' = 'active') {
-    const where = status === 'all' ? {} : { isactive: status === 'active' };
+    const qb = this.productsRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.category', 'c')
+      .orderBy('p.productid', 'DESC');
 
-    return await this.productsRepo.find({
-      where: where as any,
-      relations: { category: true },
-      order: { productid: 'DESC' },
-    });
+    if (status !== 'all') {
+      qb.where('p.isactive = :isactive', { isactive: status === 'active' });
+    }
+
+    qb.select([
+      'p.productid',
+      'p.createddate',
+      'p.updatedat',
+      'p.categoryid',
+      'p.isactive',
+      'p.productpriceofsale',
+      'p.productpriceofsupplier',
+      'p.productstock',
+      'p.productname',
+      'p.productdescription',
+      'p.productcode',
+      'p.purchaseorderid',
+      'p.suppliercategory',
+      'p.image',
+      'p.images', 
+
+      'c.id',
+      'c.name',
+    ]);
+
+    return await qb.getMany();
   }
 
   async findOne(id: number) {
-    const product = await this.productsRepo.findOne({
-      where: { productid: id },
-      relations: { category: true },
-    });
+    const product = await this.productsRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.category', 'c')
+      .where('p.productid = :id', { id })
+      .select([
+        'p.productid',
+        'p.createddate',
+        'p.updatedat',
+        'p.categoryid',
+        'p.isactive',
+        'p.productpriceofsale',
+        'p.productpriceofsupplier',
+        'p.productstock',
+        'p.productname',
+        'p.productdescription',
+        'p.productcode',
+        'p.purchaseorderid',
+        'p.suppliercategory',
+        'p.image',
+        'p.images',
 
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+        'c.id',
+        'c.name',
+      ])
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
     return product;
   }
 
   async update(id: number, dto: UpdateProductDto) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
+
+    if (
+      dto.productpriceofsale !== undefined ||
+      dto.productpriceofsupplier !== undefined
+    ) {
+      throw new BadRequestException(
+        'Los precios de compra y venta solo se gestionan desde el módulo de Compras.',
+      );
+    }
+
+    const patch: Partial<Products> = {};
 
     if (dto.categoryid !== undefined) {
       await this.ensureCategoryExists(dto.categoryid);
-      product.categoryid = dto.categoryid;
+      patch.categoryid = dto.categoryid;
     }
 
     if (dto.productname !== undefined) {
       const v = dto.productname.trim();
-      if (!v) throw new BadRequestException('El nombre del producto es obligatorio.');
-      product.productname = v;
+      if (!v) {
+        throw new BadRequestException('El nombre del producto es obligatorio.');
+      }
+      patch.productname = v;
     }
 
-    if (dto.productdescription !== undefined) product.productdescription = dto.productdescription ?? null;
+    if (dto.productdescription !== undefined) {
+      patch.productdescription = dto.productdescription ?? null;
+    }
 
     if (dto.suppliercategory !== undefined) {
       const v = dto.suppliercategory?.trim();
-      if (!v) throw new BadRequestException('La categoría del proveedor es obligatoria.');
-      product.suppliercategory = v;
+      if (!v) {
+        throw new BadRequestException(
+          'La categoría del proveedor es obligatoria.',
+        );
+      }
+      patch.suppliercategory = v;
     }
 
-    if (dto.image !== undefined) {
+    if (dto.images !== undefined) {
+      const imgs = this.normalizeImages({ images: dto.images });
+      patch.images = imgs.images;
+      patch.image = imgs.image;
+    } else if (dto.image !== undefined) {
       const v = dto.image?.trim();
       if (!v) {
         throw new BadRequestException(
           'La imagen es obligatoria. No puedes eliminarla; si deseas cambiarla, envía una nueva URL.',
         );
       }
-      product.image = v;
+
+      patch.image = v;
+
+      const existing = Array.isArray(product.images) ? [...product.images] : [];
+      if (existing.length === 0) {
+        patch.images = [v];
+      } else {
+        existing[0] = v;
+        patch.images = existing.slice(0, 6);
+      }
     }
 
-    if (dto.productcode !== undefined) product.productcode = dto.productcode ?? null;
-    if (dto.productpriceofsale !== undefined) product.productpriceofsale = dto.productpriceofsale ?? null;
-    if (dto.productpriceofsupplier !== undefined) product.productpriceofsupplier = dto.productpriceofsupplier;
-    if (dto.isactive !== undefined) product.isactive = dto.isactive;
+    if (dto.productcode !== undefined) {
+      patch.productcode = dto.productcode ?? null;
+    }
 
-    return await this.productsRepo.save(product);
+    if (dto.isactive !== undefined) {
+      patch.isactive = dto.isactive;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return await this.findOne(id);
+    }
+
+    await this.productsRepo.update({ productid: id } as any, patch);
+
+    return await this.findOne(id);
   }
 
   private async isReferenced(productid: number) {
@@ -141,7 +267,11 @@ export class ProductsService {
       hasOrdersProducts,
       hasOrdersServicesProducts,
       hasSales,
-      hasAny: hasPurchases || hasOrdersProducts || hasOrdersServicesProducts || hasSales,
+      hasAny:
+        hasPurchases ||
+        hasOrdersProducts ||
+        hasOrdersServicesProducts ||
+        hasSales,
     };
   }
 
@@ -157,14 +287,22 @@ export class ProductsService {
     if (rel.hasOrdersServicesProducts) parts.push('órdenes (servicios)');
     if (rel.hasSales) parts.push('ventas');
 
-    if (parts.length === 0) return 'Está asociado a otros registros del sistema.';
-    if (parts.length === 1) return `Está asociado a ${parts[0]}.`;
+    if (parts.length === 0) {
+      return 'Está asociado a otros registros del sistema.';
+    }
+    if (parts.length === 1) {
+      return `Está asociado a ${parts[0]}.`;
+    }
     return `Está asociado a ${parts.join(' y ')}.`;
   }
 
   async getDeletionInfo(id: number) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
 
     const rel = await this.isReferenced(id);
 
@@ -180,13 +318,19 @@ export class ProductsService {
   }
 
   async remove(id: number) {
-    const product = await this.productsRepo.findOne({ where: { productid: id } });
-    if (!product) throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    const product = await this.productsRepo.findOne({
+      where: { productid: id },
+    });
+    if (!product) {
+      throw new NotFoundException(`Producto (${id}) no encontrado.`);
+    }
 
     const rel = await this.isReferenced(id);
 
     if (rel.hasAny) {
-      if (!product.isactive) throw new BadRequestException('El producto ya está inactivo.');
+      if (!product.isactive) {
+        throw new BadRequestException('El producto ya está inactivo.');
+      }
       product.isactive = false;
       return await this.productsRepo.save(product);
     }
@@ -196,7 +340,9 @@ export class ProductsService {
       return { deleted: true, mode: 'hard', productid: id };
     } catch (e: any) {
       if (e?.code === '23503') {
-        if (!product.isactive) throw new BadRequestException('El producto ya está inactivo.');
+        if (!product.isactive) {
+          throw new BadRequestException('El producto ya está inactivo.');
+        }
         product.isactive = false;
         return await this.productsRepo.save(product);
       }
@@ -204,4 +350,3 @@ export class ProductsService {
     }
   }
 }
-

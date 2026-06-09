@@ -8,130 +8,229 @@ import {
   Patch,
   Post,
   Query,
-} from '@nestjs/common';
-import { OrdersServicesService } from './orders-services.service';
-import { CreateOrdersServicesDto } from './dto/create-orders-services.dto';
-import { UpdateOrdersServicesDto } from './dto/update-orders-services.dto';
-import { AddProductDto } from './dto/add-product.dto';
-import { AssignTechniciansDto } from './dto/assign-technicians.dto';
-import { FinishOrderDto } from './dto/finish-order.dto';
-import { AddFileDto } from './dto/add-file.dto';
-import { RemoveFileDto } from './dto/remove-file.dto';
-import { ReprogramOrderDto } from './dto/reprogram-order.dto';
+  Req,
+} from "@nestjs/common";
+import { OrdersServicesService } from "./orders-services.service";
+import { CreateOrdersServicesDto } from "./dto/create-orders-services.dto";
+import { UpdateOrdersServicesDto } from "./dto/update-orders-services.dto";
+import { AddProductDto } from "./dto/add-product.dto";
+import { AddServiceDto } from "./dto/add-service.dto";
+import { AssignTechniciansDto } from "./dto/assign-technicians.dto";
+import { FinishOrderDto } from "./dto/finish-order.dto";
+import { AddFileDto } from "./dto/add-file.dto";
+import { RemoveFileDto } from "./dto/remove-file.dto";
+import { ReprogramOrderDto } from "./dto/reprogram-order.dto";
+import { AddWorklogDto } from "./dto/add-worklog.dto";
+import { ReportWarrantyDto } from "./dto/report-warranty.dto";
+import { UpdateProductLineDto } from "./dto/update-product-line.dto";
+import { UpdateServiceLineDto } from "./dto/update-service-line.dto";
+import { UpsertProductsDto } from "./dto/upsert-products.dto";
+import { UpsertServicesDto } from "./dto/upsert-services.dto";
 
-@Controller('orders-services')
+@Controller("orders-services")
 export class OrdersServicesController {
-  constructor(private readonly service: OrdersServicesService) {}
+  constructor(private readonly ordersServicesService: OrdersServicesService) {}
 
   @Post()
   create(@Body() dto: CreateOrdersServicesDto) {
-    return this.service.create(dto);
+    return this.ordersServicesService.create(dto);
   }
 
   @Get()
   findAll() {
-    return this.service.findAll();
+    return this.ordersServicesService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  @Get(":id")
+  findOne(@Param("id", ParseIntPipe) id: number) {
+    return this.ordersServicesService.findOne(id);
   }
 
-  @Get(':id/history')
-  history(@Param('id', ParseIntPipe) id: number) {
-    return this.service.history(id);
+  @Get(":id/history")
+  history(
+    @Param("id", ParseIntPipe) id: number,
+    @Query("type") type?: "SYSTEM" | "TECH"
+  ) {
+    return this.ordersServicesService.history(id, type);
   }
 
-  @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrdersServicesDto) {
-    return this.service.update(id, dto);
+  @Post(":id/history")
+  addWorklog(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AddWorklogDto
+  ) {
+    return this.ordersServicesService.addWorklog(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  @Patch(":id")
+  update(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpdateOrdersServicesDto
+  ) {
+    return this.ordersServicesService.update(id, dto);
   }
 
-  @Post(':id/products')
-  addProduct(@Param('id', ParseIntPipe) id: number, @Body() dto: AddProductDto) {
-    return this.service.addProduct(id, dto);
+  @Delete(":id")
+  remove(@Param("id", ParseIntPipe) id: number) {
+    return this.ordersServicesService.remove(id);
   }
 
-  @Delete(':id/products/:productId')
+  @Post(":id/products")
+  addProduct(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AddProductDto
+  ) {
+    return this.ordersServicesService.addProduct(id, dto);
+  }
+
+  @Patch(":id/products")
+  upsertProducts(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpsertProductsDto
+  ) {
+    return this.ordersServicesService.upsertProducts(id, dto);
+  }
+
+  @Patch(":id/products/:productId")
+  updateProductLine(
+    @Param("id", ParseIntPipe) id: number,
+    @Param("productId", ParseIntPipe) productId: number,
+    @Body() dto: UpdateProductLineDto
+  ) {
+    return this.ordersServicesService.updateProductLine(id, productId, dto);
+  }
+
+  @Delete(":id/products/:productId")
   removeProduct(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('productId', ParseIntPipe) productId: number,
+    @Param("id", ParseIntPipe) id: number,
+    @Param("productId", ParseIntPipe) productId: number
   ) {
-    return this.service.removeProduct(id, productId);
+    return this.ordersServicesService.removeProduct(id, productId);
   }
 
-  @Patch(':id/technicians')
+  @Post(":id/services")
+  addService(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AddServiceDto
+  ) {
+    return this.ordersServicesService.addService(id, dto);
+  }
+
+  @Patch(":id/services")
+  upsertServices(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpsertServicesDto
+  ) {
+    return this.ordersServicesService.upsertServices(id, dto);
+  }
+
+  @Patch(":id/services/:serviceId")
+  updateServiceLine(
+    @Param("id", ParseIntPipe) id: number,
+    @Param("serviceId", ParseIntPipe) serviceId: number,
+    @Body() dto: UpdateServiceLineDto
+  ) {
+    return this.ordersServicesService.updateServiceLine(id, serviceId, dto);
+  }
+
+  @Delete(":id/services/:serviceId")
+  removeService(
+    @Param("id", ParseIntPipe) id: number,
+    @Param("serviceId", ParseIntPipe) serviceId: number
+  ) {
+    return this.ordersServicesService.removeService(id, serviceId);
+  }
+
+  @Patch(":id/technicians")
   assignTechnicians(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: AssignTechniciansDto,
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: AssignTechniciansDto
   ) {
-    return this.service.assignTechnicians(id, dto);
+    return this.ordersServicesService.assignTechnicians(id, dto);
   }
 
-  @Patch(':id/finish')
-  finish(@Param('id', ParseIntPipe) id: number, @Body() dto: FinishOrderDto) {
-    return this.service.finishOrder(id, dto);
+  @Patch(":id/finish")
+  finishOrder(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: FinishOrderDto
+  ) {
+    return this.ordersServicesService.finishOrder(id, dto);
   }
 
-  @Patch(':id/reprogram')
-  reprogram(@Param('id', ParseIntPipe) id: number, @Body() dto: ReprogramOrderDto) {
-    return this.service.reprogram(id, dto);
+  @Patch(":id/reprogram")
+  reprogram(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: ReprogramOrderDto
+  ) {
+    return this.ordersServicesService.reprogram(id, dto);
   }
 
-  @Get(':id/files')
-  getFiles(@Param('id', ParseIntPipe) id: number) {
-    return this.service.getFiles(id);
+  @Get(":id/files")
+  getFiles(@Param("id", ParseIntPipe) id: number) {
+    return this.ordersServicesService.getFiles(id);
   }
 
-  @Get(':id/files/:index')
+  @Get(":id/files/index/:index")
   getFileByIndex(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('index', ParseIntPipe) index: number,
+    @Param("id", ParseIntPipe) id: number,
+    @Param("index", ParseIntPipe) index: number
   ) {
-    return this.service.getFileByIndex(id, index);
+    return this.ordersServicesService.getFileByIndex(id, index);
   }
 
-  @Post(':id/files')
-  addFile(@Param('id', ParseIntPipe) id: number, @Body() dto: AddFileDto) {
-    return this.service.addFile(id, dto);
+  @Post(":id/files")
+  addFile(@Param("id", ParseIntPipe) id: number, @Body() dto: AddFileDto) {
+    return this.ordersServicesService.addFile(id, dto);
   }
 
-  @Delete(':id/files/index/:index')
+  @Delete(":id/files/index/:index")
   removeFileByIndex(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('index', ParseIntPipe) index: number,
+    @Param("id", ParseIntPipe) id: number,
+    @Param("index", ParseIntPipe) index: number
   ) {
-    return this.service.removeFileByIndex(id, index);
+    return this.ordersServicesService.removeFileByIndex(id, index);
   }
 
-  @Delete(':id/files')
-  removeFile(@Param('id', ParseIntPipe) id: number, @Body() dto: RemoveFileDto) {
-    return this.service.removeFile(id, dto);
+  @Delete(":id/files")
+  removeFile(@Param("id", ParseIntPipe) id: number, @Body() dto: RemoveFileDto) {
+    return this.ordersServicesService.removeFile(id, dto);
   }
 
-  @Get('by-technician/:technicianId')
-  findByTechnician(@Param('technicianId', ParseIntPipe) technicianId: number) {
-    return this.service.findByTechnician(technicianId);
+  @Patch(":id/warranty/mark")
+  markWarranty(@Param("id", ParseIntPipe) id: number, @Req() req: any) {
+    const actorUserId = req?.user?.userid ? Number(req.user.userid) : undefined;
+    return this.ordersServicesService.markWarranty(id, actorUserId);
   }
 
-  @Get('by-client/:clientId')
-  findByClient(@Param('clientId', ParseIntPipe) clientId: number) {
-    return this.service.findByClient(clientId);
+  @Patch(":id/warranty/report")
+  reportWarranty(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: ReportWarrantyDto,
+    @Req() req: any
+  ) {
+    const actorUserId = req?.user?.userid ? Number(req.user.userid) : undefined;
+    return this.ordersServicesService.reportWarranty(id, dto, actorUserId);
   }
 
-  @Get('by-state/:stateId')
-  findByState(@Param('stateId', ParseIntPipe) stateId: number) {
-    return this.service.findByState(stateId);
+  @Get("by-technician/:technicianId")
+  findByTechnician(
+    @Param("technicianId", ParseIntPipe) technicianId: number
+  ) {
+    return this.ordersServicesService.findByTechnician(technicianId);
   }
 
-  @Get('by-date-range')
-  findByDateRange(@Query('from') from: string, @Query('to') to: string) {
-    return this.service.findByDateRange(from, to);
+  @Get("by-client/:clientId")
+  findByClient(@Param("clientId", ParseIntPipe) clientId: number) {
+    return this.ordersServicesService.findByClient(clientId);
+  }
+
+  @Get("by-state/:stateId")
+  findByState(@Param("stateId", ParseIntPipe) stateId: number) {
+    return this.ordersServicesService.findByState(stateId);
+  }
+
+  @Get("by-date-range")
+  findByDateRange(@Query("from") from: string, @Query("to") to: string) {
+    return this.ordersServicesService.findByDateRange(from, to);
   }
 }

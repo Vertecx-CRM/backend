@@ -1,149 +1,630 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+﻿import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { MoreThanOrEqual, Repository } from "typeorm";
+
 import { ServiceRequest } from "./entities/servicerequest.entity";
+import { ServiceRequestTechnician } from "./entities/servicerequest-technician.entity";
 import { CreateRequestDto } from "./dto/create-request.dto";
 import { UpdateServiceRequestDto } from "./dto/update-request.dto";
+
 import { States } from "../shared/entities/states.entity";
-
-function localMidnight(ymd: string) {
-  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mm = Number(m[2]);
-  const d = Number(m[3]);
-  return new Date(y, mm - 1, d, 0, 0, 0, 0);
-}
-
-function toDateOrNull(input?: string | null) {
-  if (input === undefined) return undefined; // útil para update (no tocar)
-  if (input === null || input === "") return null;
-
-  const asMidnight = localMidnight(input);
-  if (asMidnight) return asMidnight;
-
-  const d = new Date(input);
-  if (Number.isNaN(d.getTime())) throw new BadRequestException("Fecha/hora inválida");
-  return d;
-}
-
-function ensureEndAfterStart(start: Date | null, end: Date | null) {
-  if (start && end && end <= start) {
-    throw new BadRequestException("La hora final debe ser mayor que la hora inicial.");
-  }
-}
+import { Customers } from "src/customers/entities/customers.entity";
+import { MailService } from "src/shared/mail/mail.service";
+import { RequestQueryDto } from "./dto/request-query.dto";
+import { DateUtils } from '../shared/utils/date-utils';
+import { NormalizationClass } from '../shared/utils/normalization.class';
+import { isCanceledState } from "../shared/utils/is-cancelled-state";
+import { OrdersServices } from "../orders-services/entities/orders-services.entity";
+import { ServicesService } from "../services/services.service";
+import { CreateAdminRequestDto } from "./dto/create-admin-request-.dto";
+import { resolveUserIdFromAuth } from "../shared/utils/resolve-user-id";
+import { CustomersService } from "../customers/customers.service";
+import {
+  composeRequestDescriptionWithAvailability,
+  normalizeRequestFlowMetadata,
+  normalizeRequestAvailabilityOptions,
+  parseRequestDescriptionWithAvailability,
+} from "./utils/request-availability";
+import {
+  getRequestScheduleContextLabel,
+  isInstallationRequestFlow,
+  normalizeRequestMode,
+} from "./utils/request-flow";
 
 @Injectable()
 export class RequestsService {
   constructor(
-    @InjectRepository(ServiceRequest) private readonly repo: Repository<ServiceRequest>,
-    @InjectRepository(States) private readonly statesRepo: Repository<States>
+    @InjectRepository(ServiceRequest)
+    private readonly srRepo: Repository<ServiceRequest>,
+
+    @InjectRepository(ServiceRequestTechnician)
+    private readonly linkRepo: Repository<ServiceRequestTechnician>,
+
+    @InjectRepository(States)
+    private readonly statesRepo: Repository<States>,
+
+    @InjectRepository(Customers)
+    private readonly customersRepo: Repository<Customers>,
+
+    @InjectRepository(OrdersServices)
+      private readonly ordersRepo: Repository<OrdersServices>,
+
+    private readonly servicesService: ServicesService,
+    private readonly customersService: CustomersService,
+    private readonly mailService: MailService
   ) {}
 
-  private async ensureStateExists(stateId: number) {
-    if (!stateId) return;
-    const ok = await this.statesRepo.exist({ where: { stateid: stateId as any } });
-    if (!ok) throw new BadRequestException("stateId no existe");
+  private async notifyScheduled(sr: ServiceRequest) {
+    try {
+      if (!DateUtils.isScheduledState(sr.state?.name)) return;
+      if (!sr.scheduledAt) return;
+
+      const when = DateUtils.buildScheduleLabel(sr.scheduledAt, sr.scheduledEndAt) || sr.scheduledAt.toISOString();
+      const parsed = parseRequestDescriptionWithAvailability(sr?.description ?? "");
+      const flowMetadata = this.normalizeFlowMetadataForRequest(
+        sr?.serviceType,
+        parsed.flowMetadata,
+      );
+      const scheduleContext = getRequestScheduleContextLabel(
+        sr?.serviceType,
+        flowMetadata?.requestMode,
+      );
+      const technicianScheduleContext =
+        scheduleContext === "asesoria tecnica previa a instalacion"
+          ? "asesoria tecnica asignada"
+          : scheduleContext === "instalacion programada"
+            ? "instalacion asignada"
+          : "visita asignada";
+
+      const customerEmail = sr.customer?.users?.email;
+      if (customerEmail) {
+        const name = [sr.customer?.users?.name, sr.customer?.users?.lastname].filter(Boolean).join(" ").trim();
+        await this.mailService.sendAppointmentScheduled(customerEmail, name, scheduleContext, when);
+      }
+
+      const techEmails = (sr.techniciansMap ?? [])
+        .map((t: any) => ({
+          email: t?.technician?.users?.email,
+          name: [t?.technician?.users?.name, t?.technician?.users?.lastname].filter(Boolean).join(" ").trim(),
+        }))
+        .filter((t: any) => t.email);
+
+      await Promise.all(
+        techEmails.map((t) =>
+          this.mailService.sendAppointmentScheduled(t.email, t.name, technicianScheduleContext, when)
+        )
+      );
+    } catch (error) {
+      // No bloquear el flujo principal por fallos de correo
+      console.error("No se pudo enviar correo de agenda de solicitud:", error?.message ?? error);
+    }
   }
 
-  async findAllStates() {
-    return this.statesRepo.find({ order: { stateid: "ASC" } as any });
-  }
+  private normalizeFlowMetadataForRequest(
+    serviceType?: string | null,
+    flowMetadata?: ReturnType<typeof normalizeRequestFlowMetadata>
+  ) {
+    if (!isInstallationRequestFlow(serviceType)) return null;
 
-  async create(dto: CreateRequestDto) {
-    await this.ensureStateExists(dto.stateId);
+    const normalized = normalizeRequestFlowMetadata(flowMetadata ?? {}) ?? {};
 
-    const direccion = String(dto?.direccion ?? "").trim();
-    if (!direccion) throw new BadRequestException("direccion should not be empty");
-    if (direccion.length > 255)
-      throw new BadRequestException("direccion must be shorter than or equal to 255 characters");
+    const requestMode =
+      normalizeRequestMode(normalized.requestMode) || "ASSESSMENT";
+    const technicalReviewStatus =
+      requestMode === "DIRECT_INSTALLATION"
+        ? normalized.technicalReviewStatus ?? "PENDING_REVIEW"
+        : "NOT_APPLICABLE";
 
-    const startParsed = toDateOrNull(dto.scheduledAt ?? undefined);
-    const endParsed = toDateOrNull((dto as any).scheduledEndAt ?? undefined);
-
-    const scheduledAt = startParsed === undefined ? new Date() : startParsed; // tu comportamiento actual
-    const scheduledEndAt = endParsed === undefined ? null : endParsed;
-
-    ensureEndAfterStart(scheduledAt, scheduledEndAt);
-
-    const entity = this.repo.create({
-      scheduledAt,
-      scheduledEndAt,
-      serviceType: dto.serviceType,
-      direccion: direccion.slice(0, 255),
-      description: dto.description,
-      stateId: dto.stateId,
-      serviceId: dto.serviceId,
-      clientId: dto.clientId,
-    });
-
-    const saved = await this.repo.save(entity);
-
-    return this.repo.findOne({
-      where: { serviceRequestId: saved.serviceRequestId },
-      relations: ["state", "service", "customer", "customer.users"],
+    return normalizeRequestFlowMetadata({
+      ...normalized,
+      requestMode,
+      technicalReviewStatus,
     });
   }
 
-  async findAll() {
-    return this.repo.find({
-      relations: ["state", "service", "customer", "customer.users"],
-      order: { serviceRequestId: "DESC" },
+  private decorateRequest<T extends ServiceRequest>(sr: T) {
+    const parsed = parseRequestDescriptionWithAvailability(sr?.description ?? "");
+    const flowMetadata = this.normalizeFlowMetadataForRequest(
+      sr?.serviceType,
+      parsed.flowMetadata,
+    );
+    return Object.assign(sr, {
+      description: parsed.descriptionPlain,
+      descriptionPlain: parsed.descriptionPlain,
+      clientAvailabilityOptions: parsed.availabilityOptions,
+      requestMode: flowMetadata?.requestMode ?? null,
+      technicalReviewStatus: flowMetadata?.technicalReviewStatus ?? null,
+      alreadyHasMaterials: flowMetadata?.alreadyHasMaterials ?? false,
+      linkedSaleId: flowMetadata?.linkedSaleId ?? null,
+      linkedSaleCode: flowMetadata?.linkedSaleCode ?? null,
+      purchasedMaterials: flowMetadata?.purchasedMaterials ?? [],
+      siteChecklist: flowMetadata?.siteChecklist ?? null,
     });
+  }
+
+  private async findOneEntity(id: number) {
+    const sr = await this.srRepo.findOne({
+      where: { serviceRequestId: id },
+      relations: {
+        state: true,
+        service: true,
+        customer: { users: true },
+        techniciansMap: { technician: { users: true } },
+      },
+    });
+    if (!sr) throw new NotFoundException("Solicitud no encontrada");
+    return sr;
+  }
+
+  async findAll(query: RequestQueryDto) {
+    const { clientId, stateId, fromScheduleDate, serviceTypeId, serviceId } = query;
+    const scheduledAt = !DateUtils.toDateOrNull(fromScheduleDate) ? undefined : MoreThanOrEqual(DateUtils.toDateOrNull(fromScheduleDate))
+
+    const result = await this.srRepo.find({
+      relations: {
+        state: true,
+        service: true,
+        customer: { users: true },
+        techniciansMap: { technician: { users: true } },
+      },
+      where: {
+        clientId: clientId,
+        stateId: stateId,
+        scheduledAt,
+        serviceId,
+        service: { typeofserviceid: serviceTypeId }
+      },
+      order: { serviceRequestId: "ASC" },
+    });
+
+    if (!result.length)
+      throw new NotFoundException('Solicitudes no encontradas')
+
+    return result.map((item) => this.decorateRequest(item));
   }
 
   async findOne(id: number) {
-    const entity = await this.repo.findOne({
-      where: { serviceRequestId: id },
-      relations: ["state", "service", "customer", "customer.users"],
+    const sr = await this.findOneEntity(id);
+    return this.decorateRequest(sr);
+  }
+
+  async findAllStates() {
+    return this.statesRepo.find({ order: { stateid: "ASC" as any } as any });
+  }
+
+  async createByAdmin(dto: CreateAdminRequestDto) {
+    const {
+      address,
+      descriptionStored,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    } = this.getCommonFields(dto);
+    const { clientId, technicians, serviceId, serviceType } = dto;
+
+    await this.customersService.findOne(clientId);
+
+    const normalizedTechnicians = NormalizationClass.normalizeTechnicians(technicians);
+
+    await this.validateService(serviceId);
+
+    const normalizedStateId = Number.isFinite(stateId) && stateId > 0 ? stateId : 5;
+    const state = await this.statesRepo.findOne({
+      where: { stateid: normalizedStateId } as any,
     });
-    if (!entity) throw new NotFoundException("ServiceRequest not found");
-    return entity;
+
+    if (!state)
+      throw new BadRequestException("stateId invalido");
+
+    if (!isCanceledState(state.name))
+      await this.ensureTechniciansAvailability(
+        technicians,
+        scheduledAt ?? null,
+        scheduledEndAt ?? null
+      );
+
+    const entity = this.srRepo.create({
+      scheduledAt: scheduledAt ?? null,
+      scheduledEndAt: scheduledEndAt ?? null,
+      serviceType,
+      direccion: address,
+      description: descriptionStored,
+      stateId: normalizedStateId,
+      serviceId,
+      clientId,
+    });
+
+    const sr = await this.srRepo.save(entity);
+
+    const linkRows = normalizedTechnicians.map((tid) => ({
+      serviceRequestId: sr.serviceRequestId,
+      technicianId: tid,
+    }));
+
+    if (linkRows.length) {
+      await this.linkRepo.insert(linkRows as any);
+    }
+
+    const full = await this.findOneEntity(sr.serviceRequestId);
+    await this.notifyScheduled(full);
+    return this.decorateRequest(full);
+  }
+
+  async create(user: any, dto: CreateRequestDto) {
+    const { serviceId } = dto
+    const userId = resolveUserIdFromAuth(user);
+
+    const customer = await this.customersRepo
+      .createQueryBuilder("c")
+      .leftJoin("c.users", "u")
+      .where("u.userid = :userId", { userId })
+      .getOne();
+
+    if (!customer) throw new BadRequestException(
+        "El usuario autenticado no tiene un cliente asociado"
+      );
+
+    const clientId = Number((customer as any)?.customerid ?? (customer as any)?.id);
+    if (!Number.isFinite(clientId)) throw new BadRequestException(
+        "No se pudo resolver el clientId del cliente asociado"
+      );
+
+    const {
+      address,
+      descriptionStored,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    } = this.getCommonFields(dto);
+
+    await this.validateService(serviceId);
+
+    const entity = this.srRepo.create({
+      scheduledAt: scheduledAt ?? null,
+      scheduledEndAt: scheduledEndAt ?? null,
+      serviceType: dto.serviceType,
+      direccion: address,
+      description: descriptionStored,
+      stateId,
+      serviceId,
+      clientId,
+    });
+
+    const sr = await this.srRepo.save(entity);
+    const full = await this.findOneEntity(sr.serviceRequestId);
+    await this.notifyScheduled(full);
+    return this.decorateRequest(full);
+  }
+
+  async validateService(id: number) {
+    if (!Number.isFinite(id))
+      throw new BadRequestException("serviceId invalido");
+
+    return await this.servicesService.findOne(id);
+  }
+
+  private getCommonFields(dto: CreateRequestDto) {
+    const scheduledAt = DateUtils.toDateOrNull((dto as any).scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull((dto as any).scheduledEndAt);
+    DateUtils.ensureEndAfterStart(scheduledAt ?? null, scheduledEndAt ?? null);
+
+    const address = String((dto as any).address || "").trim().slice(0, 255);
+    const description = String((dto as any).description || "").trim();
+    const availabilityOptions = normalizeRequestAvailabilityOptions(
+      (dto as any).availabilityOptions
+    );
+    const flowMetadata = this.normalizeFlowMetadataForRequest((dto as any)?.serviceType, {
+      requestMode: (dto as any)?.requestMode,
+      technicalReviewStatus: (dto as any)?.technicalReviewStatus,
+      alreadyHasMaterials: (dto as any)?.alreadyHasMaterials,
+      linkedSaleId: (dto as any)?.linkedSaleId,
+      linkedSaleCode: (dto as any)?.linkedSaleCode,
+      purchasedMaterials: (dto as any)?.purchasedMaterials,
+      siteChecklist: (dto as any)?.siteChecklist,
+    });
+    const descriptionStored = composeRequestDescriptionWithAvailability(
+      description,
+      availabilityOptions,
+      flowMetadata
+    );
+    const stateId = Number((dto as any)?.stateId ?? 5);
+
+    return {
+      address,
+      description,
+      descriptionStored,
+      availabilityOptions,
+      flowMetadata,
+      stateId,
+      scheduledAt,
+      scheduledEndAt,
+    };
   }
 
   async update(id: number, dto: UpdateServiceRequestDto) {
-    const existing = await this.findOne(id);
-    if (dto.stateId !== undefined) await this.ensureStateExists(dto.stateId);
+    const sr = await this.srRepo.findOne({ where: { serviceRequestId: id } });
+    if (!sr) throw new NotFoundException("Solicitud no encontrada");
+    const existingMeta = parseRequestDescriptionWithAvailability(sr.description ?? "");
+    const existingFlowMetadata = this.normalizeFlowMetadataForRequest(
+      sr.serviceType,
+      existingMeta.flowMetadata,
+    );
 
-    const nextScheduledAt =
-      dto.scheduledAt === undefined ? existing.scheduledAt : toDateOrNull(dto.scheduledAt) ?? null;
+    const prevStateId = sr.stateId;
+    const prevStart = sr.scheduledAt ? sr.scheduledAt.getTime() : null;
+    const prevEnd = sr.scheduledEndAt ? sr.scheduledEndAt.getTime() : null;
 
-    const nextScheduledEndAt =
-      (dto as any).scheduledEndAt === undefined
-        ? (existing as any).scheduledEndAt ?? null
-        : toDateOrNull((dto as any).scheduledEndAt) ?? null;
+    const scheduledAt = DateUtils.toDateOrNull((dto as any)?.scheduledAt);
+    const scheduledEndAt = DateUtils.toDateOrNull((dto as any)?.scheduledEndAt);
 
-    ensureEndAfterStart(nextScheduledAt, nextScheduledEndAt);
+    const nextStart = scheduledAt === undefined ? sr.scheduledAt : scheduledAt;
+    const nextEnd =
+      scheduledEndAt === undefined ? sr.scheduledEndAt : scheduledEndAt;
 
-    let direccion = existing.direccion;
-    if ((dto as any).direccion !== undefined) {
-      const dir = String((dto as any).direccion ?? "").trim();
-      if (!dir) throw new BadRequestException("direccion should not be empty");
-      if (dir.length > 255)
-        throw new BadRequestException("direccion must be shorter than or equal to 255 characters");
-      direccion = dir.slice(0, 255);
+    DateUtils.ensureEndAfterStart(nextStart ?? null, nextEnd ?? null);
+
+    const existingLinks = await this.linkRepo.find({
+      where: { serviceRequestId: id } as any,
+    });
+    const currentTechs = Array.from(
+      new Set(
+        (existingLinks ?? [])
+          .map((x) => Number((x as any)?.technicianId))
+          .filter((x) => Number.isFinite(x) && x > 0)
+      )
+    );
+    const nextTechs =
+      (dto as any)?.technicians !== undefined
+        ? NormalizationClass.normalizeTechnicians((dto as any)?.technicians)
+        : currentTechs;
+    const stateIdInput = (dto as any)?.stateId;
+    const effectiveStateId =
+      stateIdInput != null ? Number(stateIdInput) : Number(sr.stateId);
+    if (!Number.isFinite(effectiveStateId) || effectiveStateId <= 0) {
+      throw new BadRequestException("stateId invalido");
+    }
+    const effectiveState = await this.statesRepo.findOne({
+      where: { stateid: effectiveStateId } as any,
+    });
+    if (!effectiveState) throw new BadRequestException("stateId invalido");
+
+    if (!isCanceledState(effectiveState.name)) {
+      await this.ensureTechniciansAvailability(
+        nextTechs,
+        nextStart ?? null,
+        nextEnd ?? null,
+        { excludeRequestId: id }
+      );
     }
 
-    const patch: Partial<ServiceRequest> = {
-      scheduledAt: nextScheduledAt,
-      scheduledEndAt: nextScheduledEndAt as any,
-      serviceType: dto.serviceType ?? existing.serviceType,
-      direccion,
-      description: dto.description ?? existing.description,
-      serviceId: dto.serviceId ?? existing.serviceId,
-      clientId: dto.clientId ?? existing.clientId,
-    };
+    if (scheduledAt !== undefined) sr.scheduledAt = scheduledAt;
+    if (scheduledEndAt !== undefined) sr.scheduledEndAt = scheduledEndAt;
 
-    if (dto.stateId !== undefined) patch.stateId = dto.stateId;
+    if ((dto as any)?.serviceType != null) {
+      sr.serviceType = String((dto as any).serviceType);
+    }
 
-    await this.repo.update({ serviceRequestId: id }, patch);
+    const effectiveServiceType = String(
+      (dto as any)?.serviceType ?? sr.serviceType
+    );
 
-    return this.findOne(id);
+    const nextAddressInput =
+      (dto as any)?.address ?? (dto as any)?.direccion;
+
+    if (nextAddressInput != null) {
+      const dir = String(nextAddressInput).trim();
+      if (dir.length < 3) throw new BadRequestException("Direccion invalida");
+      sr.direccion = dir.slice(0, 255);
+    }
+
+    if ((dto as any)?.description != null) {
+      const desc = String((dto as any).description).trim();
+      if (desc.length < 3) throw new BadRequestException("Descripcion invalida");
+    }
+
+    const flowMetadataKeys = [
+      "requestMode",
+      "technicalReviewStatus",
+      "alreadyHasMaterials",
+      "linkedSaleId",
+      "linkedSaleCode",
+      "purchasedMaterials",
+      "siteChecklist",
+    ];
+    const shouldUpdateFlowMetadata = flowMetadataKeys.some((key) =>
+      Object.prototype.hasOwnProperty.call(dto ?? {}, key)
+    );
+    const shouldUpdateDescription =
+      (dto as any)?.description != null ||
+      (dto as any)?.availabilityOptions !== undefined ||
+      shouldUpdateFlowMetadata ||
+      (dto as any)?.serviceType != null;
+    if (shouldUpdateDescription) {
+      const nextDescription =
+        (dto as any)?.description != null
+          ? String((dto as any).description).trim()
+          : existingMeta.descriptionPlain;
+      const nextAvailabilityOptions =
+        (dto as any)?.availabilityOptions !== undefined
+          ? normalizeRequestAvailabilityOptions((dto as any).availabilityOptions)
+          : existingMeta.availabilityOptions;
+      const nextFlowMetadata = shouldUpdateFlowMetadata
+        ? this.normalizeFlowMetadataForRequest(effectiveServiceType, {
+            ...(existingFlowMetadata ?? {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "requestMode")
+              ? { requestMode: (dto as any)?.requestMode }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "technicalReviewStatus")
+              ? { technicalReviewStatus: (dto as any)?.technicalReviewStatus }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "alreadyHasMaterials")
+              ? { alreadyHasMaterials: (dto as any)?.alreadyHasMaterials }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "linkedSaleId")
+              ? { linkedSaleId: (dto as any)?.linkedSaleId }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "linkedSaleCode")
+              ? { linkedSaleCode: (dto as any)?.linkedSaleCode }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "purchasedMaterials")
+              ? { purchasedMaterials: (dto as any)?.purchasedMaterials }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(dto ?? {}, "siteChecklist")
+              ? { siteChecklist: (dto as any)?.siteChecklist }
+              : {}),
+          })
+        : this.normalizeFlowMetadataForRequest(
+            effectiveServiceType,
+            existingFlowMetadata,
+          );
+
+      sr.description = composeRequestDescriptionWithAvailability(
+        nextDescription,
+        nextAvailabilityOptions,
+        nextFlowMetadata
+      );
+    }
+
+    if ((dto as any)?.stateId != null) {
+      sr.stateId = effectiveStateId;
+    }
+
+    if ((dto as any)?.serviceId != null) {
+      const serviceId = Number((dto as any).serviceId);
+      if (!Number.isFinite(serviceId) || serviceId <= 0) {
+        throw new BadRequestException("serviceId invalido");
+      }
+      sr.serviceId = serviceId;
+    }
+
+    if ((dto as any)?.clientId != null) {
+      const clientId = Number((dto as any).clientId);
+      if (!Number.isFinite(clientId) || clientId <= 0) {
+        throw new BadRequestException("clientId invalido");
+      }
+      if (clientId !== Number(sr.clientId)) {
+        throw new BadRequestException("No se permite cambiar el cliente de la solicitud");
+      }
+    }
+
+    await this.srRepo.save(sr);
+
+    if ((dto as any)?.technicians !== undefined) {
+      const techs = NormalizationClass.normalizeTechnicians((dto as any)?.technicians);
+
+      await this.linkRepo.delete({ serviceRequestId: id } as any);
+
+      if (techs.length) {
+        const linkRows = techs.map((tid) => ({
+          serviceRequestId: id,
+          technicianId: tid,
+        }));
+
+        await this.linkRepo.insert(linkRows as any);
+      }
+    }
+
+    const updated = await this.findOneEntity(id);
+
+    const scheduleChanged =
+      prevStateId !== updated.stateId ||
+      prevStart !== (updated.scheduledAt ? updated.scheduledAt.getTime() : null) ||
+      prevEnd !== (updated.scheduledEndAt ? updated.scheduledEndAt.getTime() : null);
+
+    if (scheduleChanged && DateUtils.isScheduledState(updated.state?.name)) {
+      await this.notifyScheduled(updated);
+    }
+
+    return this.decorateRequest(updated);
   }
 
   async remove(id: number) {
-    await this.ensureStateExists(4);
-    await this.repo.update({ serviceRequestId: id }, { stateId: 4 });
-    return this.findOne(id);
+    const sr = await this.srRepo.findOne({ where: { serviceRequestId: id } });
+    if (!sr) throw new NotFoundException("Solicitud no encontrada");
+
+    await this.linkRepo.delete({ serviceRequestId: id } as any);
+    await this.srRepo.delete({ serviceRequestId: id });
+    return { ok: true };
+  }
+
+  private async ensureTechniciansAvailability(
+    technicianIds: number[],
+    start: Date | null,
+    end: Date | null,
+    opts?: { excludeRequestId?: number; excludeOrderId?: number }
+  ) {
+    if (!technicianIds.length || !start) return;
+    const requested = new Set(technicianIds);
+    const target = DateUtils.buildRange(start, end);
+    if (!target) return;
+
+    const conflicts = new Set<number>();
+
+    const reqQb = this.srRepo
+      .createQueryBuilder("sr")
+      .leftJoinAndSelect("sr.state", "state")
+      .leftJoinAndSelect("sr.techniciansMap", "tm")
+      .where("tm.technicianId IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeRequestId) {
+      reqQb.andWhere("sr.serviceRequestId != :excludeRequestId", {
+        excludeRequestId: opts.excludeRequestId,
+      });
+    }
+
+    const requests = await reqQb.getMany();
+
+    for (const sr of requests) {
+      if (isCanceledState(sr?.state?.name)) continue;
+      const range = DateUtils.buildRange(sr.scheduledAt, sr.scheduledEndAt);
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const link of sr.techniciansMap ?? []) {
+        const id = Number((link as any)?.technicianId);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    const ordersQb = this.ordersRepo
+      .createQueryBuilder("o")
+      .leftJoinAndSelect("o.state", "state")
+      .leftJoinAndSelect("o.technicians", "tech")
+      .where("tech.technicianid IN (:...techIds)", { techIds: technicianIds });
+
+    if (opts?.excludeOrderId) {
+      ordersQb.andWhere("o.ordersservicesid != :excludeOrderId", {
+        excludeOrderId: opts.excludeOrderId,
+      });
+    }
+
+    const orders = await ordersQb.getMany();
+    for (const o of orders) {
+      if (isCanceledState(o?.state?.name)) continue;
+
+      const oStart = DateUtils.orderDateTime(o.fechainicio as any, o.horainicio);
+      const oEnd = DateUtils.orderDateTime((o.fechafin ?? o.fechainicio) as any, o.horafin);
+      const range = DateUtils.buildRange(oStart, oEnd);
+
+      if (!range) continue;
+      if (!DateUtils.hasOverlap(target.start, target.end, range.start, range.end)) continue;
+
+      for (const tech of o.technicians ?? []) {
+        const id = Number((tech as any)?.technicianid);
+        if (requested.has(id)) conflicts.add(id);
+      }
+    }
+
+    if (conflicts.size > 0) {
+      const ids = Array.from(conflicts).sort((a, b) => a - b);
+      throw new BadRequestException(
+        `Los siguientes tecnicos ya estann ocupados en ese horario: ${ids.join(", ")}`
+      );
+    }
   }
 }
+

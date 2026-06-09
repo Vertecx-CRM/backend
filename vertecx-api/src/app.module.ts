@@ -23,14 +23,15 @@ import { TechniciantypesModule } from './technicians/techniciantypes/techniciant
 import { AuthModule } from './auth/auth.module';
 import { OrdersServicesModule } from './orders-services/orders-services.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { PaymentsModule } from './payments/payments.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { SystemStatus } from './security/panic/system-status.entity';
+// import { SystemStatus } from './security/panic/system-status.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SystemStatus]),
-    AuthModule,
+    // TypeOrmModule.forFeature([SystemStatus]),
     ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
     DatabaseModule,
     SalesModule,
     UsersModule,
@@ -51,6 +52,7 @@ import { SystemStatus } from './security/panic/system-status.entity';
     MailModule,
     TechniciantypesModule,
     DashboardModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

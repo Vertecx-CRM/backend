@@ -1,4 +1,5 @@
 import { Customers } from 'src/customers/entities/customers.entity';
+import { Sales } from 'src/sales/entities/sales.entity';
 import { Roles } from 'src/roles/entities/roles.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Typeofdocuments } from 'src/shared/entities/typeofdocuments.entity';
@@ -33,7 +34,7 @@ export class Users {
   @Column({ nullable: false })
   email: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: false, select: false })
   password: string;
 
   @Column({ name: 'mustchangepassword', type: 'boolean', default: true })

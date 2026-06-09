@@ -56,6 +56,17 @@ export class SaleDetailItemDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'ID de la solicitud de servicio asociada a la venta. ' +
+      'Es opcional y solo se envía cuando la venta incluye un servicio.',
+    example: 15,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  servicerequestid?: number;
 }
 
 // 🔹 DTO principal para crear la venta
@@ -88,6 +99,16 @@ export class CreateSaleDto {
   @IsOptional()
   @IsNumber()
   discountamount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Costo de envio aplicado a la venta. Si no se envÃ­a, puede asumirse 0.',
+    example: 20000,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  shippingamount?: number;
 
   @ApiProperty({
     description:
@@ -176,6 +197,7 @@ export class CreateSaleDto {
         unitprice: 500000,
         discountpercent: 0,
         notes: 'Incluye protector de pantalla',
+        servicerequestid: 5,
       },
       {
         productid: 8,

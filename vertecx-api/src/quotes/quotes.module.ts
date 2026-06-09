@@ -7,16 +7,24 @@ import { OrdersServices } from 'src/orders-services/entities/orders-services.ent
 import { States } from 'src/shared/entities/states.entity';
 import { QuoteDetail } from './entities/quotedetail.entity';
 import { ServiceRequest } from 'src/requests/entities/servicerequest.entity';
+import { Customers } from 'src/customers/entities/customers.entity';
+import { Technicians } from 'src/technicians/entities/technicians.entity';
+import { Products } from 'src/products/entities/products.entity';
+import { SalesModule } from 'src/sales/sales.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Quotes,
       QuoteDetail,
-      OrdersServices,
       ServiceRequest,
+      OrdersServices,
       States,
+      Customers,
+      Technicians,
+      Products
     ]),
+    SalesModule,
   ],
   controllers: [QuotesController],
   providers: [QuotesService],

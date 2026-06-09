@@ -33,6 +33,7 @@ import { hasUserLinkedRecords } from './helpers/linked-records.helper';
 import { cleanupTechnician } from './helpers/cleanup-technician.helper';
 import { cleanupCustomer } from './helpers/cleanup-customer.helper';
 import { buildUpdateNotificationHTML } from './helpers/build-update-html.helper';
+import { CheckDuplicatesDto } from './dto/check-duplicates.dto';
 
 @Injectable()
 export class UsersService {
@@ -95,6 +96,49 @@ export class UsersService {
     return this.normalizeRoleName((await this.getRoleById(id)).name);
   }
 
+  // CHECK DUPLICATES (document, email, phone)
+  async checkDuplicates(dto: CheckDuplicatesDto) {
+    const { documentnumber, email, phone } = dto;
+
+    if (!documentnumber && !email && !phone) {
+      throw new BadRequestException(
+        'Debe enviar al menos un dato para validar duplicados.',
+      );
+    }
+
+    const result = {
+      documentnumber: false,
+      email: false,
+      phone: false,
+    };
+
+    if (documentnumber) {
+      const found = await this.usersRepo.findOne({
+        where: { documentnumber },
+        select: ['userid'],
+      });
+      result.documentnumber = !!found;
+    }
+
+    if (email) {
+      const found = await this.usersRepo.findOne({
+        where: { email },
+        select: ['userid'],
+      });
+      result.email = !!found;
+    }
+
+    if (phone) {
+      const found = await this.usersRepo.findOne({
+        where: { phone },
+        select: ['userid'],
+      });
+      result.phone = !!found;
+    }
+
+    return { success: true, data: result };
+  }
+
   // CREATE
   async create(dto: CreateUserDto) {
     return await this.dataSource.transaction(async manager => {
@@ -135,6 +179,7 @@ export class UsersService {
         email: dto.email,
         phone: dto.phone,
         isNit,
+        image: dto.image ?? null,
         password: hashed,
         mustchangepassword: true,
         typeid: docType.typeofdocumentid,
@@ -581,9 +626,25 @@ export class UsersService {
   // PASSWORD CHANGE
 
   async changePassword(id: number, oldPass: string, newPass: string) {
-    const user = await this.usersRepo.findOne({ where: { userid: id } });
+    const user = await this.usersRepo.findOne({
+      where: { userid: id },
+      select: {
+        userid: true,
+        password: true,
+        mustchangepassword: true,
+        updateat: true,
+      },
+    });
 
     if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!oldPass?.trim()) {
+      throw new BadRequestException('Contraseña actual obligatoria.');
+    }
+    if (!user.password?.trim()) {
+      throw new BadRequestException(
+        'El usuario no tiene contraseña configurada.',
+      );
+    }
 
     const matches = await bcrypt.compare(oldPass, user.password);
     if (!matches) {

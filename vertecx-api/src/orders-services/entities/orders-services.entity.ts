@@ -7,14 +7,17 @@ import {
   ManyToMany,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { OrdersServicesProducts } from './orders-services-products.entity';
 import { OrdersServicesHistory } from './orders-services-history.entity';
+import { OrdersServicesServices } from './orders-services-services.entity';
+import { OrdersServicesWarranty } from './orders-services-warranty.entity';
 
-import { Customers } from 'src/customers/entities/customers.entity';
+import { Customers } from '../../customers/entities/customers.entity';
 import { States } from 'src/shared/entities/states.entity';
 import { Technicians } from 'src/technicians/entities/technicians.entity';
 
@@ -26,8 +29,14 @@ export class OrdersServices {
   @Column({ name: 'description', type: 'text' })
   description: string;
 
+  @Column({ name: 'direccion', type: 'varchar', length: 255, nullable: true })
+  direccion: string | null;
+
   @Column({ name: 'total', type: 'int', default: 0 })
   total: number;
+
+  @Column({ name: 'viaticos', type: 'int', default: 0 })
+  viaticos: number;
 
   @Column({ name: 'files', type: 'jsonb', default: () => "'[]'::jsonb" })
   files: string[];
@@ -61,6 +70,9 @@ export class OrdersServices {
   @OneToMany(() => OrdersServicesProducts, (p) => p.order)
   products: OrdersServicesProducts[];
 
+  @OneToMany(() => OrdersServicesServices, (s) => s.order)
+  services: OrdersServicesServices[];
+
   @ManyToMany(() => Technicians)
   @JoinTable({
     name: 'ordersservices_technicians',
@@ -71,4 +83,7 @@ export class OrdersServices {
 
   @OneToMany(() => OrdersServicesHistory, (h) => h.order)
   history: OrdersServicesHistory[];
+
+  @OneToOne(() => OrdersServicesWarranty, (w) => w.order)
+  warrantyRecord: OrdersServicesWarranty;
 }

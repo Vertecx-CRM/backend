@@ -1,5 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -31,7 +34,6 @@ export class UpdateProductDto {
   @Min(1)
   categoryid?: number;
 
-  // Opcional: si lo mandan, NO puede ir vacío
   @ApiPropertyOptional({ example: 'Celulares' })
   @ValidateIf((o) => o.suppliercategory !== undefined)
   @IsString()
@@ -39,8 +41,27 @@ export class UpdateProductDto {
   @MaxLength(100)
   suppliercategory?: string;
 
-  // Opcional: si lo mandan, NO puede ir vacío y debe ser URL
-  @ApiPropertyOptional({ example: 'https://res.cloudinary.com/.../products/x.png' })
+  // NUEVO
+  @ApiPropertyOptional({
+    example: [
+      'https://res.cloudinary.com/.../products/img1.png',
+      'https://res.cloudinary.com/.../products/img2.png',
+    ],
+    description: 'Reemplaza la galería completa (1 a 6).',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @MaxLength(2048, { each: true })
+  @IsUrl({}, { each: true })
+  images?: string[];
+
+  @ApiPropertyOptional({
+    example: 'https://res.cloudinary.com/.../products/x.png',
+    description: 'Imagen principal (compatibilidad).',
+  })
   @ValidateIf((o) => o.image !== undefined)
   @IsString()
   @IsNotEmpty()
@@ -54,13 +75,19 @@ export class UpdateProductDto {
   @MaxLength(20)
   productcode?: string | null;
 
-  @ApiPropertyOptional({ example: 680000 })
+  @ApiPropertyOptional({
+    example: 680000,
+    description: 'Precio de venta unitario. Normalmente lo ajusta compras.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   productpriceofsale?: number | null;
 
-  @ApiPropertyOptional({ example: 520000 })
+  @ApiPropertyOptional({
+    example: 520000,
+    description: 'Precio de compra al proveedor. Normalmente lo ajusta compras.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)

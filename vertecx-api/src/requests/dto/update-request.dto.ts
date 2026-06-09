@@ -1,11 +1,17 @@
 import { PartialType } from "@nestjs/mapped-types";
-import { ApiPropertyOptional } from "@nestjs/swagger";
 import { CreateRequestDto } from "./create-request.dto";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { IsArray, IsInt, IsOptional, Min } from "class-validator";
 
 export class UpdateServiceRequestDto extends PartialType(CreateRequestDto) {
-  @ApiPropertyOptional({ example: "2025-11-12T10:00:00.000Z" })
-  scheduledAt?: string;
-
-  @ApiPropertyOptional({ example: "2025-11-12T11:00:00.000Z" })
-  scheduledEndAt?: string;
+  @ApiPropertyOptional({
+    type: [Number],
+    description: "Tecnicos asignados a la solicitud",
+    example: [12, 18],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  technicians?: number[];
 }
