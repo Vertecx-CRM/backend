@@ -53,6 +53,8 @@ type WompiTransactionData = {
 
 type WompiEventPayload = {
   event?: string;
+  environment?: 'test' | 'prod' | string;
+  timestamp?: number | string;
   data?: {
     transaction?: WompiTransactionData;
     [key: string]: any;
@@ -60,7 +62,6 @@ type WompiEventPayload = {
   signature?: {
     properties?: string[];
     checksum?: string;
-    timestamp?: number | string;
   };
   [key: string]: any;
 };
@@ -87,6 +88,11 @@ export class PaymentsService {
 
     const publicKey = this.getRequiredConfig('WOMPI_PUBLIC_KEY');
     const integritySecret = this.getRequiredConfig('WOMPI_INTEGRITY_SECRET');
+    this.ensureWompiConfigMatchesEnv({
+      publicKey,
+      integritySecret,
+    });
+
     const amountInCents = this.getSaleAmountInCents(sale);
     const reference = this.buildReference(saleId);
     const expirationTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -223,6 +229,37 @@ export class PaymentsService {
       );
     }
     return value;
+  }
+
+  private ensureWompiConfigMatchesEnv({
+    publicKey,
+    integritySecret,
+    eventsSecret,
+  }: {
+    publicKey?: string;
+    integritySecret?: string;
+    eventsSecret?: string;
+  }) {
+    const env = this.getWompiEnv();
+    const expected = env === 'production' ? 'prod' : 'test';
+
+    if (publicKey && !publicKey.startsWith(`pub_${expected}_`)) {
+      throw new BadRequestException(
+        `WOMPI_ENV esta en ${env}, pero WOMPI_PUBLIC_KEY no corresponde a ese ambiente.`,
+      );
+    }
+
+    if (integritySecret && !integritySecret.startsWith(`${expected}_integrity_`)) {
+      throw new BadRequestException(
+        `WOMPI_ENV esta en ${env}, pero WOMPI_INTEGRITY_SECRET no corresponde a ese ambiente.`,
+      );
+    }
+
+    if (eventsSecret && !eventsSecret.startsWith(`${expected}_events_`)) {
+      throw new BadRequestException(
+        `WOMPI_ENV esta en ${env}, pero WOMPI_EVENTS_SECRET no corresponde a ese ambiente.`,
+      );
+    }
   }
 
   private ensureSaleOwnership(sale: any, user: any) {
@@ -375,6 +412,7 @@ export class PaymentsService {
 
   private async fetchTransaction(transactionId: string): Promise<WompiTransactionData> {
     const publicKey = this.getRequiredConfig('WOMPI_PUBLIC_KEY');
+    this.ensureWompiConfigMatchesEnv({ publicKey });
     const url = `${this.getWompiBaseUrl()}/transactions/${encodeURIComponent(transactionId)}`;
 
     const response = await fetch(url, {
@@ -506,12 +544,22 @@ export class PaymentsService {
       );
       return false;
     }
+    this.ensureWompiConfigMatchesEnv({ eventsSecret: secret });
+
+    const expectedEnvironment = this.getWompiEnv() === 'production' ? 'prod' : 'test';
+    const payloadEnvironment = String(payload?.environment ?? '').trim().toLowerCase();
+    if (payloadEnvironment && payloadEnvironment !== expectedEnvironment) {
+      this.logger.warn(
+        `Evento Wompi ignorado por ambiente inesperado: ${payloadEnvironment}.`,
+      );
+      return false;
+    }
 
     const signature = payload?.signature;
     const properties = Array.isArray(signature?.properties)
       ? signature.properties
       : [];
-    const timestamp = String(signature?.timestamp ?? '').trim();
+    const timestamp = String(payload?.timestamp ?? '').trim();
     const providedChecksum = String(
       checksumHeader ?? signature?.checksum ?? '',
     )
