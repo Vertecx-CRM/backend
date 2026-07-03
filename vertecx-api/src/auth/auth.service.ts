@@ -155,7 +155,7 @@ export class AuthService {
   private getFrontendBaseUrl() {
     const raw =
       process.env.FRONTEND_URL ||
-      'https://vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net';
+      'https://www.sistemaspc.co';
 
     const normalized = raw.trim().replace(/\/+$/, '');
     if (/^https?:\/\//i.test(normalized)) {

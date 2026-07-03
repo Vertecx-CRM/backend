@@ -11,8 +11,8 @@ WOMPI_ENV=production
 WOMPI_PUBLIC_KEY=pub_prod_xxx
 WOMPI_INTEGRITY_SECRET=prod_integrity_xxx
 WOMPI_EVENTS_SECRET=prod_events_xxx
-WOMPI_REDIRECT_URL=https://vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net/payments/register
-FRONTEND_URL=https://vertecx-frontend-ftetddefakf8egc2.canadacentral-01.azurewebsites.net
+WOMPI_REDIRECT_URL=https://www.sistemaspc.co/payments/register
+FRONTEND_URL=https://www.sistemaspc.co
 ```
 
 The API rejects mixed environments, for example `WOMPI_ENV=production` with a `pub_test_` key.
