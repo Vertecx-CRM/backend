@@ -326,6 +326,7 @@ export class AuthService {
       }
 
       user.password = await bcrypt.hash(newPassword, 12);
+      user.mustchangepassword = false;
       user.updateat = new Date();
 
       await this.users.save(user);
