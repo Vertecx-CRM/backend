@@ -4,9 +4,26 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 
+function normalizeOrigin(value?: string) {
+  return value?.trim().replace(/\/+$/, '');
+}
+
+function buildAllowedOrigins() {
+  const configuredOrigins = [
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS?.split(',') ?? []),
+    'https://www.sistemaspc.co',
+    'https://sistemaspc.co',
+    'http://localhost:3000',
+  ];
+
+  return new Set(configuredOrigins.map(normalizeOrigin).filter(Boolean));
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const expressApp = app.getHttpAdapter().getInstance();
+  const allowedOrigins = buildAllowedOrigins();
 
   expressApp.disable('x-powered-by');
   expressApp.use((req, res, next) => {
@@ -21,7 +38,12 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: (origin, callback) => callback(null, true),
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = normalizeOrigin(origin);
+      return callback(null, allowedOrigins.has(normalizedOrigin));
+    },
     credentials: true,
   });
 
