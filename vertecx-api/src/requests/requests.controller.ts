@@ -39,8 +39,7 @@ export class RequestsController {
     return this.requestsService.createByAdmin(dto);
   }
 
-  @ApiResponse({ status: 404, description: 'Solicitudes no encontradas, verificar parametros de consulta' })
-  @ApiResponse({ status: 200, description: 'Solicitudes encontradas' })
+  @ApiResponse({ status: 200, description: 'Solicitudes encontradas o lista vacia' })
   @Get()
   findAll(@Query() query: RequestQueryDto) {
     return this.requestsService.findAll(query);

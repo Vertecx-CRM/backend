@@ -181,9 +181,6 @@ export class RequestsService {
       order: { serviceRequestId: "ASC" },
     });
 
-    if (!result.length)
-      throw new NotFoundException('Solicitudes no encontradas')
-
     return result.map((item) => this.decorateRequest(item));
   }
 
