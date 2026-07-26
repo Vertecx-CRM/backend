@@ -25,6 +25,7 @@ import { OrdersServicesModule } from './orders-services/orders-services.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ReviewsModule } from './reviews/reviews.module';
 // import { SystemStatus } from './security/panic/system-status.entity';
 
 @Module({
@@ -53,6 +54,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TechniciantypesModule,
     DashboardModule,
     PaymentsModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [
